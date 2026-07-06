@@ -290,64 +290,78 @@ window.stockApp = function() {
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty) return alert('Select missing fields.');
             
-            // FIXED: Changed this.db.items to this.items
-            const target = this.items.find((i) => i.id === this.formInward.itemId);
-            if (!target) return;
+            // FIX: Using loose inequality (==) or string conversion to match numeric and string Firestore IDs safely
+            const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId));
+            if (!target) return alert('Selected item could not be found in the live database matrix.');
             
             const qty = parseInt(this.formInward.qty);
             if (!qty || qty <= 0) return alert('Enter a positive quantity.');
             
-            await updateDoc(doc(dbFs, 'items', target.id), { stock: target.stock + qty });
-            await addDoc(colRef('logs'), {
-                type: 'INWARD',
-                item_id: target.id,
-                qty,
-                department: null,
-                created_at: new Date().toISOString(),
-                created_by_name: this.currentUsername,
-            });
-            this.formInward = { itemId: '', qty: '' };
+            try {
+                await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock || 0) + qty });
+                await addDoc(colRef('logs'), {
+                    type: 'INWARD',
+                    item_id: target.id,
+                    qty,
+                    department: null,
+                    created_at: new Date().toISOString(),
+                    created_by_name: this.currentUsername,
+                });
+                this.formInward = { itemId: '', qty: '' };
+            } catch (error) {
+                console.error("Inward transaction write failed:", error);
+                alert("Database write error: " + error.message);
+            }
         },
 
         async deductOutward() {
             if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
             
-            // FIXED: Changed this.db.items to this.items
-            const target = this.items.find((i) => i.id === this.formOutward.itemId);
-            if (!target) return;
+            // FIX: Using string conversion to safely match numeric and string Firestore IDs
+            const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId));
+            if (!target) return alert('Selected item could not be found in the live database matrix.');
             
             const qty = parseInt(this.formOutward.qty);
             if (!qty || qty <= 0) return alert('Enter a positive quantity.');
-            if (target.stock < qty) return alert('Operation Denied: Insufficient inventory balance.');
+            if (Number(target.stock || 0) < qty) return alert('Operation Denied: Insufficient inventory balance.');
             
-            await updateDoc(doc(dbFs, 'items', target.id), { stock: target.stock - qty });
-            await addDoc(colRef('logs'), {
-                type: 'OUTWARD',
-                item_id: target.id,
-                qty,
-                department: this.formOutward.department,
-                created_at: new Date().toISOString(),
-                created_by_name: this.currentUsername,
-            });
-            this.formOutward = { itemId: '', department: 'Indian', qty: '' };
+            try {
+                await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock) - qty });
+                await addDoc(colRef('logs'), {
+                    type: 'OUTWARD',
+                    item_id: target.id,
+                    qty,
+                    department: this.formOutward.department,
+                    created_at: new Date().toISOString(),
+                    created_by_name: this.currentUsername,
+                });
+                this.formOutward = { itemId: '', department: 'Indian', qty: '' };
+            } catch (error) {
+                console.error("Outward transaction write failed:", error);
+                alert("Database write error: " + error.message);
+            }
         },
 
         async triggerUndo(log) {
-            // FIXED: Changed this.db.items to this.items
-            const item = this.items.find((i) => i.id === log.item_id);
-            if (!item) return;
+            // FIX: Using string conversion to safely match numeric and string Firestore IDs
+            const item = this.items.find((i) => String(i.id) === String(log.item_id));
+            if (!item) return alert('The original item tracking row no longer exists.');
             
             if (!this.isWithinOneHour(log.created_at)) {
                 return alert('This action can no longer be undone (past 1-hour window).');
             }
             
-            if (log.type === 'INWARD') {
-                await updateDoc(doc(dbFs, 'items', item.id), { stock: Math.max(0, item.stock - log.qty) });
-            } else {
-                await updateDoc(doc(dbFs, 'items', item.id), { stock: item.stock + log.qty });
+            try {
+                if (log.type === 'INWARD') {
+                    await updateDoc(doc(dbFs, 'items', item.id), { stock: Math.max(0, Number(item.stock || 0) - Number(log.qty)) });
+                } else {
+                    await updateDoc(doc(dbFs, 'items', item.id), { stock: Number(item.stock || 0) + Number(log.qty) });
+                }
+                await deleteDoc(doc(dbFs, 'logs', log.id));
+                alert('Action reversed successfully.');
+            } catch (error) {
+                alert("Undo action failed: " + error.message);
             }
-            await deleteDoc(doc(dbFs, 'logs', log.id));
-            alert('Action reversed successfully.');
         },
         async changeMyPassword() {
             this.accountError = ''; this.accountSuccess = '';
