@@ -1,4 +1,4 @@
-// app.js
+// app.js - Completed Production Script
 import { dbFs } from './firebase-config.js'; 
 import {
     collection,
@@ -49,7 +49,7 @@ async function seedIfEmpty() {
 
 window.stockApp = function() {
     return {
-        // --- TOP LEVEL REACTIVE ARRAYS ---
+        // --- DATA STATE ARRAYS ---
         categories: [],
         items: [],
         importantNotes: [],
@@ -82,7 +82,7 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async init() {
-            console.log("stockApp UI engine initializing...");
+            console.log("stockApp initialization tracking started...");
             await seedIfEmpty();
             
             onSnapshot(colRef('categories'), (snap) => { 
@@ -229,10 +229,8 @@ window.stockApp = function() {
 
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty) return alert('Select missing fields.');
-            
             const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId));
             if (!target) return alert('Selected item could not be found.');
-            
             const qty = parseInt(this.formInward.qty);
             if (!qty || qty <= 0) return alert('Enter a positive quantity.');
             
@@ -254,10 +252,8 @@ window.stockApp = function() {
 
         async deductOutward() {
             if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
-            
             const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId));
             if (!target) return alert('Selected item could not be found.');
-            
             const qty = parseInt(this.formOutward.qty);
             if (!qty || qty <= 0) return alert('Enter a positive quantity.');
             if (Number(target.stock || 0) < qty) return alert('Operation Denied: Insufficient stock balance.');
@@ -272,4 +268,55 @@ window.stockApp = function() {
                     created_at: new Date().toISOString(),
                     created_by_name: this.currentUsername,
                 });
-                this.formOutward = {
+                this.formOutward = { itemId: '', department: 'Indian', qty: '' };
+            } catch (error) {
+                alert("Database write error: " + error.message);
+            }
+        },
+
+        async triggerUndo(log) {
+            const item = this.items.find((i) => String(i.id) === String(log.item_id));
+            if (!item) return alert('The original tracking entry row no longer exists.');
+            if (!this.isWithinOneHour(log.created_at)) return alert('Action window expired.');
+            
+            try {
+                if (log.type === 'INWARD') {
+                    await updateDoc(doc(dbFs, 'items', item.id), { stock: Math.max(0, Number(item.stock || 0) - Number(log.qty)) });
+                } else {
+                    await updateDoc(doc(dbFs, 'items', item.id), { stock: Number(item.stock || 0) + Number(log.qty) });
+                }
+                await deleteDoc(doc(dbFs, 'logs', log.id));
+            } catch (error) {
+                alert("Undo action failed: " + error.message);
+            }
+        },
+
+        async changeMyPassword() {
+            this.accountError = ''; this.accountSuccess = '';
+            const { currentPassword, newPassword } = this.accountForm;
+            if (newPassword.length < 6) { this.accountError = 'Min 6 characters'; return; }
+            const user = this.users.find((u) => u.id === this.currentUserId);
+            if ((await sha256(currentPassword)) !== user.passwordHash) { this.accountError = 'Incorrect current password'; return; }
+            await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: await sha256(newPassword) });
+            this.accountSuccess = 'Password updated successfully.';
+            this.accountForm = { currentPassword: '', newPassword: '' };
+        },
+
+        async createUser() {
+            const { username, password, role } = this.newUserForm;
+            if (!username || password.length < 6) return;
+            await addDoc(colRef('users'), { username: username.trim(), passwordHash: await sha256(password), role });
+            this.newUserForm = { username: '', password: '', role: 'inward' };
+        },
+
+        async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
+        async deleteUser(userId) { if (confirm('Permanently delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
+
+        downloadExcelReport() {
+            const matrixData = [['ITEM NAME', 'CATEGORY', 'CURRENT STOCK', 'TOTAL INWARD']];
+            this.processedItems.forEach((item) => {
+                const itemLogs = this.logs.filter((l) => l.item_id === item.id);
+                const totalIn = itemLogs.filter((l) => l.type === 'INWARD').reduce((acc, l) => acc + l.qty, 0);
+                matrixData.push([item.name, item.category_name, item.stock, totalIn]);
+            });
+            const ws = XLSX.utils.
