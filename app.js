@@ -287,6 +287,7 @@ window.stockApp = function() {
         },
 
         async triggerUndo(log) {
+            // 🟢 FIXED: Changed this.db.items to this.items and wrapped string conversions safely
             const item = this.items.find((i) => String(i.id) === String(log.item_id));
             if (!item) return alert('The original tracking entry row no longer exists.');
             if (!this.isWithinOneHour(log.created_at)) return alert('Action window expired.');
@@ -298,11 +299,11 @@ window.stockApp = function() {
                     await updateDoc(doc(dbFs, 'items', item.id), { stock: Number(item.stock || 0) + Number(log.qty) });
                 }
                 await deleteDoc(doc(dbFs, 'logs', log.id));
+                alert('Action reversed successfully.');
             } catch (error) {
                 alert("Undo action failed: " + error.message);
             }
         },
-
         async changeMyPassword() {
             this.accountError = ''; this.accountSuccess = '';
             const { currentPassword, newPassword } = this.accountForm;
