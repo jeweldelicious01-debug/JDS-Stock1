@@ -43,14 +43,14 @@ async function seedIfEmpty() {
             await setDoc(doc(dbFs, 'categories', cat.key), { name: cat.name, bg: cat.bg, border: cat.border, text_color: cat.text_color });
         }
     } catch (e) {
-        console.warn("Seeding skipped or primary collection rules restricted: ", e);
+        console.warn("Seeding skipped or protected by Firestore database rules: ", e);
     }
 }
 
-// Explicitly register the factory globally immediately
+// Explicitly register the factory globally for Alpine
 window.stockApp = function() {
     return {
-        // --- REACTIVE STATE STORAGE ---
+        // --- REACTIVE STORAGE DESKS ---
         categories: [],
         items: [],
         importantNotes: [],
@@ -83,37 +83,37 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async init() {
-            console.log("stockApp data component instance initializing...");
+            console.log("stockApp interface initialization firing...");
             await seedIfEmpty();
             
-            // Sync Categories
+            // Real-time categories syncing
             onSnapshot(colRef('categories'), (snap) => { 
                 this.categories = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
             });
             
-            // Sync Items
+            // Real-time items syncing
             onSnapshot(colRef('items'), (snap) => { 
                 this.items = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
             });
             
-            // Sync Notes
+            // Real-time event notes panels syncing
             onSnapshot(colRef('notes'), (snap) => { 
                 this.importantNotes = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
             });
             
-            // Sync Logs
+            // Real-time logging operations sync engine
             onSnapshot(colRef('logs'), (snap) => { 
                 const rawLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                 this.logs = rawLogs
                     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
                     .slice(0, 50)
                     .map((l) => {
-                        const matchedItem = this.items.find((i) => i.id === l.item_id);
+                        const matchedItem = this.items.find((i) => String(i.id) === String(l.item_id));
                         return { ...l, item_name: matchedItem ? matchedItem.name : 'Unknown' };
                     });
             });
             
-            // Sync Users Matrix
+            // Real-time user session status tracking
             onSnapshot(colRef('users'), (snap) => {
                 this.users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                 if (this.currentUserId) {
@@ -190,18 +190,21 @@ window.stockApp = function() {
         },
 
         async deleteNote(noteId) { await deleteDoc(doc(dbFs, 'notes', noteId)); },
+        
         async changeItemName(item) {
             let updatedName = prompt('Enter item name:', item.name);
             if (updatedName?.trim()) await updateDoc(doc(dbFs, 'items', item.id), { name: updatedName.trim() });
         },
+        
         async modifyThreshold(item) {
             let promptVal = prompt('Update safety limit:', item.threshold);
             if (promptVal !== null) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parseInt(promptVal) || 0 });
         },
+        
         async purgeItem(id) { if (confirm('Purge item entry?')) await deleteDoc(doc(dbFs, 'items', id)); },
 
         async shiftOrder(id, direction) {
-            const sorted = [...this.db.items].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+            const sorted = [...this.items].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
             const idx = sorted.findIndex((i) => i.id === id);
             if (idx === -1) return;
             const swapIdx = idx + (direction === 'up' ? -1 : 1);
@@ -215,7 +218,7 @@ window.stockApp = function() {
             let categoryId = this.newItemForm.categoryId || null;
             if (!categoryId && this.newItemForm.newCategoryName.trim()) {
                 const name = this.newItemForm.newCategoryName.trim();
-                const existing = this.db.categories.find((c) => c.name.toLowerCase() === name.toLowerCase());
+                const existing = this.categories.find((c) => c.name.toLowerCase() === name.toLowerCase());
                 if (existing) categoryId = existing.id;
                 else {
                     const palette = PALETTE[Math.floor(Math.random() * PALETTE.length)];
@@ -224,75 +227,18 @@ window.stockApp = function() {
                 }
             }
             if (!categoryId) return;
-            const maxOrder = this.db.items.reduce((m, i) => Math.max(m, i.order_index || 0), 0);
+            const maxOrder = this.items.reduce((m, i) => Math.max(m, i.order_index || 0), 0);
             await addDoc(colRef('items'), { name: this.newItemForm.name.trim(), category_id: categoryId, stock: 0, threshold: this.newItemForm.threshold || 0, order_index: maxOrder + 1 });
             this.newItemForm = { name: '', categoryId: '', newCategoryName: '', threshold: 0 };
             this.showNewItemModal = false;
         },
-        handleCsvUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const text = e.target.result;
-                const lines = text.split('\n');
-                let addedCount = 0;
-                
-                for (let i = 1; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue;
-                    const columns = lines[i].split(',');
-                    if (columns.length >= 4) {
-                        const name = columns[0].trim();
-                        const categoryName = columns[1].trim();
-                        const qty = parseInt(columns[2]) || 0;
-                        const threshold = parseInt(columns[3]) || 0;
-                        if (!name || !categoryName) continue;
 
-                        let cat = this.categories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
-                        let categoryId;
-                        if (!cat) {
-                            const newCatRef = await addDoc(colRef('categories'), {
-                                name: categoryName,
-                                bg: '#f3f4f6',
-                                border: '#9ca3af',
-                                text_color: '#374151',
-                            });
-                            categoryId = newCatRef.id;
-                        } else {
-                            categoryId = cat.id;
-                        }
-
-                        const existingItem = this.items.find((it) => it.name.toLowerCase() === name.toLowerCase());
-                        if (existingItem) {
-                            await updateDoc(doc(dbFs, 'items', existingItem.id), {
-                                stock: existingItem.stock + qty,
-                                threshold,
-                            });
-                        } else {
-                            const maxOrder = this.items.reduce((m, it) => Math.max(m, it.order_index || 0), 0);
-                            await addDoc(colRef('items'), {
-                                name,
-                                category_id: categoryId,
-                                stock: qty,
-                                threshold,
-                                order_index: maxOrder + 1,
-                            });
-                        }
-                        addedCount++;
-                    }
-                }
-                alert(`CSV Ingested lines successfully parsed: ${addedCount}`);
-                event.target.value = '';
-            };
-            reader.readAsText(file);
-        },
-
+        // --- ROCK SOLID INWARD METHOD ---
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty) return alert('Select missing fields.');
             
-            // FIX: Using loose inequality (==) or string conversion to match numeric and string Firestore IDs safely
             const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId));
-            if (!target) return alert('Selected item could not be found in the live database matrix.');
+            if (!target) return alert('Selected item could not be found.');
             
             const qty = parseInt(this.formInward.qty);
             if (!qty || qty <= 0) return alert('Enter a positive quantity.');
@@ -309,21 +255,20 @@ window.stockApp = function() {
                 });
                 this.formInward = { itemId: '', qty: '' };
             } catch (error) {
-                console.error("Inward transaction write failed:", error);
                 alert("Database write error: " + error.message);
             }
         },
 
+        // --- ROCK SOLID OUTWARD METHOD ---
         async deductOutward() {
             if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
             
-            // FIX: Using string conversion to safely match numeric and string Firestore IDs
             const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId));
-            if (!target) return alert('Selected item could not be found in the live database matrix.');
+            if (!target) return alert('Selected item could not be found.');
             
             const qty = parseInt(this.formOutward.qty);
             if (!qty || qty <= 0) return alert('Enter a positive quantity.');
-            if (Number(target.stock || 0) < qty) return alert('Operation Denied: Insufficient inventory balance.');
+            if (Number(target.stock || 0) < qty) return alert('Operation Denied: Insufficient stock balance.');
             
             try {
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock) - qty });
@@ -337,19 +282,14 @@ window.stockApp = function() {
                 });
                 this.formOutward = { itemId: '', department: 'Indian', qty: '' };
             } catch (error) {
-                console.error("Outward transaction write failed:", error);
                 alert("Database write error: " + error.message);
             }
         },
 
         async triggerUndo(log) {
-            // FIX: Using string conversion to safely match numeric and string Firestore IDs
             const item = this.items.find((i) => String(i.id) === String(log.item_id));
-            if (!item) return alert('The original item tracking row no longer exists.');
-            
-            if (!this.isWithinOneHour(log.created_at)) {
-                return alert('This action can no longer be undone (past 1-hour window).');
-            }
+            if (!item) return alert('The original tracking entry row no longer exists.');
+            if (!this.isWithinOneHour(log.created_at)) return alert('Action window expired.');
             
             try {
                 if (log.type === 'INWARD') {
@@ -358,11 +298,11 @@ window.stockApp = function() {
                     await updateDoc(doc(dbFs, 'items', item.id), { stock: Number(item.stock || 0) + Number(log.qty) });
                 }
                 await deleteDoc(doc(dbFs, 'logs', log.id));
-                alert('Action reversed successfully.');
             } catch (error) {
                 alert("Undo action failed: " + error.message);
             }
         },
+
         async changeMyPassword() {
             this.accountError = ''; this.accountSuccess = '';
             const { currentPassword, newPassword } = this.accountForm;
@@ -383,67 +323,6 @@ window.stockApp = function() {
 
         async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
         async deleteUser(userId) { if (confirm('Permanently delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
-        handleCsvUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const text = e.target.result;
-                const lines = text.split('\n');
-                let addedCount = 0;
-                
-                // Expecting standard format: Item Name, Category, Quantity, Threshold
-                for (let i = 1; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue;
-                    const columns = lines[i].split(',');
-                    if (columns.length >= 4) {
-                        const name = columns[0].trim();
-                        const categoryName = columns[1].trim();
-                        const qty = parseInt(columns[2]) || 0;
-                        const threshold = parseInt(columns[3]) || 0;
-                        if (!name || !categoryName) continue;
-
-                        // FIXED: Changed this.db.categories to this.categories
-                        let cat = this.categories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
-                        let categoryId;
-                        if (!cat) {
-                            const newCatRef = await addDoc(colRef('categories'), {
-                                name: categoryName,
-                                bg: '#f3f4f6',
-                                border: '#9ca3af',
-                                text_color: '#374151',
-                            });
-                            categoryId = newCatRef.id;
-                        } else {
-                            categoryId = cat.id;
-                        }
-
-                        // FIXED: Changed this.db.items to this.items
-                        const existingItem = this.items.find((it) => it.name.toLowerCase() === name.toLowerCase());
-                        if (existingItem) {
-                            await updateDoc(doc(dbFs, 'items', existingItem.id), {
-                                stock: existingItem.stock + qty,
-                                threshold,
-                            });
-                        } else {
-                            // FIXED: Changed this.db.items to this.items
-                            const maxOrder = this.items.reduce((m, it) => Math.max(m, it.order_index || 0), 0);
-                            await addDoc(colRef('items'), {
-                                name,
-                                category_id: categoryId,
-                                stock: qty,
-                                threshold,
-                                order_index: maxOrder + 1,
-                            });
-                        }
-                        addedCount++;
-                    }
-                }
-                alert(`CSV Ingested lines successfully parsed: ${addedCount}`);
-                event.target.value = '';
-            };
-            reader.readAsText(file);
-        },
 
         downloadExcelReport() {
             const matrixData = [['ITEM NAME', 'CATEGORY', 'CURRENT STOCK', 'TOTAL INWARD']];
@@ -459,5 +338,3 @@ window.stockApp = function() {
         }
     };
 };
-
-console.log("stockApp factory global mapping ready.");
