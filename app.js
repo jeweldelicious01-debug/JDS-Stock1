@@ -1,3 +1,4 @@
+// app.js
 import { dbFs } from './firebase-config.js'; 
 import {
     collection,
@@ -48,6 +49,7 @@ async function seedIfEmpty() {
 
 window.stockApp = function() {
     return {
+        // --- DATA STATE ARRAYS ---
         categories: [],
         items: [],
         importantNotes: [],
@@ -344,17 +346,53 @@ window.stockApp = function() {
         async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
         async deleteUser(userId) { if (confirm('Permanently delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
 
+        // 📊 ADVANCED COLUMN-STACKED MULTI-DAY EXCEL DOWNLOAD LOGIC
         downloadExcelReport() {
-            const matrixData = [['ITEM NAME', 'CATEGORY', 'CURRENT STOCK', 'TOTAL INWARD']];
-            this.processedItems.forEach((item) => {
-                const itemLogs = this.logs.filter((l) => l.item_id === item.id);
-                const totalIn = itemLogs.filter((l) => l.type === 'INWARD').reduce((acc, l) => acc + l.qty, 0);
-                matrixData.push([item.name, item.category_name, item.stock, totalIn]);
+            // Setup structured headers exactly like your target ledger
+            const matrixData = [
+                ["DATE", "TOTAL STOCK", "30JunIN", "30JunOUT", "29JunIN", "29JunOUT"], 
+                ["ITEM NAME"] 
+            ];
+
+            this.processedItems.forEach(item => {
+                const row = [item.name, item.stock];
+
+                // 1. Process 30-Jun Inward Logs
+                let in30 = this.logs.filter(l => String(l.item_id) === String(item.id) && l.type === 'INWARD' && l.dateLabel === '30Jun');
+                row.push(in30.length ? `+${in30.reduce((acc, current) => acc + (parseInt(current.qty) || 0), 0)}` : "0");
+
+                // 2. Process 30-Jun Outward Logs with Multi-line Department Stacking
+                let out30 = this.logs.filter(l => String(l.item_id) === String(item.id) && l.type === 'OUTWARD' && l.dateLabel === '30Jun');
+                if (out30.length) {
+                    let stackedOut = out30.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n");
+                    row.push(stackedOut);
+                } else {
+                    row.push("0");
+                }
+
+                // 3. Process 29-Jun Inward Logs
+                let in29 = this.logs.filter(l => String(l.item_id) === String(item.id) && l.type === 'INWARD' && l.dateLabel === '29Jun');
+                row.push(in29.length ? `+${in29.reduce((acc, current) => acc + (parseInt(current.qty) || 0), 0)}` : "0");
+
+                // 4. Process 29-Jun Outward Logs with Multi-line Department Stacking
+                let out29 = this.logs.filter(l => String(l.item_id) === String(item.id) && l.type === 'OUTWARD' && l.dateLabel === '29Jun');
+                if (out29.length) {
+                    let stackedOut = out29.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n");
+                    row.push(stackedOut);
+                } else {
+                    row.push("0");
+                }
+
+                matrixData.push(row);
             });
+
             const ws = XLSX.utils.aoa_to_sheet(matrixData);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Stock Ledger');
-            XLSX.writeFile(wb, `Stock_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+            XLSX.utils.book_append_sheet(wb, ws, "Monthly LIFO Ledger");
+
+            // Format column widths precisely to accommodate multi-line content layout blueprints
+            ws['!cols'] = [{wch: 24}, {wch: 14}, {wch: 12}, {wch: 26}, {wch: 12}, {wch: 26}];
+            XLSX.writeFile(wb, `Restaurant_Inventory_${new Date().toISOString().slice(0,10)}.xlsx`);
         }
     };
 };
