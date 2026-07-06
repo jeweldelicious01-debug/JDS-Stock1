@@ -1,4 +1,3 @@
-// app.js - Fully Corrected Production Script
 import { dbFs } from './firebase-config.js'; 
 import {
     collection,
@@ -43,13 +42,12 @@ async function seedIfEmpty() {
             await setDoc(doc(dbFs, 'categories', cat.key), { name: cat.name, bg: cat.bg, border: cat.border, text_color: cat.text_color });
         }
     } catch (e) {
-        console.warn("Seeding skipped or protected by database rules: ", e);
+        console.warn("Seeding skipped: ", e);
     }
 }
 
 window.stockApp = function() {
     return {
-        // --- DATA STATE ARRAYS ---
         categories: [],
         items: [],
         importantNotes: [],
@@ -145,7 +143,7 @@ window.stockApp = function() {
             return dataset.sort((a, b) => {
                 let aAlert = a.stock <= a.threshold ? 1 : 0;
                 let bAlert = b.stock <= b.threshold ? 1 : 0;
-                if (aAlert !== bAlert) return bAlert - aAlert; // 🟢 FIXED: Changed mAlert to aAlert
+                if (aAlert !== bAlert) return bAlert - aAlert;
                 return (a.order_index || 0) - (b.order_index || 0);
             });
         },
