@@ -288,33 +288,67 @@ window.stockApp = function() {
         },
 
         async addInward() {
-            if (!this.formInward.itemId || !this.formInward.qty) return;
-            const target = this.db.items.find((i) => i.id === this.formInward.itemId);
+            if (!this.formInward.itemId || !this.formInward.qty) return alert('Select missing fields.');
+            
+            // FIXED: Changed this.db.items to this.items
+            const target = this.items.find((i) => i.id === this.formInward.itemId);
+            if (!target) return;
+            
             const qty = parseInt(this.formInward.qty);
-            if (!target || qty <= 0) return;
+            if (!qty || qty <= 0) return alert('Enter a positive quantity.');
+            
             await updateDoc(doc(dbFs, 'items', target.id), { stock: target.stock + qty });
-            await addDoc(colRef('logs'), { type: 'INWARD', item_id: target.id, qty, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
+            await addDoc(colRef('logs'), {
+                type: 'INWARD',
+                item_id: target.id,
+                qty,
+                department: null,
+                created_at: new Date().toISOString(),
+                created_by_name: this.currentUsername,
+            });
             this.formInward = { itemId: '', qty: '' };
         },
 
         async deductOutward() {
-            if (!this.formOutward.itemId || !this.formOutward.qty) return;
-            const target = this.db.items.find((i) => i.id === this.formOutward.itemId);
+            if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
+            
+            // FIXED: Changed this.db.items to this.items
+            const target = this.items.find((i) => i.id === this.formOutward.itemId);
+            if (!target) return;
+            
             const qty = parseInt(this.formOutward.qty);
-            if (!target || qty <= 0 || target.stock < qty) return alert('Insufficient stock');
+            if (!qty || qty <= 0) return alert('Enter a positive quantity.');
+            if (target.stock < qty) return alert('Operation Denied: Insufficient inventory balance.');
+            
             await updateDoc(doc(dbFs, 'items', target.id), { stock: target.stock - qty });
-            await addDoc(colRef('logs'), { type: 'OUTWARD', item_id: target.id, qty, department: this.formOutward.department, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
+            await addDoc(colRef('logs'), {
+                type: 'OUTWARD',
+                item_id: target.id,
+                qty,
+                department: this.formOutward.department,
+                created_at: new Date().toISOString(),
+                created_by_name: this.currentUsername,
+            });
             this.formOutward = { itemId: '', department: 'Indian', qty: '' };
         },
 
         async triggerUndo(log) {
-            const item = this.db.items.find((i) => i.id === log.item_id);
-            if (!item || !this.isWithinOneHour(log.created_at)) return alert('Action window expired');
-            const newStock = log.type === 'INWARD' ? Math.max(0, item.stock - log.qty) : item.stock + log.qty;
-            await updateDoc(doc(dbFs, 'items', item.id), { stock: newStock });
+            // FIXED: Changed this.db.items to this.items
+            const item = this.items.find((i) => i.id === log.item_id);
+            if (!item) return;
+            
+            if (!this.isWithinOneHour(log.created_at)) {
+                return alert('This action can no longer be undone (past 1-hour window).');
+            }
+            
+            if (log.type === 'INWARD') {
+                await updateDoc(doc(dbFs, 'items', item.id), { stock: Math.max(0, item.stock - log.qty) });
+            } else {
+                await updateDoc(doc(dbFs, 'items', item.id), { stock: item.stock + log.qty });
+            }
             await deleteDoc(doc(dbFs, 'logs', log.id));
+            alert('Action reversed successfully.');
         },
-
         async changeMyPassword() {
             this.accountError = ''; this.accountSuccess = '';
             const { currentPassword, newPassword } = this.accountForm;
