@@ -229,6 +229,63 @@ window.stockApp = function() {
             this.newItemForm = { name: '', categoryId: '', newCategoryName: '', threshold: 0 };
             this.showNewItemModal = false;
         },
+        handleCsvUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const text = e.target.result;
+                const lines = text.split('\n');
+                let addedCount = 0;
+                
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    const columns = lines[i].split(',');
+                    if (columns.length >= 4) {
+                        const name = columns[0].trim();
+                        const categoryName = columns[1].trim();
+                        const qty = parseInt(columns[2]) || 0;
+                        const threshold = parseInt(columns[3]) || 0;
+                        if (!name || !categoryName) continue;
+
+                        let cat = this.categories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
+                        let categoryId;
+                        if (!cat) {
+                            const newCatRef = await addDoc(colRef('categories'), {
+                                name: categoryName,
+                                bg: '#f3f4f6',
+                                border: '#9ca3af',
+                                text_color: '#374151',
+                            });
+                            categoryId = newCatRef.id;
+                        } else {
+                            categoryId = cat.id;
+                        }
+
+                        const existingItem = this.items.find((it) => it.name.toLowerCase() === name.toLowerCase());
+                        if (existingItem) {
+                            await updateDoc(doc(dbFs, 'items', existingItem.id), {
+                                stock: existingItem.stock + qty,
+                                threshold,
+                            });
+                        } else {
+                            const maxOrder = this.items.reduce((m, it) => Math.max(m, it.order_index || 0), 0);
+                            await addDoc(colRef('items'), {
+                                name,
+                                category_id: categoryId,
+                                stock: qty,
+                                threshold,
+                                order_index: maxOrder + 1,
+                            });
+                        }
+                        addedCount++;
+                    }
+                }
+                alert(`CSV Ingested lines successfully parsed: ${addedCount}`);
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        },
 
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty) return;
