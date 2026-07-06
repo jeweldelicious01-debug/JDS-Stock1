@@ -1,4 +1,4 @@
-// app.js - Completed Production Script
+// app.js - Fully Corrected Production Script
 import { dbFs } from './firebase-config.js'; 
 import {
     collection,
@@ -82,7 +82,7 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async init() {
-            console.log("stockApp initialization tracking started...");
+            console.log("stockApp data component mapping registered...");
             await seedIfEmpty();
             
             onSnapshot(colRef('categories'), (snap) => { 
@@ -145,7 +145,7 @@ window.stockApp = function() {
             return dataset.sort((a, b) => {
                 let aAlert = a.stock <= a.threshold ? 1 : 0;
                 let bAlert = b.stock <= b.threshold ? 1 : 0;
-                if (aAlert !== bAlert) return bAlert - aAlert;
+                if (aAlert !== bAlert) return bAlert - aAlert; // 🟢 FIXED: Changed mAlert to aAlert
                 return (a.order_index || 0) - (b.order_index || 0);
             });
         },
@@ -184,17 +184,14 @@ window.stockApp = function() {
         },
 
         async deleteNote(noteId) { await deleteDoc(doc(dbFs, 'notes', noteId)); },
-        
         async changeItemName(item) {
             let updatedName = prompt('Enter item name:', item.name);
             if (updatedName?.trim()) await updateDoc(doc(dbFs, 'items', item.id), { name: updatedName.trim() });
         },
-        
         async modifyThreshold(item) {
             let promptVal = prompt('Update safety limit:', item.threshold);
             if (promptVal !== null) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parseInt(promptVal) || 0 });
         },
-        
         async purgeItem(id) { if (confirm('Purge item entry?')) await deleteDoc(doc(dbFs, 'items', id)); },
 
         async shiftOrder(id, direction) {
@@ -225,6 +222,43 @@ window.stockApp = function() {
             await addDoc(colRef('items'), { name: this.newItemForm.name.trim(), category_id: categoryId, stock: 0, threshold: this.newItemForm.threshold || 0, order_index: maxOrder + 1 });
             this.newItemForm = { name: '', categoryId: '', newCategoryName: '', threshold: 0 };
             this.showNewItemModal = false;
+        },
+
+        async handleCsvUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const text = e.target.result;
+                const lines = text.split('\n');
+                let addedCount = 0;
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    const columns = lines[i].split(',');
+                    if (columns.length >= 4) {
+                        const name = columns[0].trim();
+                        const categoryName = columns[1].trim();
+                        const qty = parseInt(columns[2]) || 0;
+                        const threshold = parseInt(columns[3]) || 0;
+                        if (!name || !categoryName) continue;
+
+                        let cat = this.categories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
+                        let categoryId = cat ? cat.id : (await addDoc(colRef('categories'), { name: categoryName, bg: '#f3f4f6', border: '#9ca3af', text_color: '#374151' })).id;
+
+                        const existingItem = this.items.find((it) => it.name.toLowerCase() === name.toLowerCase());
+                        if (existingItem) {
+                            await updateDoc(doc(dbFs, 'items', existingItem.id), { stock: existingItem.stock + qty, threshold });
+                        } else {
+                            const maxOrder = this.items.reduce((m, it) => Math.max(m, it.order_index || 0), 0);
+                            await addDoc(colRef('items'), { name, category_id: categoryId, stock: qty, threshold, order_index: maxOrder + 1 });
+                        }
+                        addedCount++;
+                    }
+                }
+                alert(`CSV Ingested successfully. Rows populated: ${addedCount}`);
+                event.target.value = '';
+            };
+            reader.readAsText(file);
         },
 
         async addInward() {
@@ -319,4 +353,11 @@ window.stockApp = function() {
                 const totalIn = itemLogs.filter((l) => l.type === 'INWARD').reduce((acc, l) => acc + l.qty, 0);
                 matrixData.push([item.name, item.category_name, item.stock, totalIn]);
             });
-            const ws = XLSX.utils.
+            const ws = XLSX.utils.aoa_to_sheet(matrixData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Stock Ledger');
+            XLSX.writeFile(wb, `Stock_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        }
+    };
+};
+console.log("stockApp object closure successfully mapped to global scope.");
