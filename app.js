@@ -337,7 +337,7 @@ window.stockApp = function() {
         },
 
         async createUser() {
-            const { username, password, role } = this.newUserForm;
+            const { username, password, role = 'inward' } = this.newUserForm;
             if (!username || password.length < 6) return;
             await addDoc(colRef('users'), { username: username.trim(), passwordHash: await sha256(password), role });
             this.newUserForm = { username: '', password: '', role: 'inward' };
@@ -346,53 +346,61 @@ window.stockApp = function() {
         async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
         async deleteUser(userId) { if (confirm('Permanently delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
 
-        // 📊 ADVANCED COLUMN-STACKED MULTI-DAY EXCEL DOWNLOAD LOGIC
+        // 📊 GLOBAL TIME-STAMPED EXCEL LEDGER GENERATOR
         downloadExcelReport() {
-            // Setup structured headers exactly like your target ledger
+            // Helper function to extract and format distinct dates cleanly
+            const getLocalDateString = (offsetDays) => {
+                const d = new Date();
+                d.setDate(d.getDate() - offsetDays);
+                return d.toISOString().slice(0, 10); // Format: YYYY-MM-DD
+            };
+
+            // Calculate dynamic targets
+            const dateToday = getLocalDateString(0);
+            const dateYesterday = getLocalDateString(1);
+            const date2DaysAgo = getLocalDateString(2);
+
+            // Construct global calendar grid descriptors
             const matrixData = [
-                ["DATE", "TOTAL STOCK", "30JunIN", "30JunOUT", "29JunIN", "29JunOUT"], 
+                ["DATE", "TOTAL STOCK", "TODAY IN", "TODAY OUT", "YESTERDAY IN", "YESTERDAY OUT", "2 DAYS AGO IN", "2 DAYS AGO OUT"], 
                 ["ITEM NAME"] 
             ];
 
             this.processedItems.forEach(item => {
                 const row = [item.name, item.stock];
 
-                // 1. Process 30-Jun Inward Logs
-                let in30 = this.logs.filter(l => String(l.item_id) === String(item.id) && l.type === 'INWARD' && l.dateLabel === '30Jun');
-                row.push(in30.length ? `+${in30.reduce((acc, current) => acc + (parseInt(current.qty) || 0), 0)}` : "0");
+                // --- Helper mapping to extract operational delta matrices dynamically ---
+                const parseMetrics = (targetDate, actionType) => {
+                    let filtered = this.logs.filter(l => {
+                        if (!l.created_at || String(l.item_id) !== String(item.id) || l.type !== actionType) return false;
+                        return l.created_at.slice(0, 10) === targetDate;
+                    });
 
-                // 2. Process 30-Jun Outward Logs with Multi-line Department Stacking
-                let out30 = this.logs.filter(l => String(l.item_id) === String(item.id) && l.type === 'OUTWARD' && l.dateLabel === '30Jun');
-                if (out30.length) {
-                    let stackedOut = out30.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n");
-                    row.push(stackedOut);
-                } else {
-                    row.push("0");
-                }
+                    if (actionType === 'INWARD') {
+                        return filtered.length ? `+${filtered.reduce((sum, l) => sum + (parseInt(l.qty) || 0), 0)}` : "0";
+                    } else {
+                        return filtered.length ? filtered.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n") : "0";
+                    }
+                };
 
-                // 3. Process 29-Jun Inward Logs
-                let in29 = this.logs.filter(l => String(l.item_id) === String(item.id) && l.type === 'INWARD' && l.dateLabel === '29Jun');
-                row.push(in29.length ? `+${in29.reduce((acc, current) => acc + (parseInt(current.qty) || 0), 0)}` : "0");
-
-                // 4. Process 29-Jun Outward Logs with Multi-line Department Stacking
-                let out29 = this.logs.filter(l => String(l.item_id) === String(item.id) && l.type === 'OUTWARD' && l.dateLabel === '29Jun');
-                if (out29.length) {
-                    let stackedOut = out29.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n");
-                    row.push(stackedOut);
-                } else {
-                    row.push("0");
-                }
+                // Populate Column Array for the current Item Row
+                row.push(parseMetrics(dateToday, 'INWARD'));
+                row.push(parseMetrics(dateToday, 'OUTWARD'));
+                row.push(parseMetrics(dateYesterday, 'INWARD'));
+                row.push(parseMetrics(dateYesterday, 'OUTWARD'));
+                row.push(parseMetrics(date2DaysAgo, 'INWARD'));
+                row.push(parseMetrics(date2DaysAgo, 'OUTWARD'));
 
                 matrixData.push(row);
             });
 
             const ws = XLSX.utils.aoa_to_sheet(matrixData);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Monthly LIFO Ledger");
+            XLSX.utils.book_append_sheet(wb, ws, "LIFO Stock Ledger");
 
-            // Format column widths precisely to accommodate multi-line content layout blueprints
-            ws['!cols'] = [{wch: 24}, {wch: 14}, {wch: 12}, {wch: 26}, {wch: 12}, {wch: 26}];
-            XLSX.writeFile(wb, `Restaurant_Inventory_${new Date().toISOString().slice(0,10)}.xlsx`);
+            // Format dynamic column width bounds safely
+            ws['!cols'] = [{wch: 24}, {wch: 14}, {wch: 14}, {wch: 26}, {wch: 14}, {wch: 26}, {wch: 15}, {wch: 26}];
+            XLSX.writeFile(wb, `Stock_Matrix_Ledger_${dateToday}.xlsx`);
         }
     };
 };
