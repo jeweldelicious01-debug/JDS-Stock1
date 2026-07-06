@@ -264,17 +264,24 @@
                 </template>
             </div>
             <div class="bg-slate-50 border rounded p-3 space-y-2">
-                <div class="font-bold text-[11px] uppercase text-slate-600">➕ Create New User</div>
-                <div class="grid grid-cols-2 gap-2 text-xs">
-                    <input type="text" x-model="newUserForm.username" placeholder="Username" class="border p-2 rounded">
-                    <input type="password" x-model="newUserForm.password" placeholder="Password (6+ chars)" class="border p-2 rounded">
-                    <select x-model="newUserForm.role" class="border p-2 rounded col-span-2">
-                        <option value="admin">admin</option>
-                        <option value="inward">inward</option>
-                        <option value="outward">outward</option>
-                        <option value="readonly">readonly</option>
-                    </select>
-                </div>
+    <div class="font-bold text-[11px] uppercase text-slate-600">➕ Create New User</div>
+    
+    <div class="grid grid-cols-2 gap-2 text-xs">
+        <input type="text" x-model="newUserForm.username" placeholder="Username" class="border p-2 rounded">
+        <input type="password" x-model="newUserForm.password" placeholder="Password (6+ chars)" class="border p-2 rounded">
+        
+        <select x-model="newUserForm.role" class="border p-2 rounded col-span-2">
+            <option value="admin">admin</option>
+            <option value="inward">inward</option>
+            <option value="outward">outward</option>
+            <option value="readonly">readonly</option>
+        </select>
+    </div>
+
+    <p x-show="newUserError" x-text="newUserError" class="text-rose-600 text-[11px] font-bold" x-cloak></p>
+    
+    <button @click="createUser()" class="w-full bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold py-2 rounded transition">Create User</button>
+</div>
                 <p x-show="newUserError" x-text="newUserError" class="text-rose-600 text-[11px] font-bold" x-cloak></p>
                 <button @click="createUser()" class="w-full bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold py-2 rounded transition">Create User</button>
             </div>
