@@ -43,14 +43,13 @@ async function seedIfEmpty() {
             await setDoc(doc(dbFs, 'categories', cat.key), { name: cat.name, bg: cat.bg, border: cat.border, text_color: cat.text_color });
         }
     } catch (e) {
-        console.warn("Seeding skipped or protected by Firestore database rules: ", e);
+        console.warn("Seeding skipped or protected by database rules: ", e);
     }
 }
 
-// Explicitly register the factory globally for Alpine
 window.stockApp = function() {
     return {
-        // --- REACTIVE STORAGE DESKS ---
+        // --- TOP LEVEL REACTIVE ARRAYS ---
         categories: [],
         items: [],
         importantNotes: [],
@@ -83,25 +82,21 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async init() {
-            console.log("stockApp interface initialization firing...");
+            console.log("stockApp UI engine initializing...");
             await seedIfEmpty();
             
-            // Real-time categories syncing
             onSnapshot(colRef('categories'), (snap) => { 
                 this.categories = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
             });
             
-            // Real-time items syncing
             onSnapshot(colRef('items'), (snap) => { 
                 this.items = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
             });
             
-            // Real-time event notes panels syncing
             onSnapshot(colRef('notes'), (snap) => { 
                 this.importantNotes = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
             });
             
-            // Real-time logging operations sync engine
             onSnapshot(colRef('logs'), (snap) => { 
                 const rawLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                 this.logs = rawLogs
@@ -113,7 +108,6 @@ window.stockApp = function() {
                     });
             });
             
-            // Real-time user session status tracking
             onSnapshot(colRef('users'), (snap) => {
                 this.users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                 if (this.currentUserId) {
@@ -233,7 +227,6 @@ window.stockApp = function() {
             this.showNewItemModal = false;
         },
 
-        // --- ROCK SOLID INWARD METHOD ---
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty) return alert('Select missing fields.');
             
@@ -259,7 +252,6 @@ window.stockApp = function() {
             }
         },
 
-        // --- ROCK SOLID OUTWARD METHOD ---
         async deductOutward() {
             if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
             
@@ -280,62 +272,4 @@ window.stockApp = function() {
                     created_at: new Date().toISOString(),
                     created_by_name: this.currentUsername,
                 });
-                this.formOutward = { itemId: '', department: 'Indian', qty: '' };
-            } catch (error) {
-                alert("Database write error: " + error.message);
-            }
-        },
-
-        async triggerUndo(log) {
-            // 🟢 FIXED: Changed this.db.items to this.items and wrapped string conversions safely
-            const item = this.items.find((i) => String(i.id) === String(log.item_id));
-            if (!item) return alert('The original tracking entry row no longer exists.');
-            if (!this.isWithinOneHour(log.created_at)) return alert('Action window expired.');
-            
-            try {
-                if (log.type === 'INWARD') {
-                    await updateDoc(doc(dbFs, 'items', item.id), { stock: Math.max(0, Number(item.stock || 0) - Number(log.qty)) });
-                } else {
-                    await updateDoc(doc(dbFs, 'items', item.id), { stock: Number(item.stock || 0) + Number(log.qty) });
-                }
-                await deleteDoc(doc(dbFs, 'logs', log.id));
-                alert('Action reversed successfully.');
-            } catch (error) {
-                alert("Undo action failed: " + error.message);
-            }
-        },
-        async changeMyPassword() {
-            this.accountError = ''; this.accountSuccess = '';
-            const { currentPassword, newPassword } = this.accountForm;
-            if (newPassword.length < 6) { this.accountError = 'Min 6 characters'; return; }
-            const user = this.users.find((u) => u.id === this.currentUserId);
-            if ((await sha256(currentPassword)) !== user.passwordHash) { this.accountError = 'Incorrect current password'; return; }
-            await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: await sha256(newPassword) });
-            this.accountSuccess = 'Password updated successfully.';
-            this.accountForm = { currentPassword: '', newPassword: '' };
-        },
-
-        async createUser() {
-            const { username, password, role } = this.newUserForm;
-            if (!username || password.length < 6) return;
-            await addDoc(colRef('users'), { username: username.trim(), passwordHash: await sha256(password), role });
-            this.newUserForm = { username: '', password: '', role: 'inward' };
-        },
-
-        async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
-        async deleteUser(userId) { if (confirm('Permanently delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
-
-        downloadExcelReport() {
-            const matrixData = [['ITEM NAME', 'CATEGORY', 'CURRENT STOCK', 'TOTAL INWARD']];
-            this.processedItems.forEach((item) => {
-                const itemLogs = this.logs.filter((l) => l.item_id === item.id);
-                const totalIn = itemLogs.filter((l) => l.type === 'INWARD').reduce((acc, l) => acc + l.qty, 0);
-                matrixData.push([item.name, item.category_name, item.stock, totalIn]);
-            });
-            const ws = XLSX.utils.aoa_to_sheet(matrixData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Stock Ledger');
-            XLSX.writeFile(wb, `Stock_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
-        }
-    };
-};
+                this.formOutward = {
