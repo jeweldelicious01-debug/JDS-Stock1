@@ -357,13 +357,16 @@ window.stockApp = function() {
         },
 
         // 📊 SYSTEM-CALENDAR DYNAMIC EXCEL LEDGER GENERATOR
+        // 📊 AUTOMATED FULL-MONTH ROLLING LEDGER GENERATOR
         downloadExcelReport() {
+            // Helper function to extract and format distinct dates relative to the current system clock
             const getLocalDateString = (offsetDays) => {
                 const d = new Date();
                 d.setDate(d.getDate() - offsetDays);
-                return d.toISOString().slice(0, 10); 
+                return d.toISOString().slice(0, 10); // Returns format: "YYYY-MM-DD"
             };
 
+            // Helper function to turn a YYYY-MM-DD string into a clean header label (e.g., "07Jul")
             const formatHeaderLabel = (dateStr) => {
                 const parts = dateStr.split('-');
                 if (parts.length !== 3) return dateStr;
@@ -371,61 +374,74 @@ window.stockApp = function() {
                 return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); 
             };
 
-            const dateToday = getLocalDateString(0);
-            const dateYesterday = getLocalDateString(1);
-            const date2DaysAgo = getLocalDateString(2);
+            // 1. Generate an array of the last 30 calendar days dynamically
+            const targetDays = [];
+            for (let i = 0; i < 30; i++) {
+                targetDays.push(getLocalDateString(i));
+            }
 
-            const labelToday = formatHeaderLabel(dateToday);
-            const labelYesterday = formatHeaderLabel(dateYesterday);
-            const label2DaysAgo = formatHeaderLabel(date2DaysAgo);
+            // 2. Build the top header row dynamically based on those 30 days
+            const headerRow = ["DATE", "TOTAL STOCK"];
+            targetDays.forEach(dateStr => {
+                const dayLabel = formatHeaderLabel(dateStr);
+                headerRow.push(`${dayLabel}IN`);
+                headerRow.push(`${dayLabel}OUT`);
+            });
 
             const matrixData = [
-                [
-                    "DATE", 
-                    "TOTAL STOCK", 
-                    `${labelToday}IN`, 
-                    `${labelToday}OUT`, 
-                    `${labelYesterday}IN`, 
-                    `${labelYesterday}OUT`, 
-                    `${label2DaysAgo}IN`, 
-                    `${label2DaysAgo}OUT`
-                ], 
-                ["ITEM NAME"] 
+                headerRow,
+                ["ITEM NAME"] // Row alignment placeholder for SheetJS structure consistency
             ];
 
+            // 3. Process every database item and extract corresponding history columns
             this.processedItems.forEach(item => {
                 const row = [item.name, item.stock];
 
-                const parseMetrics = (targetDate, actionType) => {
-                    let filtered = this.logs.filter(l => {
-                        if (!l.created_at || String(l.item_id) !== String(item.id) || l.type !== actionType) return false;
-                        return l.created_at.slice(0, 10) === targetDate;
-                    });
+                // For each of the 30 days, pull matching transaction matrices
+                targetDays.forEach(targetDate => {
+                    
+                    // Filter Inwards for this specific day
+                    let dayInwards = this.logs.filter(l => 
+                        l.created_at && 
+                        String(l.item_id) === String(item.id) && 
+                        l.type === 'INWARD' && 
+                        l.created_at.slice(0, 10) === targetDate
+                    );
+                    row.push(dayInwards.length ? `+${dayInwards.reduce((sum, l) => sum + (parseInt(l.qty) || 0), 0)}` : "0");
 
-                    if (actionType === 'INWARD') {
-                        return filtered.length ? `+${filtered.reduce((sum, l) => sum + (parseInt(l.qty) || 0), 0)}` : "0";
+                    // Filter Outwards and stack department names for this specific day
+                    let dayOutwards = this.logs.filter(l => 
+                        l.created_at && 
+                        String(l.item_id) === String(item.id) && 
+                        l.type === 'OUTWARD' && 
+                        l.created_at.slice(0, 10) === targetDate
+                    );
+                    if (dayOutwards.length) {
+                        let stackedOut = dayOutwards.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n");
+                        row.push(stackedOut);
                     } else {
-                        return filtered.length ? filtered.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n") : "0";
+                        row.push("0");
                     }
-                };
-
-                row.push(parseMetrics(dateToday, 'INWARD'));
-                row.push(parseMetrics(dateToday, 'OUTWARD'));
-                row.push(parseMetrics(dateYesterday, 'INWARD'));
-                row.push(parseMetrics(dateYesterday, 'OUTWARD'));
-                row.push(parseMetrics(date2DaysAgo, 'INWARD'));
-                row.push(parseMetrics(date2DaysAgo, 'OUTWARD'));
+                });
 
                 matrixData.push(row);
             });
 
+            // 4. Compile workbook structure using SheetJS
             const ws = XLSX.utils.aoa_to_sheet(matrixData);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "LIFO Stock Ledger");
+            XLSX.utils.book_append_sheet(wb, ws, "30-Day LIFO Ledger");
 
-            ws['!cols'] = [{wch: 24}, {wch: 14}, {wch: 14}, {wch: 26}, {wch: 14}, {wch: 26}, {wch: 15}, {wch: 26}];
-            XLSX.writeFile(wb, `Stock_Report_${dateToday}.xlsx`);
-        }
-    };
+            // Set uniform formatting constraints for the generated columns
+            const colWidths = [{wch: 24}, {wch: 14}]; // Base parameters for Item and Stock
+            for (let i = 0; i < 60; i++) {
+                colWidths.push({ wch: i % 2 === 0 ? 14 : 26 }); // Alternates dynamic spacing widths for IN/OUT pairs
+            }
+            ws['!cols'] = colWidths;
+
+            // Trigger document compilation and save to download file directory
+            const currentDayString = getLocalDateString(0);
+            XLSX.writeFile(wb, `Restaurant_Month_Ledger_${currentDayString}.xlsx`);
+        }    };
 };
 console.log("stockApp object closure successfully mapped to global scope.");
