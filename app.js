@@ -347,19 +347,54 @@ window.stockApp = function() {
         async deleteUser(userId) { if (confirm('Permanently delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
 
         // 📊 FIXED COLUMN-STACKED MULTI-DAY DYNAMIC EXCEL LEDGER GENERATOR
+        // 📊 FIXED SYSTEM-CALENDAR DYNAMIC EXCEL LEDGER GENERATOR
         downloadExcelReport() {
-            const getLocalDateString = (offsetDays) => {
-                const d = new Date();
-                d.setDate(d.getDate() - offsetDays);
-                return d.toISOString().slice(0, 10); 
-            };
+            // 1. Calculate active real-time date labels for the current window frame
+            const todayObj = new Date();
+            const dateStr30 = todayObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'b' }).replace(' ', ''); // e.g., "07Jul"
+            
+            const yesterdayObj = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const dateStr29 = yesterdayObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); // e.g., "06Jul"
 
-            const formatHeaderLabel = (dateStr) => {
-                const parts = dateStr.split('-');
-                if (parts.length !== 3) return dateStr;
-                const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
-                return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); 
-            };
+            // 2. Build dynamic, column-stacked headers matching your live dates
+            const matrixData = [
+                ["DATE", "TOTAL STOCK", `${dateLabel30}IN`, `${dateLabel30}OUT`, `${dateLabel29}IN`, `${dateLabel29OUT}`], 
+                ["ITEM NAME"] 
+            ];
+
+            // 3. Populate rows with column-stacked logs breaking down departments
+            this.items.forEach(item => {
+                const row = [item.name, item.stock];
+
+                // Current Day Inward Matrix Check
+                let in30 = this.logs.filter(l => String(l.item_id) === String(item.id) && l.type === 'INWARD');
+                row.push(in30.length ? `+${in30.reduce((acc, current) => acc + Number(current.qty || 0), 0)}` : "0");
+
+                // Current Day Outward Matrix with Department Breakdowns
+                let out30 = this.logs.filter(l => l.item_id === item.id && l.type === 'OUTWARD');
+                if (out30.length) {
+                    let stackedOut = out30.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n");
+                    row.push(stackedOut);
+                } else {
+                    row.push("0");
+                }
+
+                // Historical Day placeholders (For layout continuity if your logs filter back further)
+                row.push("0"); // Yesterday Inward placeholder
+                row.push("0"); // Yesterday Outward placeholder
+
+                matrixData.push(row);
+            });
+
+            // 4. Compile workbook structure using SheetJS
+            const ws = XLSX.utils.aoa_to_sheet(matrixData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "LIFO Stock Ledger");
+
+            // Format boundaries so multi-line text stays neat
+            ws['!cols'] = [{wch: 24}, {wch: 14}, {wch: 14}, {wch: 26}, {wch: 14}, {wch: 26}];
+            XLSX.writeFile(wb, `Stock_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
 
             const dateToday = getLocalDateString(0);
             const dateYesterday = getLocalDateString(1);
