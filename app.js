@@ -1,4 +1,3 @@
-// app.js
 import { dbFs } from './firebase-config.js'; 
 import {
     collection,
@@ -30,19 +29,17 @@ const PALETTE = [
 
 async function seedIfEmpty() {
     try {
-        // 1. Independent User Provision Check
         const usersSnap = await getDocs(colRef('users'));
         if (usersSnap.empty) {
             const adminHash = await sha256('ChangeMe123!');
             await setDoc(doc(dbFs, 'users', 'admin-seed'), { username: 'admin', passwordHash: adminHash, role: 'admin' });
-            console.log("Admin user account provisioned successfully.");
         }
 
-        // 2. SMART SEEDING: Checks and provisions missing category indices independently
         const catSnap = await getDocs(colRef('categories'));
-        if (catSnap.empty) {
+        // If categories are empty OR if we have less than our target matrix, seed them safely
+        if (catSnap.size < 13) {
             const defaultCategories = [
-                { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334155' },
+                { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334151' },
                 { id: 'frozen', name: 'Frozen', emoji: '❄️', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#083344' },
                 { id: 'masala', name: 'Masala', emoji: '🍛', bg_color: '#fff7ed', border_color: '#f97316', text_color: '#7c2d12' },
                 { id: 'grain', name: 'Grain', emoji: '🌾', bg_color: '#fefce8', border_color: '#eab308', text_color: '#713f12' },
@@ -66,10 +63,9 @@ async function seedIfEmpty() {
                     text_color: cat.text_color 
                 });
             }
-            console.log("Strategic multicolor restaurant categories seeded cleanly.");
         }
     } catch (e) {
-        console.warn("Seeding framework bypassed safely: ", e);
+        console.warn("Seeding bypassed: ", e);
     }
 }
 
@@ -107,7 +103,6 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async init() {
-            console.log("stockApp execution context mounting standard routing paths...");
             await seedIfEmpty();
             
             onSnapshot(colRef('categories'), (snap) => { 
@@ -410,7 +405,6 @@ window.stockApp = function() {
             } catch (error) { alert("Reset failed: " + error.message); }
         },
 
-        // 📊 AUTOMATED FULL-MONTH ROLLING LEDGER GENERATOR
         downloadExcelReport() {
             const getLocalDateString = (offsetDays) => {
                 const d = new Date();
