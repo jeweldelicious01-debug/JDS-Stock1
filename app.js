@@ -90,6 +90,26 @@ window.stockApp = function() {
         formInward: { itemId: '', qty: '' },
         formOutward: { itemId: '', department: 'Indian', qty: '' },
         formNote: { itemName: '', pax: '', dateLabel: '' },
+        async reassignCategory(item) {
+    // 1. Prompt the operator with a list of available categories
+    let catList = this.categories.map((c, idx) => `${idx + 1}. ${c.name}`).join('\n');
+    let choice = prompt(`Select a new category number for "${item.name}":\n\n${catList}`);
+    
+    if (choice !== null) {
+        let idx = parseInt(choice) - 1;
+        if (idx >= 0 && idx < this.categories.length) {
+            let targetCategory = this.categories[idx];
+            
+            // 2. Update the item's category pointer in Firestore
+            await updateDoc(doc(dbFs, 'items', item.id), { 
+                category_id: targetCategory.id 
+            });
+            alert(`"${item.name}" has been successfully moved to ${targetCategory.name}!`);
+        } else {
+            alert("Invalid selection choice.");
+        }
+    }
+}
         
         showNewItemModal: false,
         newItemForm: { name: '', categoryId: '', newCategoryEmoji: '🍱', newCategoryName: '', threshold: 0, mrp: '' },
