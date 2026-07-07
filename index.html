@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Restaurant Stock Manager & Event Control Engine</title>
-    <link rel="stylesheet" href="https://unpkg.com/@tailwindcss/browser@4">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -237,9 +237,6 @@
                                     <button @click="modifyMrp(item)" class="text-amber-700 hover:text-amber-900 font-bold text-[11px]">MRP</button>
                                     <span x-show="currentRole === 'admin'" class="text-slate-200">|</span>
                                     <button x-show="currentRole === 'admin'" @click="purgeItem(item.id)" class="text-rose-600 hover:text-rose-900 font-bold text-[11px]">Purge</button>
-                               <!-- Inside index.html table row management buttons -->
-<button @click="reassignCategory(item)" class="text-indigo-600 font-bold text-[11px]">Move Cat</button>
-<span class="text-slate-200">|</span>
                                 </td>
                             </tr>
                         </template>
