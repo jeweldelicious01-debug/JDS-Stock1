@@ -1,3 +1,4 @@
+// app.js
 import { dbFs } from './firebase-config.js'; 
 import {
     collection,
@@ -20,55 +21,60 @@ async function sha256(text) {
 }
 
 const PALETTE = [
-    { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af' }, // Blue
-    { bg: '#fffbeb', border: '#f59e0b', text: '#92400e' }, // Amber
-    { bg: '#f0fdf4', border: '#22c55e', text: '#166534' }, // Green
-    { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8' }, // Purple
-    { bg: '#fdf2f8', border: '#ec4899', text: '#9d174d' }, // Pink
+    { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af' }, 
+    { bg: '#fffbeb', border: '#f59e0b', text: '#92400e' }, 
+    { bg: '#f0fdf4', border: '#22c55e', text: '#166534' }, 
+    { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8' }, 
+    { bg: '#fdf2f8', border: '#ec4899', text: '#9d174d' }, 
 ];
 
 async function seedIfEmpty() {
     try {
+        // 1. Independent User Provision Check
         const usersSnap = await getDocs(colRef('users'));
-        if (!usersSnap.empty) return;
+        if (usersSnap.empty) {
+            const adminHash = await sha256('ChangeMe123!');
+            await setDoc(doc(dbFs, 'users', 'admin-seed'), { username: 'admin', passwordHash: adminHash, role: 'admin' });
+            console.log("Admin user account provisioned successfully.");
+        }
 
-        const adminHash = await sha256('ChangeMe123!');
-        await setDoc(doc(dbFs, 'users', 'admin-seed'), { username: 'admin', passwordHash: adminHash, role: 'admin' });
-        
-        // Expanded 15-Category Matrix with tailored professional color scopes and asset icons
-        const defaultCategories = [
-            { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334155' },
-            { id: 'frozen', name: 'Frozen', emoji: '❄️', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#083344' },
-            { id: 'masala', name: 'Masala', emoji: '🍛', bg_color: '#fff7ed', border_color: '#f97316', text_color: '#7c2d12' },
-            { id: 'grain', name: 'Grain', emoji: '🌾', bg_color: '#fefce8', border_color: '#eab308', text_color: '#713f12' },
-            { id: 'vegetables', name: 'Vegetables', emoji: '🥦', bg_color: '#f0fdf4', border_color: '#22c55e', text_color: '#14532d' },
-            { id: 'bottle', name: 'Bottle', emoji: '🍾', bg_color: '#f5f5f4', border_color: '#737367', text_color: '#1c1917' },
-            { id: 'pasta', name: 'Pasta', emoji: '🍝', bg_color: '#fffbeb', border_color: '#f59e0b', text_color: '#78350f' },
-            { id: 'dairy', name: 'Dairy', emoji: '🥛', bg_color: '#eff6ff', border_color: '#3b82f6', text_color: '#1e40af' },
-            { id: 'disposables', name: 'Disposables', emoji: '🥤', bg_color: '#fafafa', border_color: '#a3a3a3', text_color: '#171717' },
-            { id: 'flour', name: 'Flour', emoji: '🥡', bg_color: '#fdf6f0', border_color: '#cca47c', text_color: '#4a3319' },
-            { id: 'tin', name: 'Tin', emoji: '🥫', bg_color: '#f0fdfa', border_color: '#14b8a6', text_color: '#115e59' },
-            { id: 'khademasala', name: 'KhadeMasala', emoji: '🌶️', bg_color: '#fff1f2', border_color: '#f43f5e', text_color: '#4c0519' },
-            { id: 'beverages', name: 'Beverages', emoji: '🧃', bg_color: '#fdf2f8', border_color: '#ec4899', text_color: '#701a75' }
-        ];
+        // 2. SMART SEEDING: Checks and provisions missing category indices independently
+        const catSnap = await getDocs(colRef('categories'));
+        if (catSnap.empty) {
+            const defaultCategories = [
+                { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334155' },
+                { id: 'frozen', name: 'Frozen', emoji: '❄️', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#083344' },
+                { id: 'masala', name: 'Masala', emoji: '🍛', bg_color: '#fff7ed', border_color: '#f97316', text_color: '#7c2d12' },
+                { id: 'grain', name: 'Grain', emoji: '🌾', bg_color: '#fefce8', border_color: '#eab308', text_color: '#713f12' },
+                { id: 'vegetables', name: 'Vegetables', emoji: '🥦', bg_color: '#f0fdf4', border_color: '#22c55e', text_color: '#14532d' },
+                { id: 'bottle', name: 'Bottle', emoji: '🍾', bg_color: '#f5f5f4', border_color: '#737367', text_color: '#1c1917' },
+                { id: 'pasta', name: 'Pasta', emoji: '🍝', bg_color: '#fffbeb', border_color: '#f59e0b', text_color: '#78350f' },
+                { id: 'dairy', name: 'Dairy', emoji: '🥛', bg_color: '#eff6ff', border_color: '#3b82f6', text_color: '#1e40af' },
+                { id: 'disposables', name: 'Disposables', emoji: '🥤', bg_color: '#fafafa', border_color: '#a3a3a3', text_color: '#171717' },
+                { id: 'flour', name: 'Flour', emoji: '🥡', bg_color: '#fdf6f0', border_color: '#cca47c', text_color: '#4a3319' },
+                { id: 'tin', name: 'Tin', emoji: '🥫', bg_color: '#f0fdfa', border_color: '#14b8a6', text_color: '#115e59' },
+                { id: 'khademasala', name: 'KhadeMasala', emoji: '🌶️', bg_color: '#fff1f2', border_color: '#f43f5e', text_color: '#4c0519' },
+                { id: 'beverages', name: 'Beverages', emoji: '🧃', bg_color: '#fdf2f8', border_color: '#ec4899', text_color: '#701a75' }
+            ];
 
-        for (const cat of defaultCategories) {
-            await setDoc(doc(dbFs, 'categories', cat.id), { 
-                name: cat.name, 
-                emoji: cat.emoji, 
-                bg_color: cat.bg_color, 
-                border_color: cat.border_color, 
-                text_color: cat.text_color 
-            });
+            for (const cat of defaultCategories) {
+                await setDoc(doc(dbFs, 'categories', cat.id), { 
+                    name: cat.name, 
+                    emoji: cat.emoji, 
+                    bg_color: cat.bg_color, 
+                    border_color: cat.border_color, 
+                    text_color: cat.text_color 
+                });
+            }
+            console.log("Strategic multicolor restaurant categories seeded cleanly.");
         }
     } catch (e) {
-        console.warn("Realtime seeding matrix initialization skipped: ", e);
+        console.warn("Seeding framework bypassed safely: ", e);
     }
 }
 
 window.stockApp = function() {
     return {
-        // --- REACTIVE STATE MANAGEMENT DESKS ---
         categories: [],
         items: [],
         importantNotes: [],
@@ -101,7 +107,7 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async init() {
-            console.log("stockApp core system framework running...");
+            console.log("stockApp execution context mounting standard routing paths...");
             await seedIfEmpty();
             
             onSnapshot(colRef('categories'), (snap) => { 
