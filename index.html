@@ -12,182 +12,231 @@
     <script type="module" src="app.js"></script>
     
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
 </head>
-<body class="bg-gray-50 text-gray-900 font-sans" x-data="stockApp()" x-init="init()">
+<body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp()" x-init="init()">
 
-    <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 bg-opacity-95 flex flex-col justify-center items-center z-50 p-4" x-cloak>
-        <div class="bg-white p-6 rounded-lg max-w-sm w-full shadow-2xl text-center border-t-4 border-amber-500">
-            <div class="text-3xl mb-1">🔐</div>
-            <h3 class="text-md font-bold tracking-tight text-slate-800 uppercase mb-4">Inventory Access Login</h3>
+    <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
+        <div class="bg-white p-8 rounded-xl max-w-sm w-full shadow-2xl border border-slate-200">
+            <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-4 border border-amber-200">🔑</div>
+            <h3 class="text-xl font-extrabold tracking-tight text-slate-800 text-center uppercase mb-1">System Portal</h3>
+            <p class="text-xs text-slate-500 text-center mb-6">Inventory Ledger Authentication</p>
 
-            <form @submit.prevent="verifyLogin()" class="space-y-3 text-left text-xs">
+            <form @submit.prevent="verifyLogin()" class="space-y-4 text-left text-xs">
                 <div>
-                    <label for="login-username" class="block font-semibold mb-1 text-gray-600">Username:</label>
-                    <input type="text" id="login-username" name="username" autocomplete="username" x-model="loginForm.username" placeholder="Enter username" class="border p-2 w-full rounded bg-gray-50 font-medium">
+                    <label for="login-username" class="block font-bold mb-1 text-slate-700 tracking-wide uppercase text-[10px]">Operator Username</label>
+                    <input type="text" id="login-username" name="username" autocomplete="username" x-model="loginForm.username" placeholder="e.g. admin" class="border border-slate-300 p-2.5 w-full rounded-lg bg-slate-50 focus:ring-2 focus:ring-slate-500 focus:border-slate-500 font-medium transition duration-150">
                 </div>
                 <div>
-                    <label for="login-password" class="block font-semibold mb-1 text-gray-600">Password:</label>
-                    <input type="password" id="login-password" name="password" autocomplete="current-password" x-model="loginForm.password" placeholder="••••••••" class="border p-2 w-full rounded text-center tracking-widest font-mono bg-gray-50 text-base">
+                    <label for="login-password" class="block font-bold mb-1 text-slate-700 tracking-wide uppercase text-[10px]">Passphrase Code</label>
+                    <input type="password" id="login-password" name="password" autocomplete="current-password" x-model="loginForm.password" placeholder="••••••••" class="border border-slate-300 p-2.5 w-full rounded-lg text-center tracking-widest font-mono bg-slate-50 text-base focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition duration-150">
                 </div>
-                <button type="submit" class="bg-slate-800 hover:bg-slate-900 text-white w-full py-2 rounded font-bold text-xs mt-4 uppercase tracking-wider transition">Unlock Dashboard</button>
+                <button type="submit" class="bg-slate-800 hover:bg-slate-900 text-white w-full py-3 rounded-lg font-bold text-xs mt-4 uppercase tracking-wider shadow-md transition duration-150">Unlock Corporate Dashboard</button>
             </form>
-            <p x-show="loginError" x-text="loginError" class="text-rose-600 text-[11px] font-bold mt-2" x-cloak></p>
+            <p x-show="loginError" x-text="loginError" class="text-rose-600 text-xs font-bold text-center mt-3" x-cloak></p>
         </div>
     </div>
 
-    <main class="max-w-6xl mx-auto p-4 space-y-5" x-show="isAuthenticated" x-cloak>
-        <header class="bg-white p-4 rounded border border-gray-200 shadow-xs flex justify-between items-center gap-4 flex-wrap">
-            <div>
-                <h1 class="text-lg font-black tracking-tight text-slate-800">🍽️ Restaurant Inventory Dashboard</h1>
-                <p class="text-xs text-gray-500">Logged in as <span class="font-bold text-slate-900" x-text="currentUsername"></span> · Role: <span class="font-bold uppercase text-slate-900 underline" x-text="currentRole"></span></p>
+    <main class="max-w-6xl mx-auto p-4 space-y-6" x-show="isAuthenticated" x-cloak>
+        
+        <header class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center gap-4 flex-wrap">
+            <div class="space-y-1">
+                <h1 class="text-2xl font-black tracking-tight text-slate-800 flex items-center gap-2">📊 Restaurant Inventory Operations</h1>
+                <p class="text-xs text-slate-500">
+                    Active User Session: <span class="font-bold text-slate-800" x-text="currentUsername"></span> 
+                    <span class="mx-2 text-slate-300">|</span> 
+                    Security Scope: <span class="bg-slate-100 text-slate-800 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-slate-200" x-text="currentRole"></span>
+                </p>
             </div>
-            <div class="flex gap-2">
-                <button @click="showAccountModal = true" class="text-[11px] bg-slate-50 hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded font-bold tracking-wide transition shadow-xs">👤 My Account</button>
-                <button x-show="currentRole === 'admin'" @click="showUserAdminModal = true" class="text-[11px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded font-bold tracking-wide transition shadow-xs">🧑‍💼 Manage Users</button>
-                <button @click="downloadExcelReport()" class="text-[11px] bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-bold tracking-wide flex items-center gap-1 transition shadow-xs">📊 Download True Excel (.xlsx)</button>
-                <button @click="logout()" class="text-[11px] bg-red-50 hover:bg-red-100 text-red-700 font-bold px-2.5 py-1.5 rounded transition">🔒 Lock Session</button>
+            <div class="flex gap-2 items-center flex-wrap">
+                <button @click="showAccountModal = true" class="text-xs bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2 rounded-lg font-bold tracking-wide transition shadow-sm">👤 Security Settings</button>
+                <button x-show="currentRole === 'admin'" @click="showUserAdminModal = true" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg font-bold tracking-wide border border-indigo-200 transition shadow-sm">🧑‍💼 Operator Management</button>
+                <button @click="downloadExcelReport()" class="text-xs bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg font-bold tracking-wide flex items-center gap-1.5 transition shadow-md">📊 Export LIFO Excel (.xlsx)</button>
+                <button @click="logout()" class="text-xs bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold px-3 py-2 rounded-lg transition">🔒 Close Session</button>
             </div>
         </header>
 
-        <section class="bg-amber-50 border-l-4 border-amber-600 p-4 rounded-r text-xs text-amber-950 space-y-3 shadow-xs">
-            <div class="flex justify-between items-center border-b border-amber-200 pb-1.5">
-                <span class="font-bold uppercase tracking-wider text-amber-900 text-sm flex items-center gap-1">📢 Large Order High-Pax Notice Alerts</span>
-                <span x-show="currentRole === 'admin'" class="bg-amber-200 text-amber-900 px-2 py-0.5 rounded font-bold text-[10px]">Admin Controls Unlocked</span>
+        <section class="bg-amber-50 border border-amber-200 p-4 rounded-xl text-xs text-amber-950 space-y-3 shadow-xs">
+            <div class="flex justify-between items-center border-b border-amber-200 pb-2">
+                <span class="font-bold uppercase tracking-wider text-amber-900 text-xs flex items-center gap-1.5">📢 Scheduled High-Pax Catering Event Matrix</span>
+                <span x-show="currentRole === 'admin'" class="bg-amber-200 text-amber-900 px-2 py-0.5 rounded font-bold text-[10px] uppercase tracking-wide">Admin Authority Active</span>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <template x-for="note in importantNotes" :key="note.id">
-                    <div class="bg-white border border-amber-200 p-2.5 rounded shadow-xs flex justify-between items-center">
-                        <div>📌 Need extra <strong class="text-slate-900 text-sm" x-text="note.item_name"></strong> for <strong class="text-amber-700 text-sm" x-text="note.pax + ' Pax'"></strong> on Date: <span class="underline font-bold text-slate-800" x-text="note.date_label"></span></div>
-                        <button x-show="currentRole === 'admin'" @click="deleteNote(note.id)" class="text-rose-600 hover:bg-rose-100 border border-rose-200 font-bold px-2 py-1 rounded text-[10px] transition">🗑️ Delete</button>
+                    <div class="bg-white border border-amber-200 p-3 rounded-lg shadow-xs flex justify-between items-center transition hover:border-amber-300">
+                        <div class="text-slate-700 font-medium">📌 Special stock procurement allocation required for <strong class="text-slate-900 font-bold text-sm" x-text="note.item_name"></strong> serving <strong class="text-amber-800 font-extrabold text-sm" x-text="note.pax + ' Pax'"></strong>. Target Deadline: <span class="underline font-bold text-slate-900" x-text="note.date_label"></span></div>
+                        <button x-show="currentRole === 'admin'" @click="deleteNote(note.id)" class="text-rose-600 hover:bg-rose-50 border border-rose-100 font-bold px-2 py-1 rounded-md text-[10px] transition shrink-0 ml-2">🗑️ Remove</button>
                     </div>
                 </template>
                 <template x-if="importantNotes.length === 0">
-                    <p class="text-gray-400 italic py-1">No large order notes scheduled in the platform tracker currently.</p>
+                    <p class="text-slate-400 italic py-1">No upcoming large-scale event allocations pending verification.</p>
                 </template>
             </div>
-            <div x-show="currentRole === 'admin'" class="bg-amber-100/60 border border-amber-300 p-3 rounded space-y-2 mt-2">
-                <div class="font-bold text-amber-900 text-[11px] uppercase tracking-wider">➕ Create Event Alert Note:</div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <input type="text" x-model="formNote.itemName" placeholder="Item Name" class="border border-amber-300 p-2 rounded bg-white text-xs">
-                    <input type="number" x-model.number="formNote.pax" placeholder="Pax Count" class="border border-amber-300 p-2 rounded bg-white text-xs text-center font-mono">
-                    <input type="text" x-model="formNote.dateLabel" placeholder="Date Label" class="border border-amber-300 p-2 rounded bg-white text-xs text-center font-mono">
+            <div x-show="currentRole === 'admin'" class="bg-white border border-amber-200 p-4 rounded-lg space-y-3 mt-2 shadow-xs">
+                <div class="font-bold text-amber-900 text-[11px] uppercase tracking-wider flex items-center gap-1">➕ Stage Event Allocation Note:</div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Item Title</label>
+                        <input type="text" x-model="formNote.itemName" placeholder="e.g. Basmati Rice" class="border border-slate-300 p-2 rounded-md bg-slate-50 text-xs w-full focus:ring-1 focus:ring-amber-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Headcount (Pax)</label>
+                        <input type="number" x-model.number="formNote.pax" placeholder="e.g. 350" class="border border-slate-300 p-2 rounded-md bg-slate-50 text-xs text-center font-mono w-full focus:ring-1 focus:ring-amber-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Target Date</label>
+                        <input type="text" x-model="formNote.dateLabel" placeholder="e.g. 12-Jul" class="border border-slate-300 p-2 rounded-md bg-slate-50 text-xs text-center font-mono w-full focus:ring-1 focus:ring-amber-500">
+                    </div>
                 </div>
-                <button @click="submitNewNote()" class="bg-amber-700 hover:bg-amber-800 text-white font-bold text-[11px] px-3 py-1.5 rounded shadow-xs uppercase transition tracking-wider">Add Note To Live Banner</button>
+                <button @click="submitNewNote()" class="bg-amber-700 hover:bg-amber-800 text-white font-bold text-[11px] px-4 py-2 rounded-lg shadow-sm uppercase transition tracking-wider">Publish Alert Note to Banner</button>
             </div>
         </section>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4" x-show="currentRole !== 'readonly'">
-            <div class="bg-white p-4 rounded border border-gray-200 shadow-xs space-y-3" x-show="currentRole === 'admin' || currentRole === 'inward'">
-                <div class="text-xs font-bold uppercase tracking-wider text-emerald-800 border-b pb-1">📥 Log New Inward Entry</div>
-                <div class="grid grid-cols-3 gap-2 text-xs">
-                    <select x-model="formInward.itemId" class="border p-2 rounded bg-white col-span-2">
-                        <option value="">-- Select Product --</option>
-                        <template x-for="item in items" :key="item.id">
-                            <option :value="item.id" x-text="item.name"></option>
-                        </template>
-                    </select>
-                    <input type="number" x-model.number="formInward.qty" placeholder="Units" class="border p-2 rounded text-center font-mono">
-                </div>
-                <button @click="addInward()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2 rounded transition uppercase tracking-wide mb-2">Commit Inward Entry</button>
-                <div class="pt-2 border-t border-dashed border-gray-200 space-y-2">
-                    <div class="flex justify-between items-center">
-                        <label class="block text-[11px] font-bold uppercase text-slate-500">➕ Create New Item</label>
-                        <button @click="showNewItemModal = true" class="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2 py-1 rounded transition">New Item / Category</button>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="currentRole !== 'readonly'">
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
+                <div class="text-xs font-bold uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2 flex items-center gap-1.5">📥 Log New Inward Consignment</div>
+                <div class="grid grid-cols-3 gap-3 text-xs">
+                    <div class="col-span-2">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Select Tracked Product</label>
+                        <select x-model="formInward.itemId" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-medium text-slate-700">
+                            <option value="">-- Active Inventory Index --</option>
+                            <template x-for="item in items" :key="item.id">
+                                <option :value="item.id" x-text="item.name"></option>
+                            </template>
+                        </select>
                     </div>
-                    <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1">📦 Bulk Upload Inward (CSV):</label>
-                    <input type="file" accept=".csv" @change="handleCsvUpload($event)" class="block w-full text-xs text-gray-500 file:mr-3 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-[11px] file:font-bold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity</label>
+                        <input type="number" x-model.number="formInward.qty" placeholder="Units" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
+                    </div>
+                </div>
+                <button @click="addInward()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2.5 rounded-lg shadow-sm transition uppercase tracking-wider">Commit Inward Entry to Cloud</button>
+                
+                <div class="pt-3 border-t border-dashed border-slate-200 flex flex-col gap-3">
+                    <div class="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-200">
+                        <span class="text-[11px] font-bold uppercase text-slate-600">Index Extensions Desk:</span>
+                        <button @click="showNewItemModal = true" class="text-[11px] bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-1.5 rounded-md transition shadow-xs">➕ Add New Item Portfolio</button>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Bulk Dataset File Parsing (.CSV Ingestion):</label>
+                        <input type="file" accept=".csv" @change="handleCsvUpload($event)" class="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-slate-200 file:text-[11px] file:font-bold file:bg-white file:text-slate-700 hover:file:bg-slate-50 cursor-pointer">
+                    </div>
                 </div>
             </div>
 
-            <div class="bg-white p-4 rounded border border-gray-200 shadow-xs space-y-3" x-show="currentRole === 'admin' || currentRole === 'outward'">
-                <div class="text-xs font-bold uppercase tracking-wider text-rose-800 border-b pb-1">📤 Issue Outward Allocation</div>
-                <div class="grid grid-cols-3 gap-2 text-xs">
-                    <select x-model="formOutward.itemId" class="border p-2 rounded bg-white col-span-1">
-                        <option value="">-- Item --</option>
-                        <template x-for="item in items" :key="item.id">
-                            <option :value="item.id" x-text="item.name"></option>
-                        </template>
-                    </select>
-                    <select x-model="formOutward.department" class="border p-2 rounded bg-white col-span-1 font-semibold text-slate-700">
-                        <template x-for="dept in departments" :key="dept">
-                            <option :value="dept" x-text="dept"></option>
-                        </template>
-                    </select>
-                    <input type="number" x-model.number="formOutward.qty" placeholder="Units" class="border p-2 rounded text-center font-mono col-span-1">
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'outward'">
+                <div class="text-xs font-bold uppercase tracking-wider text-rose-800 border-b border-slate-100 pb-2 flex items-center gap-1.5">📤 Issue Line Outward Allocation</div>
+                <div class="grid grid-cols-3 gap-3 text-xs">
+                    <div class="col-span-1">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Product</label>
+                        <select x-model="formOutward.itemId" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-medium text-slate-700">
+                            <option value="">-- Item --</option>
+                            <template x-for="item in items" :key="item.id">
+                                <option :value="item.id" x-text="item.name"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="col-span-1">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cost Center (Dept)</label>
+                        <select x-model="formOutward.department" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-bold text-slate-700">
+                            <template x-for="dept in departments" :key="dept">
+                                <option :value="dept" x-text="dept"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div class="col-span-1">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity</label>
+                        <input type="number" x-model.number="formOutward.qty" placeholder="Units" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
+                    </div>
                 </div>
-                <button @click="deductOutward()" class="w-full bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold py-2 rounded transition uppercase tracking-wide">Deduct & Issue Stock</button>
+                <button @click="deductOutward()" class="w-full bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold py-2.5 rounded-lg shadow-sm transition uppercase tracking-wider">Execute Deduction & Issue Stock</button>
             </div>
         </div>
 
-        <div x-show="logs.length > 0 && currentRole !== 'readonly'" class="bg-white p-3 rounded border border-slate-200 shadow-xs">
-            <div class="text-[11px] font-bold uppercase text-slate-500 tracking-wider mb-2">⏱️ Recent Activity Operations (Undo within 1-Hour window):</div>
+        <div x-show="logs.length > 0 && currentRole !== 'readonly'" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
+            <div class="text-[11px] font-bold uppercase text-slate-500 tracking-wider flex items-center gap-1.5">⏱️ Real-time Transaction Ledger Streams (LIFO Buffer Timeline):</div>
             <div class="flex flex-wrap gap-2">
                 <template x-for="log in logs" :key="log.id">
-                    <div class="bg-slate-50 border px-2.5 py-1 rounded text-xs flex items-center gap-2 font-mono">
-                        <span :class="log.type === 'INWARD' ? 'text-emerald-700' : 'text-rose-700'" class="font-bold">
-                            <span x-text="log.type === 'INWARD' ? '📥 +' : '📤 -'"></span><span x-text="log.qty"></span>
+                    <div class="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2.5 font-mono shadow-2xs">
+                        <span :class="log.type === 'INWARD' ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-rose-700 bg-rose-50 border border-rose-200'" class="font-bold px-1.5 py-0.5 rounded text-[10px]">
+                            <span x-text="log.type === 'INWARD' ? '📥 IN +' : '📤 OUT -'"></span><span x-text="log.qty"></span>
                         </span>
                         <span class="font-bold font-sans text-slate-800" x-text="log.item_name"></span>
-                        <span x-show="log.department" class="text-[10px] bg-slate-200 text-slate-700 px-1 rounded font-bold" x-text="log.department"></span>
-                        <button x-show="isWithinOneHour(log.created_at)" @click="triggerUndo(log)" class="text-[10px] bg-amber-100 hover:bg-amber-200 text-amber-900 px-1.5 py-0.5 rounded font-black font-sans transition">↩ Undo</button>
+                        <span x-show="log.department" class="text-[10px] bg-slate-200 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold" x-text="log.department"></span>
+                        <button x-show="isWithinOneHour(log.created_at)" @click="triggerUndo(log)" class="text-[10px] bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 px-2 py-0.5 rounded-md font-extrabold font-sans transition">↩ Rollback</button>
                     </div>
                 </template>
             </div>
         </div>
 
-        <section class="bg-white rounded border border-gray-200 shadow-xs overflow-hidden">
-            <div class="p-3 bg-slate-100 border-b flex flex-wrap justify-between items-center gap-2">
-                <div class="text-xs font-black text-slate-700 uppercase tracking-wide">Live Stock Level Counter</div>
-                <div class="flex flex-wrap gap-1 text-[11px] font-bold">
-                    <button @click="filterCat = 'all'" :class="filterCat === 'all' ? 'bg-slate-800 text-white' : 'bg-white text-slate-700 border'" class="px-2.5 py-1 rounded transition">All Categories</button>
+        <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
+                <div class="space-y-0.5">
+                    <div class="text-sm font-extrabold text-slate-800 uppercase tracking-wide">Live Infrastructure Ledger Engine</div>
+                    <p class="text-[11px] text-slate-500">Real-time balances matching safety parameters</p>
+                </div>
+                
+                <div class="flex flex-wrap gap-1.5 text-xs font-bold">
+                    <button @click="filterCat = 'all'" :class="filterCat === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'" class="px-3 py-1.5 rounded-lg border shadow-2xs transition">📁 All Categories</button>
                     <template x-for="cat in categories" :key="cat.id">
-                        <button @click="filterCat = cat.name" :style="'background-color: ' + (filterCat === cat.name ? cat.border : cat.bg) + '; color: ' + (filterCat === cat.name ? '#fff' : cat.text_color) + '; border-color: ' + cat.border" class="px-2.5 py-1 rounded border transition" x-text="cat.name"></button>
+                        <button @click="filterCat = cat.name" 
+                                :style="filterCat === cat.name ? 'background-color: ' + cat.border_color + '; color: #fff; border-color: ' + cat.border_color : 'background-color: ' + cat.bg_color + '; color: ' + cat.text_color + '; border-color: ' + cat.border_color"
+                                class="px-3 py-1.5 rounded-lg border shadow-2xs transition" 
+                                x-text="(cat.emoji || '📦') + ' ' + cat.name"></button>
                     </template>
                 </div>
             </div>
+            
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs border-collapse">
                     <thead>
-                        <tr class="bg-slate-50 border-b text-slate-500 uppercase tracking-wider text-[11px] font-bold">
-                            <th class="p-3 w-16 text-center" x-show="currentRole === 'admin'">Move</th>
-                            <th class="p-3">Item Name</th>
-                            <th class="p-3">Category</th>
-                            <th class="p-3 text-center">Current Stock Balance</th>
-                            <th class="p-3 text-center">Safety Threshold</th>
-                            <th class="p-3">Status Label Alert</th>
-                            <th class="p-3 text-right" x-show="currentRole === 'admin' || currentRole === 'inward'">Controls</th>
+                        <tr class="bg-slate-100/70 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
+                            <th class="p-4 w-16 text-center" x-show="currentRole === 'admin'">Sort</th>
+                            <th class="p-4 text-sm">Item Name</th>
+                            <th class="p-4">Operational Category Tag</th>
+                            <th class="p-4 text-center">Live Stock Balance</th>
+                            <th class="p-4 text-center">Safety Limit</th>
+                            <th class="p-4 text-center">Unit Price (MRP)</th>
+                            <th class="p-4">Status Threshold Vector</th>
+                            <th class="p-4 text-right" x-show="currentRole === 'admin' || currentRole === 'inward'">Management Axis</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y">
+                    <tbody class="divide-y divide-slate-100">
                         <template x-for="item in processedItems" :key="item.id">
-                            <tr :class="item.stock <= item.threshold ? 'bg-red-50/70 font-semibold' : 'bg-white'">
-                                <td class="p-3 text-center space-x-1 whitespace-nowrap" x-show="currentRole === 'admin'">
-                                    <button @click="shiftOrder(item.id, 'up')" class="text-slate-400 hover:text-black font-bold">▲</button>
-                                    <button @click="shiftOrder(item.id, 'down')" class="text-slate-400 hover:text-black font-bold">▼</button>
+                            <tr :class="item.stock <= item.threshold ? 'bg-rose-50/40 font-medium' : 'bg-white hover:bg-slate-50/50'" class="transition duration-75">
+                                <td class="p-4 text-center space-x-1 whitespace-nowrap" x-show="currentRole === 'admin'">
+                                    <button @click="shiftOrder(item.id, 'up')" class="text-slate-400 hover:text-slate-800 font-bold transition">▲</button>
+                                    <button @click="shiftOrder(item.id, 'down')" class="text-slate-400 hover:text-slate-800 font-bold transition">▼</button>
                                 </td>
-                                <td class="p-3 font-bold text-slate-900 text-sm" x-text="item.name"></td>
-                                <td class="p-3">
-                                    <span :style="'background-color: ' + item.bg + '; color: ' + item.text_color + '; border-color: ' + item.border" class="px-2 py-0.5 rounded text-[10px] uppercase font-bold border" x-text="item.category_name"></span>
+                                <td class="p-4 font-extrabold text-slate-900 text-sm" x-text="item.name"></td>
+                                <td class="p-4">
+                                    <span :style="'background-color: ' + item.bg + '; color: ' + item.text_color + '; border-color: ' + item.border" class="px-2.5 py-1 rounded-md text-[10px] uppercase font-extrabold border shadow-2xs whitespace-nowrap" x-text="(item.emoji || '📦') + ' ' + item.category_name"></span>
                                 </td>
-                                <td class="p-3 text-center font-mono text-sm font-bold" :class="item.stock <= item.threshold ? 'text-red-600' : 'text-slate-800'" x-text="item.stock"></td>
-                                <td class="p-3 text-center font-mono text-gray-500" x-text="item.threshold"></td>
-                                <td class="p-3">
+                                <td class="p-4 text-center font-mono text-sm font-black" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="item.stock"></td>
+                                <td class="p-4 text-center font-mono text-slate-400 font-medium" x-text="item.threshold"></td>
+                                <td class="p-4 text-center font-mono font-bold text-slate-700" x-text="'₹' + (item.mrp || 0)"></td>
+                                <td class="p-4">
                                     <template x-if="item.stock === 0">
-                                        <span class="bg-red-600 text-white text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-widest">🚨 RUNNING OUT</span>
+                                        <span class="bg-rose-600 text-white text-[9px] px-2 py-0.5 rounded-sm font-black uppercase tracking-wider shadow-2xs">🚨 depleted</span>
                                     </template>
                                     <template x-if="item.stock > 0 && item.stock <= item.threshold">
-                                        <span class="bg-amber-500 text-slate-950 text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-widest">⚠️ LOW STOCK</span>
+                                        <span class="bg-amber-500 text-slate-950 text-[9px] px-2 py-0.5 rounded-sm font-black uppercase tracking-wider shadow-2xs">⚠️ breach limit</span>
                                     </template>
                                     <template x-if="item.stock > item.threshold">
-                                        <span class="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.5 rounded font-medium">Stable</span>
+                                        <span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] px-2 py-0.5 rounded-md font-bold">Stable Matrix</span>
                                     </template>
                                 </td>
-                                <td class="p-3 text-right space-x-2 whitespace-nowrap" x-show="currentRole === 'admin' || currentRole === 'inward'">
-                                    <button @click="changeItemName(item)" class="text-blue-700 hover:underline font-bold text-[11px]">✏️ Rename</button>
-                                    <span class="text-gray-300">|</span>
-                                    <button @click="modifyThreshold(item)" class="text-slate-600 hover:underline font-bold text-[11px]">Set Threshold</button>
-                                    <span x-show="currentRole === 'admin'" class="text-gray-300">|</span>
-                                    <button x-show="currentRole === 'admin'" @click="purgeItem(item.id)" class="text-rose-600 hover:underline font-bold text-[11px]">Purge</button>
+                                <td class="p-4 text-right space-x-2.5 whitespace-nowrap" x-show="currentRole === 'admin' || currentRole === 'inward'">
+                                    <button @click="changeItemName(item)" class="text-slate-600 hover:text-slate-900 font-bold text-[11px]">✏️ Rename</button>
+                                    <span class="text-slate-200">|</span>
+                                    <button @click="modifyThreshold(item)" class="text-slate-600 hover:text-slate-900 font-bold text-[11px]">Limit</button>
+                                    <span class="text-slate-200">|</span>
+                                    <button @click="modifyMrp(item)" class="text-amber-700 hover:text-amber-900 font-bold text-[11px]">MRP</button>
+                                    <span x-show="currentRole === 'admin'" class="text-slate-200">|</span>
+                                    <button x-show="currentRole === 'admin'" @click="purgeItem(item.id)" class="text-rose-600 hover:text-rose-900 font-bold text-[11px]">Purge</button>
                                 </td>
                             </tr>
                         </template>
@@ -197,77 +246,99 @@
         </section>
     </main>
 
-    <div x-show="showNewItemModal" class="fixed inset-0 bg-slate-900/70 flex items-center justify-center z-50 p-4" x-cloak>
-        <div class="bg-white p-5 rounded-lg max-w-sm w-full shadow-2xl space-y-3">
-            <h3 class="text-sm font-bold uppercase text-slate-800">➕ New Item / Category</h3>
-            <div class="space-y-2 text-xs">
-                <label for="new-item-name" class="block font-semibold text-gray-600">Item Name</label>
-                <input type="text" id="new-item-name" x-model="newItemForm.name" class="border p-2 w-full rounded" placeholder="e.g. Basmati Rice">
-                <label for="new-item-category" class="block font-semibold text-gray-600 mt-2">Category</label>
-                <select id="new-item-category" x-model="newItemForm.categoryId" class="border p-2 w-full rounded">
-                    <option value="">-- Select Existing --</option>
-                    <template x-for="cat in categories" :key="cat.id">
-                        <option :value="cat.id" x-text="cat.name"></option>
-                    </template>
-                </select>
-                <input type="text" id="new-custom-category" x-model="newItemForm.newCategoryName" class="border p-2 w-full rounded mt-1" placeholder="New category name (optional)">
-                <label for="new-item-threshold" class="block font-semibold text-gray-600 mt-2">Starting Threshold</label>
-                <input type="number" id="new-item-threshold" x-model.number="newItemForm.threshold" class="border p-2 w-full rounded" placeholder="0">
+    <div x-show="showNewItemModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
+        <div class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <h3 class="text-sm font-black uppercase text-slate-800 tracking-wide border-b pb-1">➕ Append Portfolio Tracking row</h3>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Product Description Label</label>
+                    <input type="text" x-model="newItemForm.name" class="border border-slate-300 p-2 w-full rounded-md focus:ring-1 focus:ring-slate-500" placeholder="e.g. Cardamom Powder">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Select Base Operational Segment</label>
+                    <select x-model="newItemForm.categoryId" class="border border-slate-300 p-2 w-full rounded-md bg-white text-slate-700">
+                        <option value="">-- Assign Portfolio Group --</option>
+                        <template x-for="cat in categories" :key="cat.id">
+                            <option :value="cat.id" x-text="cat.name"></option>
+                        </template>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Or Initialize New Custom Category</label>
+                    <div class="grid grid-cols-4 gap-1">
+                        <input type="text" x-model="newItemForm.newCategoryEmoji" class="border border-slate-300 p-2 rounded-md text-center text-sm col-span-1" placeholder="🍱">
+                        <input type="text" x-model="newItemForm.newCategoryName" class="border border-slate-300 p-2 rounded-md col-span-3" placeholder="Category Name">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Safety Limit</label>
+                        <input type="number" x-model.number="newItemForm.threshold" class="border border-slate-300 p-2 w-full rounded-md font-mono text-center" placeholder="10">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-slate-600 mb-1">Unit Price (MRP)</label>
+                        <input type="number" x-model.number="newItemForm.mrp" class="border border-slate-300 p-2 w-full rounded-md font-mono text-center" placeholder="₹0">
+                    </div>
+                </div>
             </div>
             <div class="flex gap-2 pt-2">
-                <button @click="showNewItemModal = false" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2 rounded transition">Cancel</button>
-                <button @click="submitNewItem()" class="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2 rounded transition">Create</button>
+                <button @click="showNewItemModal = false" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold py-2.5 rounded-lg transition">Dismiss</button>
+                <button @click="submitNewItem()" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2.5 rounded-lg shadow-sm transition">Commit Axis</button>
             </div>
         </div>
     </div>
 
-    <div x-show="showAccountModal" class="fixed inset-0 bg-slate-900/70 flex items-center justify-center z-50 p-4" x-cloak>
-        <form @submit.prevent="changeMyPassword()" class="bg-white p-5 rounded-lg max-w-sm w-full shadow-2xl space-y-3">
-            <h3 class="text-sm font-bold uppercase text-slate-800">👤 My Account</h3>
-            <div class="space-y-2 text-xs">
-                <label for="account-current-pass" class="block font-semibold text-gray-600">Current Password</label>
-                <input type="password" id="account-current-pass" name="current_password" autocomplete="current-password" x-model="accountForm.currentPassword" class="border p-2 w-full rounded">
-                <label for="account-new-pass" class="block font-semibold text-gray-600 mt-2">New Password</label>
-                <input type="password" id="account-new-pass" name="new_password" autocomplete="new-password" x-model="accountForm.newPassword" class="border p-2 w-full rounded">
+    <div x-show="showAccountModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
+        <form @submit.prevent="changeMyPassword()" class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
+            <h3 class="text-sm font-bold uppercase text-slate-800 tracking-wide border-b pb-1">👤 Account Credentials Configuration</h3>
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">Current Active Password</label>
+                    <input type="password" name="current_password" autocomplete="current-password" x-model="accountForm.currentPassword" class="border border-slate-300 p-2 w-full rounded-md">
+                </div>
+                <div>
+                    <label class="block font-bold text-slate-600 mb-1">New Structural Security Key</label>
+                    <input type="password" name="new_password" autocomplete="new-password" x-model="accountForm.newPassword" class="border border-slate-300 p-2 w-full rounded-md">
+                </div>
             </div>
             <p x-show="accountError" x-text="accountError" class="text-rose-600 text-[11px] font-bold" x-cloak></p>
             <p x-show="accountSuccess" x-text="accountSuccess" class="text-emerald-600 text-[11px] font-bold" x-cloak></p>
             <div class="flex gap-2 pt-2">
-                <button type="button" @click="showAccountModal = false" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2 rounded transition">Close</button>
-                <button type="submit" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 rounded transition">Update Password</button>
+                <button type="button" @click="showAccountModal = false" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold py-2.5 rounded-lg transition">Dismiss</button>
+                <button type="submit" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2.5 rounded-lg shadow-sm transition">Apply Update</button>
             </div>
         </form>
     </div>
 
-    <div x-show="showUserAdminModal" class="fixed inset-0 bg-slate-900/70 flex items-center justify-center z-50 p-4" x-cloak>
-        <div class="bg-white p-5 rounded-lg max-w-lg w-full shadow-2xl space-y-3 max-h-[85vh] overflow-y-auto">
-            <h3 class="text-sm font-bold uppercase text-slate-800">🧑‍💼 Manage Users</h3>
-            <div class="border rounded divide-y">
+    <div x-show="showUserAdminModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
+        <div class="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl space-y-4 border border-slate-200 max-h-[85vh] overflow-y-auto">
+            <h3 class="text-sm font-bold uppercase text-slate-800 tracking-wide border-b pb-1">🧑‍💼 Authorized System Operators Directory</h3>
+            <div class="border border-slate-200 rounded-lg divide-y bg-slate-50 overflow-hidden shadow-2xs">
                 <template x-for="u in users" :key="u.id">
-                    <div class="p-2 flex items-center justify-between gap-2 text-xs">
+                    <div class="p-3 flex items-center justify-between gap-3 text-xs bg-white">
                         <div>
-                            <div class="font-bold text-slate-800" x-text="u.username"></div>
-                            <div class="text-[10px] text-gray-400 uppercase" x-text="u.role"></div>
+                            <div class="font-extrabold text-slate-800 text-sm" x-text="u.username"></div>
+                            <div class="text-[10px] font-mono text-slate-400 uppercase tracking-wider" x-text="'Privilege: ' + u.role"></div>
                         </div>
-                        <div class="flex items-center gap-1">
-                            <select @change="changeUserRole(u.id, $event.target.value)" class="border rounded text-[11px] p-1">
+                        <div class="flex items-center gap-1.5">
+                            <select @change="changeUserRole(u.id, $event.target.value)" class="border border-slate-200 rounded-md text-[11px] p-1 bg-slate-50 font-medium">
                                 <option value="admin" :selected="u.role === 'admin'">admin</option>
                                 <option value="inward" :selected="u.role === 'inward'">inward</option>
                                 <option value="outward" :selected="u.role === 'outward'">outward</option>
                                 <option value="readonly" :selected="u.role === 'readonly'">readonly</option>
                             </select>
-                            <button @click="promptResetPassword(u)" class="text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold px-2 py-1 rounded">Reset</button>
-                            <button @click="deleteUser(u.id)" class="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-2 py-1 rounded">Delete</button>
+                            <button @click="promptResetPassword(u)" class="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2 py-1 rounded-md border border-slate-200 transition">Reset</button>
+                            <button @click="deleteUser(u.id)" class="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-2 py-1 rounded-md border border-rose-100 transition">Purge</button>
                         </div>
                     </div>
                 </template>
             </div>
-            <div class="bg-slate-50 border rounded p-3 space-y-2">
-                <div class="font-bold text-[11px] uppercase text-slate-600">➕ Create New User</div>
-                <div class="grid grid-cols-2 gap-2 text-xs">
-                    <input type="text" x-model="newUserForm.username" placeholder="Username" class="border p-2 rounded">
-                    <input type="password" x-model="newUserForm.password" placeholder="Password (6+ chars)" class="border p-2 rounded">
-                    <select x-model="newUserForm.role" class="border p-2 rounded col-span-2">
+            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-3 shadow-2xs">
+                <div class="font-bold text-[11px] uppercase text-slate-600 tracking-wide">➕ Authorize New Operator Node</div>
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <input type="text" x-model="newUserForm.username" placeholder="Operator Name" class="border border-slate-300 p-2 rounded-md bg-white">
+                    <input type="password" x-model="newUserForm.password" placeholder="Key (6+ chars)" class="border border-slate-300 p-2 rounded-md bg-white">
+                    <select x-model="newUserForm.role" class="border border-slate-300 p-2 rounded-md bg-white col-span-2 text-slate-700">
                         <option value="admin">admin</option>
                         <option value="inward">inward</option>
                         <option value="outward">outward</option>
@@ -275,9 +346,9 @@
                     </select>
                 </div>
                 <p x-show="newUserError" x-text="newUserError" class="text-rose-600 text-[11px] font-bold" x-cloak></p>
-                <button @click="createUser()" class="w-full bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold py-2 rounded transition">Create User</button>
+                <button @click="createUser()" class="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2.5 rounded-lg shadow-sm transition uppercase tracking-wider">Deploy Access Authorization</button>
             </div>
-            <button @click="showUserAdminModal = false" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2 rounded transition">Close</button>
+            <button @click="showUserAdminModal = false" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-bold py-2.5 rounded-lg transition">Dismiss Panel</button>
         </div>
     </div>
 </body>
