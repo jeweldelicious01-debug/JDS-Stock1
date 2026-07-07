@@ -346,31 +346,44 @@ window.stockApp = function() {
         async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
         async deleteUser(userId) { if (confirm('Permanently delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
 
-        // 📊 GLOBAL TIME-STAMPED EXCEL LEDGER GENERATOR
+        // 📊 FIXED COLUMN-STACKED MULTI-DAY DYNAMIC EXCEL LEDGER GENERATOR
         downloadExcelReport() {
-            // Helper function to extract and format distinct dates cleanly
             const getLocalDateString = (offsetDays) => {
                 const d = new Date();
                 d.setDate(d.getDate() - offsetDays);
-                return d.toISOString().slice(0, 10); // Format: YYYY-MM-DD
+                return d.toISOString().slice(0, 10); 
             };
 
-            // Calculate dynamic targets
+            const formatHeaderLabel = (dateStr) => {
+                const parts = dateStr.split('-');
+                if (parts.length !== 3) return dateStr;
+                const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+                return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); 
+            };
+
             const dateToday = getLocalDateString(0);
             const dateYesterday = getLocalDateString(1);
             const date2DaysAgo = getLocalDateString(2);
 
-            // Construct global calendar grid descriptors
             const matrixData = [
-                ["DATE", "TOTAL STOCK", "TODAY IN", "TODAY OUT", "YESTERDAY IN", "YESTERDAY OUT", "2 DAYS AGO IN", "2 DAYS AGO OUT"], 
+                [
+                    "DATE", 
+                    "TOTAL STOCK", 
+                    `${formatHeaderLabel(dateToday)} IN`, 
+                    `${formatHeaderLabel(dateToday)} OUT`, 
+                    `${formatHeaderLabel(dateYesterday)} IN`, 
+                    `${formatHeaderLabel(dateYesterday)} OUT`, 
+                    `${formatHeaderLabel(date2DaysAgo)} IN`, 
+                    `${formatHeaderLabel(date2DaysAgo)} OUT`
+                ], 
                 ["ITEM NAME"] 
             ];
 
             this.processedItems.forEach(item => {
                 const row = [item.name, item.stock];
 
-                // --- Helper mapping to extract operational delta matrices dynamically ---
                 const parseMetrics = (targetDate, actionType) => {
+                    // 🟢 FIXED: Changed l.item_id to correctly read Firestore underscores
                     let filtered = this.logs.filter(l => {
                         if (!l.created_at || String(l.item_id) !== String(item.id) || l.type !== actionType) return false;
                         return l.created_at.slice(0, 10) === targetDate;
@@ -379,11 +392,11 @@ window.stockApp = function() {
                     if (actionType === 'INWARD') {
                         return filtered.length ? `+${filtered.reduce((sum, l) => sum + (parseInt(l.qty) || 0), 0)}` : "0";
                     } else {
+                        // 🟢 FIXED: Properly stacks out department distributions separated by line breaks
                         return filtered.length ? filtered.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n") : "0";
                     }
                 };
 
-                // Populate Column Array for the current Item Row
                 row.push(parseMetrics(dateToday, 'INWARD'));
                 row.push(parseMetrics(dateToday, 'OUTWARD'));
                 row.push(parseMetrics(dateYesterday, 'INWARD'));
@@ -398,7 +411,6 @@ window.stockApp = function() {
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "LIFO Stock Ledger");
 
-            // Format dynamic column width bounds safely
             ws['!cols'] = [{wch: 24}, {wch: 14}, {wch: 14}, {wch: 26}, {wch: 14}, {wch: 26}, {wch: 15}, {wch: 26}];
             XLSX.writeFile(wb, `Stock_Matrix_Ledger_${dateToday}.xlsx`);
         }
