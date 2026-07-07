@@ -1,4 +1,3 @@
-// app.js
 import { dbFs } from './firebase-config.js'; 
 import {
     collection,
@@ -49,7 +48,7 @@ async function seedIfEmpty() {
 
 window.stockApp = function() {
     return {
-        // --- DATA STATE ARRAYS ---
+        // --- REACTIVE STATE DESKS ---
         categories: [],
         items: [],
         importantNotes: [],
@@ -82,7 +81,7 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async init() {
-            console.log("stockApp data component mapping registered...");
+            console.log("stockApp interface initialization tracking firing...");
             await seedIfEmpty();
             
             onSnapshot(colRef('categories'), (snap) => { 
@@ -345,71 +344,51 @@ window.stockApp = function() {
 
         async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
         async deleteUser(userId) { if (confirm('Permanently delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
+        
+        async promptResetPassword(user) {
+            let newPass = prompt(`Enter new password for ${user.username} (Min 6 chars):`);
+            if (!newPass) return;
+            if (newPass.trim().length < 6) return alert('Password must be at least 6 characters.');
+            try {
+                const hashed = await sha256(newPass.trim());
+                await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: hashed });
+                alert(`Password for ${user.username} has been reset successfully!`);
+            } catch (error) { alert("Reset failed: " + error.message); }
+        },
 
-        // 📊 FIXED COLUMN-STACKED MULTI-DAY DYNAMIC EXCEL LEDGER GENERATOR
-        // 📊 FIXED SYSTEM-CALENDAR DYNAMIC EXCEL LEDGER GENERATOR
+        // 📊 SYSTEM-CALENDAR DYNAMIC EXCEL LEDGER GENERATOR
         downloadExcelReport() {
-            // 1. Calculate active real-time date labels for the current window frame
-            const todayObj = new Date();
-            const dateStr30 = todayObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'b' }).replace(' ', ''); // e.g., "07Jul"
-            
-            const yesterdayObj = new Date(Date.now() - 24 * 60 * 60 * 1000);
-            const dateStr29 = yesterdayObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); // e.g., "06Jul"
+            const getLocalDateString = (offsetDays) => {
+                const d = new Date();
+                d.setDate(d.getDate() - offsetDays);
+                return d.toISOString().slice(0, 10); 
+            };
 
-            // 2. Build dynamic, column-stacked headers matching your live dates
-            const matrixData = [
-                ["DATE", "TOTAL STOCK", `${dateLabel30}IN`, `${dateLabel30}OUT`, `${dateLabel29}IN`, `${dateLabel29OUT}`], 
-                ["ITEM NAME"] 
-            ];
-
-            // 3. Populate rows with column-stacked logs breaking down departments
-            this.items.forEach(item => {
-                const row = [item.name, item.stock];
-
-                // Current Day Inward Matrix Check
-                let in30 = this.logs.filter(l => String(l.item_id) === String(item.id) && l.type === 'INWARD');
-                row.push(in30.length ? `+${in30.reduce((acc, current) => acc + Number(current.qty || 0), 0)}` : "0");
-
-                // Current Day Outward Matrix with Department Breakdowns
-                let out30 = this.logs.filter(l => l.item_id === item.id && l.type === 'OUTWARD');
-                if (out30.length) {
-                    let stackedOut = out30.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n");
-                    row.push(stackedOut);
-                } else {
-                    row.push("0");
-                }
-
-                // Historical Day placeholders (For layout continuity if your logs filter back further)
-                row.push("0"); // Yesterday Inward placeholder
-                row.push("0"); // Yesterday Outward placeholder
-
-                matrixData.push(row);
-            });
-
-            // 4. Compile workbook structure using SheetJS
-            const ws = XLSX.utils.aoa_to_sheet(matrixData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "LIFO Stock Ledger");
-
-            // Format boundaries so multi-line text stays neat
-            ws['!cols'] = [{wch: 24}, {wch: 14}, {wch: 14}, {wch: 26}, {wch: 14}, {wch: 26}];
-            XLSX.writeFile(wb, `Stock_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
-        }
+            const formatHeaderLabel = (dateStr) => {
+                const parts = dateStr.split('-');
+                if (parts.length !== 3) return dateStr;
+                const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+                return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); 
+            };
 
             const dateToday = getLocalDateString(0);
             const dateYesterday = getLocalDateString(1);
             const date2DaysAgo = getLocalDateString(2);
 
+            const labelToday = formatHeaderLabel(dateToday);
+            const labelYesterday = formatHeaderLabel(dateYesterday);
+            const label2DaysAgo = formatHeaderLabel(date2DaysAgo);
+
             const matrixData = [
                 [
                     "DATE", 
                     "TOTAL STOCK", 
-                    `${formatHeaderLabel(dateToday)} IN`, 
-                    `${formatHeaderLabel(dateToday)} OUT`, 
-                    `${formatHeaderLabel(dateYesterday)} IN`, 
-                    `${formatHeaderLabel(dateYesterday)} OUT`, 
-                    `${formatHeaderLabel(date2DaysAgo)} IN`, 
-                    `${formatHeaderLabel(date2DaysAgo)} OUT`
+                    `${labelToday}IN`, 
+                    `${labelToday}OUT`, 
+                    `${labelYesterday}IN`, 
+                    `${labelYesterday}OUT`, 
+                    `${label2DaysAgo}IN`, 
+                    `${label2DaysAgo}OUT`
                 ], 
                 ["ITEM NAME"] 
             ];
@@ -418,7 +397,6 @@ window.stockApp = function() {
                 const row = [item.name, item.stock];
 
                 const parseMetrics = (targetDate, actionType) => {
-                    // 🟢 FIXED: Changed l.item_id to correctly read Firestore underscores
                     let filtered = this.logs.filter(l => {
                         if (!l.created_at || String(l.item_id) !== String(item.id) || l.type !== actionType) return false;
                         return l.created_at.slice(0, 10) === targetDate;
@@ -427,7 +405,6 @@ window.stockApp = function() {
                     if (actionType === 'INWARD') {
                         return filtered.length ? `+${filtered.reduce((sum, l) => sum + (parseInt(l.qty) || 0), 0)}` : "0";
                     } else {
-                        // 🟢 FIXED: Properly stacks out department distributions separated by line breaks
                         return filtered.length ? filtered.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n") : "0";
                     }
                 };
@@ -447,7 +424,7 @@ window.stockApp = function() {
             XLSX.utils.book_append_sheet(wb, ws, "LIFO Stock Ledger");
 
             ws['!cols'] = [{wch: 24}, {wch: 14}, {wch: 14}, {wch: 26}, {wch: 14}, {wch: 26}, {wch: 15}, {wch: 26}];
-            XLSX.writeFile(wb, `Stock_Matrix_Ledger_${dateToday}.xlsx`);
+            XLSX.writeFile(wb, `Stock_Report_${dateToday}.xlsx`);
         }
     };
 };
