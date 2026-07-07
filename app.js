@@ -20,10 +20,11 @@ async function sha256(text) {
 }
 
 const PALETTE = [
-    { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af' },
-    { bg: '#fef2f2', border: '#ef4444', text: '#991b1b' },
-    { bg: '#f0fdf4', border: '#22c55e', text: '#166534' },
-    { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8' },
+    { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af' }, // Blue
+    { bg: '#fffbeb', border: '#f59e0b', text: '#92400e' }, // Amber
+    { bg: '#f0fdf4', border: '#22c55e', text: '#166534' }, // Green
+    { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8' }, // Purple
+    { bg: '#fdf2f8', border: '#ec4899', text: '#9d174d' }, // Pink
 ];
 
 async function seedIfEmpty() {
@@ -34,21 +35,40 @@ async function seedIfEmpty() {
         const adminHash = await sha256('ChangeMe123!');
         await setDoc(doc(dbFs, 'users', 'admin-seed'), { username: 'admin', passwordHash: adminHash, role: 'admin' });
         
-        const categories = [
-            { key: 'dairy', name: 'Dairy', bg: '#eff6ff', border: '#3b82f6', text_color: '#1e40af' },
-            { key: 'disposables', name: 'Disposables', bg: '#f9fafb', border: '#9ca3af', text_color: '#374151' }
+        // Expanded 15-Category Matrix with tailored professional color scopes and asset icons
+        const defaultCategories = [
+            { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334155' },
+            { id: 'frozen', name: 'Frozen', emoji: '❄️', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#083344' },
+            { id: 'masala', name: 'Masala', emoji: '🍛', bg_color: '#fff7ed', border_color: '#f97316', text_color: '#7c2d12' },
+            { id: 'grain', name: 'Grain', emoji: '🌾', bg_color: '#fefce8', border_color: '#eab308', text_color: '#713f12' },
+            { id: 'vegetables', name: 'Vegetables', emoji: '🥦', bg_color: '#f0fdf4', border_color: '#22c55e', text_color: '#14532d' },
+            { id: 'bottle', name: 'Bottle', emoji: '🍾', bg_color: '#f5f5f4', border_color: '#737367', text_color: '#1c1917' },
+            { id: 'pasta', name: 'Pasta', emoji: '🍝', bg_color: '#fffbeb', border_color: '#f59e0b', text_color: '#78350f' },
+            { id: 'dairy', name: 'Dairy', emoji: '🥛', bg_color: '#eff6ff', border_color: '#3b82f6', text_color: '#1e40af' },
+            { id: 'disposables', name: 'Disposables', emoji: '🥤', bg_color: '#fafafa', border_color: '#a3a3a3', text_color: '#171717' },
+            { id: 'flour', name: 'Flour', emoji: '🥡', bg_color: '#fdf6f0', border_color: '#cca47c', text_color: '#4a3319' },
+            { id: 'tin', name: 'Tin', emoji: '🥫', bg_color: '#f0fdfa', border_color: '#14b8a6', text_color: '#115e59' },
+            { id: 'khademasala', name: 'KhadeMasala', emoji: '🌶️', bg_color: '#fff1f2', border_color: '#f43f5e', text_color: '#4c0519' },
+            { id: 'beverages', name: 'Beverages', emoji: '🧃', bg_color: '#fdf2f8', border_color: '#ec4899', text_color: '#701a75' }
         ];
-        for (const cat of categories) {
-            await setDoc(doc(dbFs, 'categories', cat.key), { name: cat.name, bg: cat.bg, border: cat.border, text_color: cat.text_color });
+
+        for (const cat of defaultCategories) {
+            await setDoc(doc(dbFs, 'categories', cat.id), { 
+                name: cat.name, 
+                emoji: cat.emoji, 
+                bg_color: cat.bg_color, 
+                border_color: cat.border_color, 
+                text_color: cat.text_color 
+            });
         }
     } catch (e) {
-        console.warn("Seeding skipped: ", e);
+        console.warn("Realtime seeding matrix initialization skipped: ", e);
     }
 }
 
 window.stockApp = function() {
     return {
-        // --- REACTIVE STATE DESKS ---
+        // --- REACTIVE STATE MANAGEMENT DESKS ---
         categories: [],
         items: [],
         importantNotes: [],
@@ -70,7 +90,7 @@ window.stockApp = function() {
         formNote: { itemName: '', pax: '', dateLabel: '' },
         
         showNewItemModal: false,
-        newItemForm: { name: '', categoryId: '', newCategoryName: '', threshold: 0 },
+        newItemForm: { name: '', categoryId: '', newCategoryEmoji: '🍱', newCategoryName: '', threshold: 0, mrp: '' },
         showAccountModal: false,
         accountForm: { currentPassword: '', newPassword: '' },
         accountError: '',
@@ -81,7 +101,7 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async init() {
-            console.log("stockApp interface initialization tracking firing...");
+            console.log("stockApp core system framework running...");
             await seedIfEmpty();
             
             onSnapshot(colRef('categories'), (snap) => { 
@@ -135,7 +155,14 @@ window.stockApp = function() {
         get processedItems() {
             let dataset = this.items.map((i) => {
                 const cat = this.categories.find((c) => c.id === i.category_id) || {};
-                return { ...i, category_name: cat.name || 'Unassigned', bg: cat.bg || '#f3f4f6', border: cat.border || '#9ca3af', text_color: cat.text_color || '#374151' };
+                return { 
+                    ...i, 
+                    category_name: cat.name || 'Unassigned', 
+                    emoji: cat.emoji || '📦',
+                    bg: cat.bg_color || '#f3f4f6', 
+                    border: cat.border_color || '#9ca3af', 
+                    text_color: cat.text_color || '#374151' 
+                };
             });
 
             if (this.filterCat !== 'all') {
@@ -191,6 +218,14 @@ window.stockApp = function() {
             let promptVal = prompt('Update safety limit:', item.threshold);
             if (promptVal !== null) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parseInt(promptVal) || 0 });
         },
+        async modifyMrp(item) {
+            let promptVal = prompt(`Update Maximum Retail Price (MRP) for ${item.name}:`, item.mrp || 0);
+            if (promptVal !== null) {
+                let numericPrice = Number(promptVal);
+                if (isNaN(numericPrice) || numericPrice < 0) return alert("Please enter a valid numeric pricing value.");
+                await updateDoc(doc(dbFs, 'items', item.id), { mrp: numericPrice });
+            }
+        },
         async purgeItem(id) { if (confirm('Purge item entry?')) await deleteDoc(doc(dbFs, 'items', id)); },
 
         async shiftOrder(id, direction) {
@@ -212,14 +247,27 @@ window.stockApp = function() {
                 if (existing) categoryId = existing.id;
                 else {
                     const palette = PALETTE[Math.floor(Math.random() * PALETTE.length)];
-                    const newCatRef = await addDoc(colRef('categories'), { name, bg: palette.bg, border: palette.border, text_color: palette.text });
+                    const newCatRef = await addDoc(colRef('categories'), { 
+                        name, 
+                        emoji: this.newItemForm.newCategoryEmoji || '🍱',
+                        bg_color: palette.bg, 
+                        border_color: palette.border, 
+                        text_color: palette.text 
+                    });
                     categoryId = newCatRef.id;
                 }
             }
             if (!categoryId) return;
             const maxOrder = this.items.reduce((m, i) => Math.max(m, i.order_index || 0), 0);
-            await addDoc(colRef('items'), { name: this.newItemForm.name.trim(), category_id: categoryId, stock: 0, threshold: this.newItemForm.threshold || 0, order_index: maxOrder + 1 });
-            this.newItemForm = { name: '', categoryId: '', newCategoryName: '', threshold: 0 };
+            await addDoc(colRef('items'), { 
+                name: this.newItemForm.name.trim(), 
+                category_id: categoryId, 
+                stock: 0, 
+                threshold: this.newItemForm.threshold || 0, 
+                mrp: Number(this.newItemForm.mrp || 0),
+                order_index: maxOrder + 1 
+            });
+            this.newItemForm = { name: '', categoryId: '', newCategoryEmoji: '🍱', newCategoryName: '', threshold: 0, mrp: '' };
             this.showNewItemModal = false;
         },
 
@@ -239,17 +287,17 @@ window.stockApp = function() {
                         const categoryName = columns[1].trim();
                         const qty = parseInt(columns[2]) || 0;
                         const threshold = parseInt(columns[3]) || 0;
-                        if (!name || !categoryName) continue;
+                        const mrp = columns[4] ? Number(columns[4].trim()) || 0 : 0;
 
                         let cat = this.categories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
-                        let categoryId = cat ? cat.id : (await addDoc(colRef('categories'), { name: categoryName, bg: '#f3f4f6', border: '#9ca3af', text_color: '#374151' })).id;
+                        let categoryId = cat ? cat.id : (await addDoc(colRef('categories'), { name: categoryName, emoji: '🍱', bg_color: '#f3f4f6', border_color: '#9ca3af', text_color: '#374151' })).id;
 
                         const existingItem = this.items.find((it) => it.name.toLowerCase() === name.toLowerCase());
                         if (existingItem) {
-                            await updateDoc(doc(dbFs, 'items', existingItem.id), { stock: existingItem.stock + qty, threshold });
+                            await updateDoc(doc(dbFs, 'items', existingItem.id), { stock: existingItem.stock + qty, threshold, mrp });
                         } else {
                             const maxOrder = this.items.reduce((m, it) => Math.max(m, it.order_index || 0), 0);
-                            await addDoc(colRef('items'), { name, category_id: categoryId, stock: qty, threshold, order_index: maxOrder + 1 });
+                            await addDoc(colRef('items'), { name, category_id: categoryId, stock: qty, threshold, mrp, order_index: maxOrder + 1 });
                         }
                         addedCount++;
                     }
@@ -356,17 +404,14 @@ window.stockApp = function() {
             } catch (error) { alert("Reset failed: " + error.message); }
         },
 
-        // 📊 SYSTEM-CALENDAR DYNAMIC EXCEL LEDGER GENERATOR
         // 📊 AUTOMATED FULL-MONTH ROLLING LEDGER GENERATOR
         downloadExcelReport() {
-            // Helper function to extract and format distinct dates relative to the current system clock
             const getLocalDateString = (offsetDays) => {
                 const d = new Date();
                 d.setDate(d.getDate() - offsetDays);
-                return d.toISOString().slice(0, 10); // Returns format: "YYYY-MM-DD"
+                return d.toISOString().slice(0, 10); 
             };
 
-            // Helper function to turn a YYYY-MM-DD string into a clean header label (e.g., "07Jul")
             const formatHeaderLabel = (dateStr) => {
                 const parts = dateStr.split('-');
                 if (parts.length !== 3) return dateStr;
@@ -374,13 +419,11 @@ window.stockApp = function() {
                 return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); 
             };
 
-            // 1. Generate an array of the last 30 calendar days dynamically
             const targetDays = [];
             for (let i = 0; i < 30; i++) {
                 targetDays.push(getLocalDateString(i));
             }
 
-            // 2. Build the top header row dynamically based on those 30 days
             const headerRow = ["DATE", "TOTAL STOCK"];
             targetDays.forEach(dateStr => {
                 const dayLabel = formatHeaderLabel(dateStr);
@@ -388,19 +431,12 @@ window.stockApp = function() {
                 headerRow.push(`${dayLabel}OUT`);
             });
 
-            const matrixData = [
-                headerRow,
-                ["ITEM NAME"] // Row alignment placeholder for SheetJS structure consistency
-            ];
+            const matrixData = [headerRow, ["ITEM NAME"]];
 
-            // 3. Process every database item and extract corresponding history columns
             this.processedItems.forEach(item => {
                 const row = [item.name, item.stock];
 
-                // For each of the 30 days, pull matching transaction matrices
                 targetDays.forEach(targetDate => {
-                    
-                    // Filter Inwards for this specific day
                     let dayInwards = this.logs.filter(l => 
                         l.created_at && 
                         String(l.item_id) === String(item.id) && 
@@ -409,7 +445,6 @@ window.stockApp = function() {
                     );
                     row.push(dayInwards.length ? `+${dayInwards.reduce((sum, l) => sum + (parseInt(l.qty) || 0), 0)}` : "0");
 
-                    // Filter Outwards and stack department names for this specific day
                     let dayOutwards = this.logs.filter(l => 
                         l.created_at && 
                         String(l.item_id) === String(item.id) && 
@@ -427,21 +462,19 @@ window.stockApp = function() {
                 matrixData.push(row);
             });
 
-            // 4. Compile workbook structure using SheetJS
             const ws = XLSX.utils.aoa_to_sheet(matrixData);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "30-Day LIFO Ledger");
 
-            // Set uniform formatting constraints for the generated columns
-            const colWidths = [{wch: 24}, {wch: 14}]; // Base parameters for Item and Stock
+            const colWidths = [{wch: 24}, {wch: 14}];
             for (let i = 0; i < 60; i++) {
-                colWidths.push({ wch: i % 2 === 0 ? 14 : 26 }); // Alternates dynamic spacing widths for IN/OUT pairs
+                colWidths.push({ wch: i % 2 === 0 ? 14 : 26 });
             }
             ws['!cols'] = colWidths;
 
-            // Trigger document compilation and save to download file directory
             const currentDayString = getLocalDateString(0);
-            XLSX.writeFile(wb, `Restaurant_Month_Ledger_${currentDayString}.xlsx`);
-        }    };
+            XLSX.writeFile(wb, `Stock_Rolling_Report_${currentDayString}.xlsx`);
+        }
+    };
 };
 console.log("stockApp object closure successfully mapped to global scope.");
