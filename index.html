@@ -256,6 +256,7 @@
                                 <option value="outward" :selected="u.role === 'outward'">outward</option>
                                 <option value="readonly" :selected="u.role === 'readonly'">readonly</option>
                             </select>
+                            <button @click="promptResetPassword(u)" class="text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold px-2 py-1 rounded">Reset</button>
                             <button @click="deleteUser(u.id)" class="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-2 py-1 rounded">Delete</button>
                         </div>
                     </div>
