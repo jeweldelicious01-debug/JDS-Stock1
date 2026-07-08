@@ -198,14 +198,15 @@
                                     <template x-if="item.stock > item.threshold"><span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] px-2 py-0.5 rounded-md font-bold">Stable Matrix</span></template>
                                 </td>
                                 <td class="p-4 text-right space-x-2.5 whitespace-nowrap" x-show="currentRole === 'admin' || currentRole === 'inward'">
-                                    <button @click="changeItemName(item)" class="text-slate-600 font-bold text-[11px]">✏️ Rename</button>
-                                    <span class="text-slate-200">|</span>
-                                    <button @click="modifyThreshold(item)" class="text-slate-600 font-bold text-[11px]">Limit</button>
-                                    <span class="text-slate-200" x-show="currentRole !== 'readonly'">|</span>
-                                    <button @click="modifyMrp(item)" class="text-amber-700 font-bold text-[11px]" x-show="currentRole !== 'readonly'">MRP</button>
-                                    <span x-show="currentRole === 'admin'" class="text-slate-200">|</span>
-                                    <button x-show="currentRole === 'admin'" @click="purgeItem(item.id)" class="text-rose-600 font-bold text-[11px]">Purge</button>
-                                </td>
+    
+    <button @click="changeItemName(item)" class="text-slate-600 font-bold hover:text-slate-900 text-[11px]">✏️ Edit Details</button>
+    <span class="text-slate-200">|</span>
+    
+    <button @click="modifyThreshold(item)" class="text-slate-600 font-bold hover:text-slate-900 text-[11px]">Limit</button>
+    <span x-show="currentRole === 'admin'" class="text-slate-200">|</span>
+    
+    <button x-show="currentRole === 'admin'" @click="purgeItem(item.id)" class="text-rose-600 font-bold hover:text-rose-900 text-[11px]">Purge</button>
+</td>
                             </tr>
                         </template>
                     </tbody>
