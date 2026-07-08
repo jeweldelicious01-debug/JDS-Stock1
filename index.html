@@ -86,16 +86,19 @@
                             </template>
                         </select>
                     </div>
-                    <div class="col-span-1">
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Supplier / Vendor</label>
-                        <select x-model="formInward.supplierName" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full text-slate-700 font-bold focus:ring-1 focus:ring-emerald-500">
-                            <option value="">-- Select Vendor --</option>
-                            <template x-for="sup in suppliers" :key="sup">
-                                <option :value="sup" x-text="sup"></option>
-                            </template>
-                            <option value="_NEW_" class="text-indigo-600 font-black bg-indigo-50">+ 🆕 Add New Supplier</option>
-                        </select>
-                    </div>
+                    <<div class="col-span-1">
+    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Supplier / Vendor</label>
+    <select x-model="formInward.supplierName" class="border border-slate-300 p-2.5 rounded-lg bg-white w-full text-slate-700 font-bold focus:ring-1 focus:ring-emerald-500">
+        <option value="">-- Select Vendor --</option>
+        
+        <!-- FIX: Updated loop properties to render names correctly -->
+        <template x-for="sup in suppliers" :key="sup.id">
+            <option :value="sup.name || sup" x-text="sup.name || sup"></option>
+        </template>
+        
+        <option value="_NEW_" class="text-indigo-600 font-black bg-indigo-50">+ 🆕 Add New Supplier</option>
+    </select>
+</div>
                     <div class="col-span-1">
                         <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Units</label>
                         <input type="number" x-model.number="formInward.qty" placeholder="Units" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
