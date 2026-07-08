@@ -12,6 +12,7 @@
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp()" x-init="init()">
 
+    <!-- Authentication Screen Overlay -->
     <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
         <div class="bg-white p-8 rounded-xl max-w-sm w-full shadow-2xl border border-slate-200 text-center">
             <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-4 border border-amber-200">🔑</div>
@@ -32,6 +33,7 @@
         </div>
     </div>
 
+    <!-- Active Management Dashboard Workspace -->
     <main class="max-w-6xl mx-auto p-4 space-y-6" x-show="isAuthenticated" x-cloak>
         <header class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center gap-4 flex-wrap">
             <div class="space-y-1">
@@ -47,6 +49,7 @@
             </div>
         </header>
 
+        <!-- Dynamic Event Notice Alerts Panel -->
         <section class="bg-amber-50 border border-amber-200 p-4 rounded-xl text-xs text-amber-950 space-y-3 shadow-xs">
             <div class="flex justify-between items-center border-b border-amber-200 pb-2">
                 <span class="font-bold uppercase tracking-wider text-amber-900 text-xs flex items-center gap-1.5">📢 Scheduled High-Pax Catering Event Matrix</span>
@@ -73,7 +76,9 @@
             </div>
         </section>
 
+        <!-- Command Control Center Operations Desks -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="currentRole !== 'readonly'">
+            <!-- Inward Box -->
             <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
                 <div class="text-xs font-bold uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2">📥 Log New Inward Consignment</div>
                 <div class="grid grid-cols-4 gap-3 text-xs">
@@ -86,19 +91,16 @@
                             </template>
                         </select>
                     </div>
-                    <<div class="col-span-1">
-    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Supplier / Vendor</label>
-    <select x-model="formInward.supplierName" class="border border-slate-300 p-2.5 rounded-lg bg-white w-full text-slate-700 font-bold focus:ring-1 focus:ring-emerald-500">
-        <option value="">-- Select Vendor --</option>
-        
-        <!-- FIX: Updated loop properties to render names correctly -->
-        <template x-for="sup in suppliers" :key="sup.id">
-            <option :value="sup.name || sup" x-text="sup.name || sup"></option>
-        </template>
-        
-        <option value="_NEW_" class="text-indigo-600 font-black bg-indigo-50">+ 🆕 Add New Supplier</option>
-    </select>
-</div>
+                    <div class="col-span-1">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Supplier / Vendor</label>
+                        <select x-model="formInward.supplierName" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full text-slate-700 font-bold focus:ring-1 focus:ring-emerald-500">
+                            <option value="">-- Select Vendor --</option>
+                            <template x-for="sup in suppliers" :key="sup.id">
+                                <option :value="sup.name" x-text="sup.name"></option>
+                            </template>
+                            <option value="_NEW_" class="text-indigo-600 font-black bg-indigo-50">+ 🆕 Add New Supplier</option>
+                        </select>
+                    </div>
                     <div class="col-span-1">
                         <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Units</label>
                         <input type="number" x-model.number="formInward.qty" placeholder="Units" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
@@ -114,6 +116,7 @@
                 </div>
             </div>
 
+            <!-- Outward Dispatch Desk -->
             <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'outward'">
                 <div class="text-xs font-bold uppercase tracking-wider text-rose-800 border-b border-slate-100 pb-2">📤 Issue Line Outward Allocation</div>
                 <div class="grid grid-cols-3 gap-3 text-xs">
@@ -134,6 +137,7 @@
             </div>
         </div>
 
+        <!-- Recent Logs Buffer Timeline -->
         <div x-show="logs.length > 0 && currentRole !== 'readonly'" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
             <div class="text-[11px] font-bold uppercase text-slate-500 tracking-wider">⏱️ Real-time Transaction Ledger Streams (LIFO Buffer Timeline):</div>
             <div class="flex flex-wrap gap-2">
@@ -145,18 +149,20 @@
                         <span class="font-bold font-sans text-slate-800" x-text="log.item_name"></span>
                         <span x-show="log.supplier_name" class="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded font-bold" x-text="'Vendor: ' + log.supplier_name"></span>
                         <span x-show="log.department" class="text-[10px] bg-slate-200 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold" x-text="log.department"></span>
-                        <button x-show="isWithinOneHour(log.created_at)" @click="triggerUndo(log)" class="text-[10px] bg-amber-100 hover:bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md font-extrabold font-sans transition">↩ Rollback</button>
+                        <button x-show="isWithinOneHour(log.created_at)" @click="triggerUndo(log)" class="text-[10px] bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 px-2 py-0.5 rounded-md font-extrabold font-sans transition">↩ Rollback</button>
                     </div>
                 </template>
             </div>
         </div>
 
+        <!-- Live Infrastructure Ledger Board -->
         <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
                 <div class="space-y-0.5">
                     <div class="text-sm font-extrabold text-slate-800 uppercase tracking-wide">Live Infrastructure Ledger Engine</div>
                     <p class="text-[11px] text-slate-500">Real-time balances matching safety parameters</p>
                 </div>
+                <!-- Filter Category Badges Hook -->
                 <div class="flex flex-wrap gap-1.5 text-xs font-bold">
                     <button @click="filterCat = 'all'" :class="filterCat === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'" class="px-3 py-1.5 rounded-lg border shadow-2xs transition">📁 All Categories</button>
                     <template x-for="cat in categories" :key="cat.id">
@@ -167,14 +173,15 @@
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs border-collapse">
                     <thead>
+                        <!-- 🟢 RESTRUCTURED COLUMN HEADERS TO YOUR EXACT SEQUENCE -->
                         <tr class="bg-slate-50 border-b text-slate-500 uppercase tracking-wider text-[11px] font-bold">
                             <th class="p-3 w-16 text-center" x-show="currentRole === 'admin'">Move</th>
-                            <th class="p-3">Item Name</th>
-                            <th class="p-3">Category Tag</th>
-                            <th class="p-3 text-center">Live Stock Balance</th>
-                            <th class="p-3 text-center">Safety Limit</th>
-                            <th class="p-3 text-center" x-show="currentRole !== 'readonly'">Unit Price (MRP)</th>
-                            <th class="p-3">Status Threshold Vector</th>
+                            <th class="p-3">Item Name</th>                       <!-- Position 1 -->
+                            <th class="p-3">Category Tag</th>                    
+                            <th class="p-3 text-center">Live Stock Balance</th>  <!-- Position 2 -->
+                            <th class="p-3">Status Threshold Vector</th>         <!-- Position 3 -->
+                            <th class="p-3 text-center">Safety Limit</th>        <!-- Position 4 -->
+                            <th class="p-3 text-center" x-show="currentRole !== 'readonly'">Unit Price (MRP)</th> <!-- Collapsible 5 -->
                             <th class="p-3 text-right" x-show="currentRole === 'admin' || currentRole === 'inward'">Management Axis</th>
                         </tr>
                     </thead>
@@ -185,28 +192,37 @@
                                     <button @click="shiftOrder(item.id, 'up')" class="text-slate-400 hover:text-slate-800 font-bold">▲</button>
                                     <button @click="shiftOrder(item.id, 'down')" class="text-slate-400 hover:text-slate-800 font-bold">▼</button>
                                 </td>
+                                
+                                <!-- 🟢 POSITION 1: Item Name -->
                                 <td class="p-4 font-extrabold text-slate-900 text-sm" x-text="item.name"></td>
+                                
                                 <td class="p-4">
                                     <span :style="'background-color: ' + item.bg + '; color: ' + item.text_color + '; border-color: ' + item.border" class="px-2.5 py-1 rounded-md text-[10px] uppercase font-extrabold border shadow-2xs whitespace-nowrap" x-text="item.emoji + ' ' + item.category_name"></span>
                                 </td>
+                                
+                                <!-- 🟢 POSITION 2: Live Stock Balance -->
                                 <td class="p-4 text-center font-mono text-sm font-black" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="item.stock"></td>
-                                <td class="p-4 text-center font-mono text-slate-400 font-medium" x-text="item.threshold"></td>
-                                <td class="p-4 text-center font-mono font-bold text-slate-700" x-show="currentRole !== 'readonly'" x-text="'₹' + (item.mrp || 0)"></td>
+                                
+                                <!-- 🟢 POSITION 3: Status Threshold Vector -->
                                 <td class="p-4">
-                                    <template x-if="item.stock === 0"><span class="bg-rose-600 text-white text-[9px] px-2 py-0.5 rounded-sm font-black uppercase tracking-wider">🚨 out of stock</span></template>
-                                    <template x-if="item.stock > 0 && item.stock <= item.threshold"><span class="bg-amber-500 text-slate-950 text-[9px] px-2 py-0.5 rounded-sm font-black uppercase tracking-wider">⚠️ low stock </span></template>
-                                    <template x-if="item.stock > item.threshold"><span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] px-2 py-0.5 rounded-md font-bold">Healthy stock</span></template>
+                                    <template x-if="item.stock === 0"><span class="bg-rose-600 text-white text-[9px] px-2 py-0.5 rounded-sm font-black uppercase tracking-wider">🚨 depleted</span></template>
+                                    <template x-if="item.stock > 0 && item.stock <= item.threshold"><span class="bg-amber-500 text-slate-950 text-[9px] px-2 py-0.5 rounded-sm font-black uppercase tracking-wider">⚠️ breach limit</span></template>
+                                    <template x-if="item.stock > item.threshold"><span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] px-2 py-0.5 rounded-md font-bold">Stable Matrix</span></template>
                                 </td>
+                                
+                                <!-- 🟢 POSITION 4: Safety Limit -->
+                                <td class="p-4 text-center font-mono text-slate-400 font-medium" x-text="item.threshold"></td>
+                                
+                                <!-- 🟢 POSITION 5: Unit Price (MRP) - Hidden automatically for Readonly Scope -->
+                                <td class="p-4 text-center font-mono font-bold text-slate-700" x-show="currentRole !== 'readonly'" x-text="'₹' + (item.mrp || 0)"></td>
+                                
                                 <td class="p-4 text-right space-x-2.5 whitespace-nowrap" x-show="currentRole === 'admin' || currentRole === 'inward'">
-    
-    <button @click="changeItemName(item)" class="text-slate-600 font-bold hover:text-slate-900 text-[11px]">✏️ Edit Details</button>
-    <span class="text-slate-200">|</span>
-    
-    <button @click="modifyThreshold(item)" class="text-slate-600 font-bold hover:text-slate-900 text-[11px]">Limit</button>
-    <span x-show="currentRole === 'admin'" class="text-slate-200">|</span>
-    
-    <button x-show="currentRole === 'admin'" @click="purgeItem(item.id)" class="text-rose-600 font-bold hover:text-rose-900 text-[11px]">Purge</button>
-</td>
+                                    <button @click="changeItemName(item)" class="text-slate-600 font-bold text-[11px]">✏&zwj;️ Edit Details</button>
+                                    <span class="text-slate-200">|</span>
+                                    <button @click="modifyThreshold(item)" class="text-slate-600 font-bold text-[11px]">Limit</button>
+                                    <span x-show="currentRole === 'admin'" class="text-slate-200">|</span>
+                                    <button x-show="currentRole === 'admin'" @click="purgeItem(item.id)" class="text-rose-600 font-bold text-[11px]">Purge</button>
+                                </td>
                             </tr>
                         </template>
                     </tbody>
@@ -215,6 +231,7 @@
         </section>
     </main>
 
+    <!-- Modal Sheets Suite Layout templates -->
     <div x-show="showNewItemModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
         <div class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
             <h3 class="text-sm font-black uppercase text-slate-800 tracking-wide border-b pb-1">➕ Append Portfolio Tracking row</h3>
@@ -251,6 +268,7 @@
         </div>
     </div>
 
+    <!-- Security Popups Configuration -->
     <div x-show="showAccountModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
         <form @submit.prevent="changeMyPassword()" class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
             <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">👤 Account Credentials Configuration</h3>
@@ -269,7 +287,7 @@
 
     <div x-show="showUserAdminModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
         <div class="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl space-y-4 border border-slate-200 max-h-[85vh] overflow-y-auto">
-            <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">🧑‍💼 Authorized System Operators Directory</h3>
+            <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">🧑&zwj;💼 Authorized System Operators Directory</h3>
             <div class="border rounded-lg bg-slate-50 overflow-hidden divide-y">
                 <template x-for="u in users" :key="u.id">
                     <div class="p-3 flex items-center justify-between gap-3 bg-white text-xs">
