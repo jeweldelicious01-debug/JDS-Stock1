@@ -33,13 +33,13 @@ async function seedIfEmpty() {
         if (usersSnap.empty) {
             const adminHash = await sha256('ChangeMe123!');
             await setDoc(doc(dbFs, 'users', 'admin-seed'), { username: 'admin', passwordHash: adminHash, role: 'admin' });
+            console.log("Admin user account provisioned successfully.");
         }
 
         const catSnap = await getDocs(colRef('categories'));
-        // If categories are empty OR if we have less than our target matrix, seed them safely
-        if (catSnap.size < 13) {
+        if (catSnap.empty) {
             const defaultCategories = [
-                { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334151' },
+                { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334155' },
                 { id: 'frozen', name: 'Frozen', emoji: '❄️', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#083344' },
                 { id: 'masala', name: 'Masala', emoji: '🍛', bg_color: '#fff7ed', border_color: '#f97316', text_color: '#7c2d12' },
                 { id: 'grain', name: 'Grain', emoji: '🌾', bg_color: '#fefce8', border_color: '#eab308', text_color: '#713f12' },
@@ -63,9 +63,10 @@ async function seedIfEmpty() {
                     text_color: cat.text_color 
                 });
             }
+            console.log("Strategic multicolor restaurant categories seeded cleanly.");
         }
     } catch (e) {
-        console.warn("Seeding bypassed: ", e);
+        console.warn("Seeding framework bypassed safely: ", e);
     }
 }
 
@@ -90,26 +91,6 @@ window.stockApp = function() {
         formInward: { itemId: '', qty: '' },
         formOutward: { itemId: '', department: 'Indian', qty: '' },
         formNote: { itemName: '', pax: '', dateLabel: '' },
-        async reassignCategory(item) {
-    // 1. Prompt the operator with a list of available categories
-    let catList = this.categories.map((c, idx) => `${idx + 1}. ${c.name}`).join('\n');
-    let choice = prompt(`Select a new category number for "${item.name}":\n\n${catList}`);
-    
-    if (choice !== null) {
-        let idx = parseInt(choice) - 1;
-        if (idx >= 0 && idx < this.categories.length) {
-            let targetCategory = this.categories[idx];
-            
-            // 2. Update the item's category pointer in Firestore
-            await updateDoc(doc(dbFs, 'items', item.id), { 
-                category_id: targetCategory.id 
-            });
-            alert(`"${item.name}" has been successfully moved to ${targetCategory.name}!`);
-        } else {
-            alert("Invalid selection choice.");
-        }
-    }
-}
         
         showNewItemModal: false,
         newItemForm: { name: '', categoryId: '', newCategoryEmoji: '🍱', newCategoryName: '', threshold: 0, mrp: '' },
@@ -123,6 +104,7 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async init() {
+            console.log("stockApp execution context mounting standard routing paths...");
             await seedIfEmpty();
             
             onSnapshot(colRef('categories'), (snap) => { 
@@ -497,4 +479,15 @@ window.stockApp = function() {
         }
     };
 };
-console.log("stockApp object closure successfully mapped to global scope.");
+
+// Check if Alpine has already initialized prior to module evaluation context mounting
+if (window.Alpine) {
+    if (!window.stockAppBound) {
+        window.stockAppBound = true;
+    }
+} else {
+    document.addEventListener('alpine:init', () => {
+        window.stockAppBound = true;
+    });
+}
+console.log("stockApp initialization routing paths bound completely.");
