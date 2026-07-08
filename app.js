@@ -1,3 +1,4 @@
+// app.js
 import { dbFs } from './firebase-config.js'; 
 import {
     collection,
@@ -33,13 +34,12 @@ async function seedIfEmpty() {
         if (usersSnap.empty) {
             const adminHash = await sha256('ChangeMe123!');
             await setDoc(doc(dbFs, 'users', 'admin-seed'), { username: 'admin', passwordHash: adminHash, role: 'admin' });
-            console.log("Admin user account provisioned successfully.");
         }
 
         const catSnap = await getDocs(colRef('categories'));
-        if (catSnap.empty) {
+        if (catSnap.size < 13) {
             const defaultCategories = [
-                { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334155' },
+                { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334151' },
                 { id: 'frozen', name: 'Frozen', emoji: '❄️', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#083344' },
                 { id: 'masala', name: 'Masala', emoji: '🍛', bg_color: '#fff7ed', border_color: '#f97316', text_color: '#7c2d12' },
                 { id: 'grain', name: 'Grain', emoji: '🌾', bg_color: '#fefce8', border_color: '#eab308', text_color: '#713f12' },
@@ -63,10 +63,9 @@ async function seedIfEmpty() {
                     text_color: cat.text_color 
                 });
             }
-            console.log("Strategic multicolor restaurant categories seeded cleanly.");
         }
     } catch (e) {
-        console.warn("Seeding framework bypassed safely: ", e);
+        console.warn("Seeding bypassed: ", e);
     }
 }
 
@@ -88,7 +87,7 @@ window.stockApp = function() {
         
         loginForm: { username: '', password: '' },
         loginError: '',
-        formInward: { itemId: '', qty: '' },
+        formInward: { itemId: '', qty: '', supplierName: '' }, // 🟢 Added supplierName mapping key
         formOutward: { itemId: '', department: 'Indian', qty: '' },
         formNote: { itemName: '', pax: '', dateLabel: '' },
         
@@ -104,7 +103,6 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async init() {
-            console.log("stockApp execution context mounting standard routing paths...");
             await seedIfEmpty();
             
             onSnapshot(colRef('categories'), (snap) => { 
@@ -318,17 +316,20 @@ window.stockApp = function() {
             const qty = parseInt(this.formInward.qty);
             if (!qty || qty <= 0) return alert('Enter a positive quantity.');
             
+            const vendor = this.formInward.supplierName.trim() || 'General Vendor';
+            
             try {
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock || 0) + qty });
                 await addDoc(colRef('logs'), {
                     type: 'INWARD',
                     item_id: target.id,
                     qty,
+                    supplier_name: vendor, // 🟢 Saved clean vendor trace
                     department: null,
                     created_at: new Date().toISOString(),
                     created_by_name: this.currentUsername,
                 });
-                this.formInward = { itemId: '', qty: '' };
+                this.formInward = { itemId: '', qty: '', supplierName: '' };
             } catch (error) {
                 alert("Database write error: " + error.message);
             }
@@ -407,6 +408,51 @@ window.stockApp = function() {
             } catch (error) { alert("Reset failed: " + error.message); }
         },
 
+        // 🟢 NEW FEATURE: PARSES VENDOR INWARDS INTO SEPARATE TABLES VERTICALLY
+        downloadInwardSupplierReport() {
+            const inwards = this.logs.filter(l => l.type === 'INWARD');
+            if (!inwards.length) return alert("No active inward logs found to generate a ledger.");
+
+            // Group transactions by supplier key string signatures
+            const supplierGroups = {};
+            inwards.forEach(log => {
+                const sName = log.supplier_name || 'General Vendor';
+                if (!supplierGroups[sName]) supplierGroups[sName] = [];
+                supplierGroups[sName].push(log);
+            });
+
+            const sheetMatrix = [];
+
+            // Compile clean block charts per distinct merchant identity
+            Object.keys(supplierGroups).forEach(supplier => {
+                sheetMatrix.push([`🚚 SUPPLIER LEDGER: ${supplier.toUpperCase()}`]);
+                sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE (MRP)", "TOTAL VALUATION"]);
+
+                let grandTotal = 0;
+
+                supplierGroups[supplier].forEach(log => {
+                    const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
+                    const name = log.item_name || linkedItem.name || 'Unknown Item';
+                    const qty = parseInt(log.qty) || 0;
+                    const price = parseFloat(linkedItem.mrp) || 0;
+                    const totalCost = qty * price;
+                    grandTotal += totalCost;
+
+                    sheetMatrix.push([name, qty, price, totalCost]);
+                });
+
+                sheetMatrix.push(["", "", "GRAND TOTAL:", grandTotal]);
+                sheetMatrix.push([]); // Spacer row to separate table views vertically
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Supplier Inward Breakdown");
+
+            ws['!cols'] = [{wch: 28}, {wch: 18}, {wch: 18}, {wch: 20}];
+            XLSX.writeFile(wb, `Supplier_Inward_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        },
+
         downloadExcelReport() {
             const getLocalDateString = (offsetDays) => {
                 const d = new Date();
@@ -479,15 +525,4 @@ window.stockApp = function() {
         }
     };
 };
-
-// Check if Alpine has already initialized prior to module evaluation context mounting
-if (window.Alpine) {
-    if (!window.stockAppBound) {
-        window.stockAppBound = true;
-    }
-} else {
-    document.addEventListener('alpine:init', () => {
-        window.stockAppBound = true;
-    });
-}
-console.log("stockApp initialization routing paths bound completely.");
+console.log("stockApp object closure successfully mapped to global scope.");
