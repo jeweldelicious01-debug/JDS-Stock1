@@ -170,18 +170,32 @@ window.stockApp = function() {
             });
         },
 
-        // 🟢 CASCADING FILTER 1: Inward Manual Dropdown Filter
+        / 🟢 FULLY DYNAMIC FILTER 1: Inward Manual Dropdown Filter
         get filteredInwardItems() {
             if (!this.formInward.supplierName) return [];
-            return this.items.filter(i => i.supplier_name === this.formInward.supplierName);
+            
+            // Dynamically find your first available cloud supplier name as a fallback
+            const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
+            
+            return this.items.filter(i => {
+                // If item has no supplier yet, fall back to your first supplier automatically
+                const itemSupplier = i.supplier_name || defaultSupplier;
+                return itemSupplier === this.formInward.supplierName;
+            });
         },
 
-        // 🟢 CASCADING FILTER 2: Purchase Order Desk Dropdown Filter
+        // 🟢 FULLY DYNAMIC FILTER 2: Purchase Order Desk Dropdown Filter
         get filteredOrderDeskItems() {
             if (!this.orderDesk.supplierId) return [];
             const vendor = this.suppliers.find(s => String(s.id) === String(this.orderDesk.supplierId));
             if (!vendor) return [];
-            return this.items.filter(i => i.supplier_name === vendor.name);
+            
+            const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
+            
+            return this.items.filter(i => {
+                const itemSupplier = i.supplier_name || defaultSupplier;
+                return itemSupplier === vendor.name;
+            });
         },
 
         addItemToOrder() {
