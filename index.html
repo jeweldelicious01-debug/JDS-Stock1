@@ -219,9 +219,9 @@
                                 </td>
                                 <td class="p-4 text-center font-mono text-sm font-black" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="item.stock"></td>
                                 <td class="p-4">
-                                    <template x-if="item.stock === 0"><span class="bg-rose-600 text-white text-[9px] px-2 py-0.5 rounded-sm font-black uppercase tracking-wider">🚨 depleted</span></template>
-                                    <template x-if="item.stock > 0 && item.stock <= item.threshold"><span class="bg-amber-500 text-slate-950 text-[9px] px-2 py-0.5 rounded-sm font-black uppercase tracking-wider">⚠️ breach limit</span></template>
-                                    <template x-if="item.stock > item.threshold"><span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] px-2 py-0.5 rounded-md font-bold">Stable Matrix</span></template>
+                                    <template x-if="item.stock === 0"><span class="bg-rose-600 text-white text-[9px] px-2 py-0.5 rounded-sm font-black uppercase tracking-wider">🚨 Out Of Stock</span></template>
+                                    <template x-if="item.stock > 0 && item.stock <= item.threshold"><span class="bg-amber-500 text-slate-950 text-[9px] px-2 py-0.5 rounded-sm font-black uppercase tracking-wider">⚠️ LOW Stock</span></template>
+                                    <template x-if="item.stock > item.threshold"><span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] px-2 py-0.5 rounded-md font-bold">Healthy Stock</span></template>
                                 </td>
                                 <td class="p-4 text-center font-mono text-slate-400 font-medium" x-text="item.threshold"></td>
                                 <td class="p-4 text-center font-mono font-bold text-slate-700" x-show="currentRole !== 'readonly'" x-text="'₹' + (item.mrp || 0)"></td>
