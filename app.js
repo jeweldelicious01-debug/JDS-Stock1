@@ -453,75 +453,63 @@ window.stockApp = function() {
             XLSX.writeFile(wb, `Supplier_Inward_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
         },
 
-        downloadExcelReport() {
-            const getLocalDateString = (offsetDays) => {
-                const d = new Date();
-                d.setDate(d.getDate() - offsetDays);
-                return d.toISOString().slice(0, 10); 
-            };
-
-            const formatHeaderLabel = (dateStr) => {
-                const parts = dateStr.split('-');
-                if (parts.length !== 3) return dateStr;
-                const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
-                return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); 
-            };
-
-            const targetDays = [];
-            for (let i = 0; i < 30; i++) {
-                targetDays.push(getLocalDateString(i));
+        ddownloadInwardSupplierReport() {
+            // 1. Filter out only INWARD transactions from the live cloud log cache
+            const inwards = this.logs.filter(l => l.type === 'INWARD');
+            if (!inwards.length) {
+                return alert("No inward logs found in the system registry to compile a report.");
             }
 
-            const headerRow = ["DATE", "TOTAL STOCK"];
-            targetDays.forEach(dateStr => {
-                const dayLabel = formatHeaderLabel(dateStr);
-                headerRow.push(`${dayLabel}IN`);
-                headerRow.push(`${dayLabel}OUT`);
+            // 2. Group transactions by supplier names safely
+            const supplierGroups = {};
+            inwards.forEach(log => {
+                // Fallback to "Historical / Unassigned Vendor" if supplier_name doesn't exist yet
+                const sName = log.supplier_name && log.supplier_name.trim() !== "" 
+                    ? log.supplier_name.trim() 
+                    : 'Historical / Unassigned Vendor';
+                
+                if (!supplierGroups[sName]) {
+                    supplierGroups[sName] = [];
+                }
+                supplierGroups[sName].push(log);
             });
 
-            const matrixData = [headerRow, ["ITEM NAME"]];
+            const sheetMatrix = [];
 
-            this.processedItems.forEach(item => {
-                const row = [item.name, item.stock];
+            // 3. Loop through vendors and build clean standalone column blocks
+            Object.keys(supplierGroups).forEach(supplier => {
+                // Table Title Header Block
+                sheetMatrix.push([`🚚 SUPPLIER LEDGER: ${supplier.toUpperCase()}`]);
+                sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE (MRP)", "TOTAL VALUATION"]);
 
-                targetDays.forEach(targetDate => {
-                    let dayInwards = this.logs.filter(l => 
-                        l.created_at && 
-                        String(l.item_id) === String(item.id) && 
-                        l.type === 'INWARD' && 
-                        l.created_at.slice(0, 10) === targetDate
-                    );
-                    row.push(dayInwards.length ? `+${dayInwards.reduce((sum, l) => sum + (parseInt(l.qty) || 0), 0)}` : "0");
+                let grandTotal = 0;
 
-                    let dayOutwards = this.logs.filter(l => 
-                        l.created_at && 
-                        String(l.item_id) === String(item.id) && 
-                        l.type === 'OUTWARD' && 
-                        l.created_at.slice(0, 10) === targetDate
-                    );
-                    if (dayOutwards.length) {
-                        let stackedOut = dayOutwards.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n");
-                        row.push(stackedOut);
-                    } else {
-                        row.push("0");
-                    }
+                supplierGroups[supplier].forEach(log => {
+                    // Pull item metrics securely from local data arrays
+                    const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
+                    
+                    const name = log.item_name || linkedItem.name || 'Unknown Portfolio Item';
+                    const qty = parseInt(log.qty) || 0;
+                    const price = parseFloat(linkedItem.mrp) || 0;
+                    const totalCost = qty * price;
+                    grandTotal += totalCost;
+
+                    sheetMatrix.push([name, qty, `₹${price}`, `₹${totalCost}`]);
                 });
 
-                matrixData.push(row);
+                // Inject Bottom Totals Summary row
+                sheetMatrix.push(["", "", "GRAND TOTAL:", `₹${grandTotal}`]);
+                sheetMatrix.push([]); // Empty spacing block to separate tables vertically
             });
 
-            const ws = XLSX.utils.aoa_to_sheet(matrixData);
+            // 4. Compile and bundle to binary file spreadsheet
+            const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "30-Day LIFO Ledger");
+            XLSX.utils.book_append_sheet(wb, ws, "Supplier Inward Breakdown");
 
-            const colWidths = [{wch: 24}, {wch: 14}];
-            for (let i = 0; i < 60; i++) {
-                colWidths.push({ wch: i % 2 === 0 ? 14 : 26 });
-            }
-            ws['!cols'] = colWidths;
-
-            const currentDayString = getLocalDateString(0);
-            XLSX.writeFile(wb, `Stock_Rolling_Report_${currentDayString}.xlsx`);
+            // Format boundaries so layout fits cleanly
+            ws['!cols'] = [{wch: 32}, {wch: 20}, {wch: 18}, {wch: 22}];
+            XLSX.writeFile(wb, `Supplier_Inward_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
         }
     };
 };
