@@ -12,7 +12,6 @@
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp()" x-init="init()">
 
-    <!-- Authentication Screen Overlay -->
     <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
         <div class="bg-white p-8 rounded-xl max-w-sm w-full shadow-2xl border border-slate-200 text-center">
             <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-4 border border-amber-200">🔑</div>
@@ -33,7 +32,6 @@
         </div>
     </div>
 
-    <!-- Active Management Dashboard Workspace -->
     <main class="max-w-6xl mx-auto p-4 space-y-6" x-show="isAuthenticated" x-cloak>
         <header class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center gap-4 flex-wrap">
             <div class="space-y-1">
@@ -49,7 +47,6 @@
             </div>
         </header>
 
-        <!-- Dynamic Event Notice Alerts Panel -->
         <section class="bg-amber-50 border border-amber-200 p-4 rounded-xl text-xs text-amber-950 space-y-3 shadow-xs">
             <div class="flex justify-between items-center border-b border-amber-200 pb-2">
                 <span class="font-bold uppercase tracking-wider text-amber-900 text-xs flex items-center gap-1.5">📢 Scheduled High-Pax Catering Event Matrix</span>
@@ -76,12 +73,12 @@
             </div>
         </section>
 
-        <!-- Command Control Center Operations Desks -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="currentRole !== 'readonly'">
             <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
                 <div class="text-xs font-bold uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2">📥 Log New Inward Consignment</div>
                 <div class="grid grid-cols-4 gap-3 text-xs">
                     <div class="col-span-2">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Select Tracked Product</label>
                         <select x-model="formInward.itemId" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-medium text-slate-700">
                             <option value="">-- Active Inventory Index --</option>
                             <template x-for="item in items" :key="item.id">
@@ -90,9 +87,17 @@
                         </select>
                     </div>
                     <div class="col-span-1">
-                        <input type="text" x-model="formInward.supplierName" placeholder="Supplier" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full text-slate-700 font-medium">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Supplier / Vendor</label>
+                        <select x-model="formInward.supplierName" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full text-slate-700 font-bold focus:ring-1 focus:ring-emerald-500">
+                            <option value="">-- Select Vendor --</option>
+                            <template x-for="sup in suppliers" :key="sup">
+                                <option :value="sup" x-text="sup"></option>
+                            </template>
+                            <option value="_NEW_" class="text-indigo-600 font-black bg-indigo-50">+ 🆕 Add New Supplier</option>
+                        </select>
                     </div>
                     <div class="col-span-1">
+                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Units</label>
                         <input type="number" x-model.number="formInward.qty" placeholder="Units" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
                     </div>
                 </div>
@@ -126,7 +131,6 @@
             </div>
         </div>
 
-        <!-- Recent Logs Buffer Timeline -->
         <div x-show="logs.length > 0 && currentRole !== 'readonly'" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
             <div class="text-[11px] font-bold uppercase text-slate-500 tracking-wider">⏱️ Real-time Transaction Ledger Streams (LIFO Buffer Timeline):</div>
             <div class="flex flex-wrap gap-2">
@@ -138,13 +142,12 @@
                         <span class="font-bold font-sans text-slate-800" x-text="log.item_name"></span>
                         <span x-show="log.supplier_name" class="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded font-bold" x-text="'Vendor: ' + log.supplier_name"></span>
                         <span x-show="log.department" class="text-[10px] bg-slate-200 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold" x-text="log.department"></span>
-                        <button x-show="isWithinOneHour(log.created_at)" @click="triggerUndo(log)" class="text-[10px] bg-amber-50 hover:bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md font-extrabold font-sans transition">↩ Rollback</button>
+                        <button x-show="isWithinOneHour(log.created_at)" @click="triggerUndo(log)" class="text-[10px] bg-amber-100 hover:bg-amber-200 text-amber-900 px-2 py-0.5 rounded-md font-extrabold font-sans transition">↩ Rollback</button>
                     </div>
                 </template>
             </div>
         </div>
 
-        <!-- Live Infrastructure Ledger Board -->
         <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
                 <div class="space-y-0.5">
@@ -167,7 +170,6 @@
                             <th class="p-3">Category Tag</th>
                             <th class="p-3 text-center">Live Stock Balance</th>
                             <th class="p-3 text-center">Safety Limit</th>
-                            <!-- 🟢 HIDE MRP HEADERS FOR READONLY PROFILES -->
                             <th class="p-3 text-center" x-show="currentRole !== 'readonly'">Unit Price (MRP)</th>
                             <th class="p-3">Status Threshold Vector</th>
                             <th class="p-3 text-right" x-show="currentRole === 'admin' || currentRole === 'inward'">Management Axis</th>
@@ -186,7 +188,6 @@
                                 </td>
                                 <td class="p-4 text-center font-mono text-sm font-black" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="item.stock"></td>
                                 <td class="p-4 text-center font-mono text-slate-400 font-medium" x-text="item.threshold"></td>
-                                <!-- 🟢 HIDE MRP CELL DATA FOR READONLY PROFILES -->
                                 <td class="p-4 text-center font-mono font-bold text-slate-700" x-show="currentRole !== 'readonly'" x-text="'₹' + (item.mrp || 0)"></td>
                                 <td class="p-4">
                                     <template x-if="item.stock === 0"><span class="bg-rose-600 text-white text-[9px] px-2 py-0.5 rounded-sm font-black uppercase tracking-wider">🚨 depleted</span></template>
@@ -197,8 +198,7 @@
                                     <button @click="changeItemName(item)" class="text-slate-600 font-bold text-[11px]">✏️ Rename</button>
                                     <span class="text-slate-200">|</span>
                                     <button @click="modifyThreshold(item)" class="text-slate-600 font-bold text-[11px]">Limit</button>
-                                    <span class="text-slate-200">|</span>
-                                    <!-- 🟢 HIDE MRP MODIFY ACTIONS FOR READONLY PROFILES -->
+                                    <span class="text-slate-200" x-show="currentRole !== 'readonly'">|</span>
                                     <button @click="modifyMrp(item)" class="text-amber-700 font-bold text-[11px]" x-show="currentRole !== 'readonly'">MRP</button>
                                     <span x-show="currentRole === 'admin'" class="text-slate-200">|</span>
                                     <button x-show="currentRole === 'admin'" @click="purgeItem(item.id)" class="text-rose-600 font-bold text-[11px]">Purge</button>
@@ -211,7 +211,6 @@
         </section>
     </main>
 
-    <!-- Modal Sheets Suite Layout templates -->
     <div x-show="showNewItemModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
         <div class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
             <h3 class="text-sm font-black uppercase text-slate-800 tracking-wide border-b pb-1">➕ Append Portfolio Tracking row</h3>
@@ -238,7 +237,6 @@
                 </div>
                 <div class="grid grid-cols-2 gap-2">
                     <div><label class="block font-bold text-slate-600 mb-1">Safety Limit</label><input type="number" x-model.number="newItemForm.threshold" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="10"></div>
-                    <!-- 🟢 HIDE NEW ITEM MODAL MRP VALUES FOR READONLY PORTALS -->
                     <div x-show="currentRole !== 'readonly'"><label class="block font-bold text-slate-600 mb-1">Unit Price (MRP)</label><input type="number" x-model.number="newItemForm.mrp" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="₹0"></div>
                 </div>
             </div>
@@ -249,7 +247,6 @@
         </div>
     </div>
 
-    <!-- Security Popups Configuration -->
     <div x-show="showAccountModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
         <form @submit.prevent="changeMyPassword()" class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
             <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">👤 Account Credentials Configuration</h3>
