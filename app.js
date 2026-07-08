@@ -310,13 +310,28 @@ window.stockApp = function() {
         },
 
         async addInward() {
-            if (!this.formInward.itemId || !this.formInward.qty) return alert('Select missing fields.');
+            if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) {
+                return alert('Select missing fields including supplier vendor.');
+            }
             const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId));
             if (!target) return alert('Selected item could not be found.');
             const qty = parseInt(this.formInward.qty);
             if (!qty || qty <= 0) return alert('Enter a positive quantity.');
             
-            const vendor = this.formInward.supplierName.trim() || 'General Vendor';
+            let vendor = this.formInward.supplierName.trim();
+            
+            // 🟢 INTERCEPT: If operator chose to add a new supplier, prompt them right here
+            if (vendor === "_NEW_") {
+                let newVendorName = prompt("Enter new Supplier/Vendor Name:");
+                if (!newVendorName || !newVendorName.trim()) {
+                    return alert("Inward transaction abandoned. Supplier name required.");
+                }
+                vendor = newVendorName.trim();
+                // Save it to the active memory selection deck for next use on the screen
+                if (!this.suppliers.includes(vendor)) {
+                    this.suppliers.push(vendor);
+                }
+            }
             
             try {
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock || 0) + qty });
@@ -324,7 +339,7 @@ window.stockApp = function() {
                     type: 'INWARD',
                     item_id: target.id,
                     qty,
-                    supplier_name: vendor, // 🟢 Saved clean vendor trace
+                    supplier_name: vendor, 
                     department: null,
                     created_at: new Date().toISOString(),
                     created_by_name: this.currentUsername,
@@ -334,7 +349,6 @@ window.stockApp = function() {
                 alert("Database write error: " + error.message);
             }
         },
-
         async deductOutward() {
             if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
             const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId));
