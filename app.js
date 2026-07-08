@@ -1,315 +1,601 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Restaurant Stock Manager & Event Control Engine</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script type="module" src="app.js"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <style>[x-cloak] { display: none !important; }</style>
-</head>
-<body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp()" x-init="init()">
+import { dbFs } from './firebase-config.js'; 
+import {
+    collection,
+    doc,
+    getDocs,
+    setDoc,
+    addDoc,
+    updateDoc,
+    deleteDoc,
+    onSnapshot,
+} from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
 
-    <!-- Authentication Screen Overlay -->
-    <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
-        <div class="bg-white p-8 rounded-xl max-w-sm w-full shadow-2xl border border-slate-200 text-center">
-            <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-4 border border-amber-200">🔑</div>
-            <h3 class="text-xl font-extrabold tracking-tight text-slate-800 uppercase mb-1">System Portal</h3>
-            <p class="text-xs text-slate-500 mb-6">Inventory Ledger Authentication</p>
-            <form @submit.prevent="verifyLogin()" class="space-y-4 text-left text-xs">
-                <div>
-                    <label class="block font-bold mb-1 text-slate-700 tracking-wide uppercase text-[10px]">Operator Username</label>
-                    <input type="text" x-model="loginForm.username" placeholder="e.g. admin" class="border border-slate-300 p-2.5 w-full rounded-lg bg-slate-50 focus:ring-2 focus:ring-slate-500">
-                </div>
-                <div>
-                    <label class="block font-bold mb-1 text-slate-700 tracking-wide uppercase text-[10px]">Passphrase Code</label>
-                    <input type="password" x-model="loginForm.password" placeholder="••••••••" class="border border-slate-300 p-2.5 w-full rounded-lg text-center tracking-widest font-mono bg-slate-50 text-base focus:ring-2 focus:ring-slate-500">
-                </div>
-                <button type="submit" class="bg-slate-800 hover:bg-slate-900 text-white w-full py-3 rounded-lg font-bold text-xs mt-4 uppercase tracking-wider shadow-md transition">Unlock Corporate Dashboard</button>
-            </form>
-            <p x-show="loginError" x-text="loginError" class="text-rose-600 text-xs font-bold text-center mt-3" x-cloak></p>
-        </div>
-    </div>
+const SESSION_KEY = 'restaurantStockSession_v1';
+const colRef = (name) => collection(dbFs, name);
 
-    <!-- Active Management Dashboard Workspace -->
-    <main class="max-w-6xl mx-auto p-4 space-y-6" x-show="isAuthenticated" x-cloak>
-        <header class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center gap-4 flex-wrap">
-            <div class="space-y-1">
-                <h1 class="text-2xl font-black tracking-tight text-slate-800 flex items-center gap-2">📊 Restaurant Inventory Operations</h1>
-                <p class="text-xs text-slate-500">Logged in as <span class="font-bold text-slate-800" x-text="currentUsername"></span> <span class="mx-2 text-slate-300">|</span> Security Scope: <span class="bg-slate-100 text-slate-800 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-slate-200" x-text="currentRole"></span></p>
-            </div>
-            <div class="flex gap-2 items-center flex-wrap">
-                <button @click="showAccountModal = true" class="text-xs bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2 rounded-lg font-bold tracking-wide transition shadow-sm">👤 Security Settings</button>
-                <button x-show="currentRole === 'admin'" @click="showUserAdminModal = true" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg font-bold tracking-wide border border-indigo-200 transition shadow-sm">🧑‍💼 Operator Management</button>
-                <button x-show="currentRole !== 'readonly'" @click="downloadInwardSupplierReport()" class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg font-bold tracking-wide flex items-center gap-1.5 transition shadow-md">🧾 Supplier Inward Report (.xlsx)</button>
-                <button @click="downloadExcelReport()" class="text-xs bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg font-bold tracking-wide flex items-center gap-1.5 transition shadow-md">📊 Export 30-Day Excel (.xlsx)</button>
-                <button @click="logout()" class="text-xs bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold px-3 py-2 rounded-lg transition">🔒 Close Session</button>
-            </div>
-        </header>
+async function sha256(text) {
+    const enc = new TextEncoder().encode(text);
+    const hashBuf = await crypto.subtle.digest('SHA-256', enc);
+    return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
-        <!-- Dynamic Event Notice Alerts Panel -->
-        <section class="bg-amber-50 border border-amber-200 p-4 rounded-xl text-xs text-amber-950 space-y-3 shadow-xs">
-            <div class="flex justify-between items-center border-b border-amber-200 pb-2">
-                <span class="font-bold uppercase tracking-wider text-amber-900 text-xs flex items-center gap-1.5">📢 Scheduled High-Pax Catering Event Matrix</span>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <template x-for="note in importantNotes" :key="note.id">
-                    <div class="bg-white border border-amber-200 p-3 rounded-lg shadow-xs flex justify-between items-center transition hover:border-amber-300">
-                        <div class="text-slate-700 font-medium">📌 Special stock procurement allocation required for <strong class="text-slate-900 font-bold text-sm" x-text="note.item_name"></strong> serving <strong class="text-amber-800 font-extrabold text-sm" x-text="note.pax + ' Pax'"></strong>. Target Deadline: <span class="underline font-bold text-slate-900" x-text="note.date_label"></span></div>
-                        <button x-show="currentRole === 'admin'" @click="deleteNote(note.id)" class="text-rose-600 hover:bg-rose-50 font-bold px-2 py-1 rounded text-[10px] transition">🗑️ Delete</button>
-                    </div>
-                </template>
-                <template x-if="importantNotes.length === 0">
-                    <p class="text-slate-400 italic py-1">No upcoming large-scale event allocations pending verification.</p>
-                </template>
-            </div>
-            <div x-show="currentRole === 'admin'" class="bg-white border border-amber-200 p-4 rounded-lg space-y-3 mt-2 shadow-xs">
-                <div class="font-bold text-amber-900 text-[11px] uppercase tracking-wider">➕ Stage Event Allocation Note:</div>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <input type="text" x-model="formNote.itemName" placeholder="Item Title" class="border border-slate-300 p-2 rounded-md bg-slate-50 text-xs w-full">
-                    <input type="number" x-model.number="formNote.pax" placeholder="Headcount (Pax)" class="border border-slate-300 p-2 rounded-md bg-slate-50 text-xs text-center font-mono w-full">
-                    <input type="text" x-model="formNote.dateLabel" placeholder="Target Date Label" class="border border-slate-300 p-2 rounded-md bg-slate-50 text-xs text-center font-mono w-full">
-                </div>
-                <button @click="submitNewNote()" class="bg-amber-700 hover:bg-amber-800 text-white font-bold text-[11px] px-4 py-2 rounded-lg shadow-sm uppercase transition tracking-wider">Publish Alert Note to Banner</button>
-            </div>
-        </section>
+const PALETTE = [
+    { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af' }, 
+    { bg: '#fffbeb', border: '#f59e0b', text: '#92400e' }, 
+    { bg: '#f0fdf4', border: '#22c55e', text: '#166534' }, 
+    { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8' }, 
+    { bg: '#fdf2f8', border: '#ec4899', text: '#9d174d' }, 
+];
 
-        <!-- Command Control Center Operations Desks -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="currentRole !== 'readonly'">
-            <!-- Inward Box -->
-            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
-                <div class="text-xs font-bold uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2">📥 Log New Inward Consignment</div>
-                <div class="grid grid-cols-4 gap-3 text-xs">
-                    <div class="col-span-2">
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Select Tracked Product</label>
-                        <select x-model="formInward.itemId" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-medium text-slate-700">
-                            <option value="">-- Active Inventory Index --</option>
-                            <template x-for="item in items" :key="item.id">
-                                <option :value="item.id" x-text="item.name"></option>
-                            </template>
-                        </select>
-                    </div>
-                    <div class="col-span-1">
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Supplier / Vendor</label>
-                        <select x-model="formInward.supplierName" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full text-slate-700 font-bold focus:ring-1 focus:ring-emerald-500">
-                            <option value="">-- Select Vendor --</option>
-                            <template x-for="sup in suppliers" :key="sup.id">
-                                <option :value="sup.name" x-text="sup.name"></option>
-                            </template>
-                            <option value="_NEW_" class="text-indigo-600 font-black bg-indigo-50">+ 🆕 Add New Supplier</option>
-                        </select>
-                    </div>
-                    <div class="col-span-1">
-                        <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Units</label>
-                        <input type="number" x-model.number="formInward.qty" placeholder="Units" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
-                    </div>
-                </div>
-                <button @click="addInward()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2.5 rounded-lg shadow-sm transition uppercase tracking-wider">Commit Inward Entry to Cloud</button>
-                <div class="pt-3 border-t border-dashed border-slate-200 flex flex-col gap-3">
-                    <div class="flex justify-between items-center bg-slate-50 p-2 rounded-lg border border-slate-200">
-                        <span class="text-[11px] font-bold uppercase text-slate-600">Index Extensions Desk:</span>
-                        <button @click="showNewItemModal = true" class="text-[11px] bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-1.5 rounded-md transition shadow-xs">➕ Add New Item Portfolio</button>
-                    </div>
-                    <input type="file" accept=".csv" @change="handleCsvUpload($event)" class="block w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-slate-200 file:text-[11px] file:font-bold file:bg-white cursor-pointer">
-                </div>
-            </div>
+async function seedIfEmpty() {
+    try {
+        const usersSnap = await getDocs(colRef('users'));
+        if (usersSnap.empty) {
+            const adminHash = await sha256('ChangeMe123!');
+            await setDoc(doc(dbFs, 'users', 'admin-seed'), { username: 'admin', passwordHash: adminHash, role: 'admin' });
+        }
 
-            <!-- Outward Dispatch Desk -->
-            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'outward'">
-                <div class="text-xs font-bold uppercase tracking-wider text-rose-800 border-b border-slate-100 pb-2">📤 Issue Line Outward Allocation</div>
-                <div class="grid grid-cols-3 gap-3 text-xs">
-                    <select x-model="formOutward.itemId" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-medium text-slate-700">
-                        <option value="">-- Item --</option>
-                        <template x-for="item in items" :key="item.id">
-                            <option :value="item.id" x-text="item.name"></option>
-                        </template>
-                    </select>
-                    <select x-model="formOutward.department" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-bold text-slate-700">
-                        <template x-for="dept in departments" :key="dept">
-                            <option :value="dept" x-text="dept"></option>
-                        </template>
-                    </select>
-                    <input type="number" x-model.number="formOutward.qty" placeholder="Units" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
-                </div>
-                <button @click="deductOutward()" class="w-full bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold py-2.5 rounded-lg shadow-sm transition uppercase tracking-wider">Execute Deduction & Issue Stock</button>
-            </div>
-        </div>
+        const catSnap = await getDocs(colRef('categories'));
+        if (catSnap.size < 13) {
+            const defaultCategories = [
+                { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334151' },
+                { id: 'frozen', name: 'Frozen', emoji: '❄️', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#083344' },
+                { id: 'masala', name: 'Masala', emoji: '🍛', bg_color: '#fff7ed', border_color: '#f97316', text_color: '#7c2d12' },
+                { id: 'grain', name: 'Grain', emoji: '🌾', bg_color: '#fefce8', border_color: '#eab308', text_color: '#713f12' },
+                { id: 'vegetables', name: 'Vegetables', emoji: '🥦', bg_color: '#f0fdf4', border_color: '#22c55e', text_color: '#14532d' },
+                { id: 'bottle', name: 'Bottle', emoji: '🍾', bg_color: '#f5f5f4', border_color: '#737367', text_color: '#1c1917' },
+                { id: 'pasta', name: 'Pasta', emoji: '🍝', bg_color: '#fffbeb', border_color: '#f59e0b', text_color: '#78350f' },
+                { id: 'dairy', name: 'Dairy', emoji: '🥛', bg_color: '#eff6ff', border_color: '#3b82f6', text_color: '#1e40af' },
+                { id: 'disposables', name: 'Disposables', emoji: '🥤', bg_color: '#fafafa', border_color: '#a3a3a3', text_color: '#171717' },
+                { id: 'flour', name: 'Flour', emoji: '🥡', bg_color: '#fdf6f0', border_color: '#cca47c', text_color: '#4a3319' },
+                { id: 'tin', name: 'Tin', emoji: '🥫', bg_color: '#f0fdfa', border_color: '#14b8a6', text_color: '#115e59' },
+                { id: 'khademasala', name: 'KhadeMasala', emoji: '🌶️', bg_color: '#fff1f2', border_color: '#f43f5e', text_color: '#4c0519' },
+                { id: 'beverages', name: 'Beverages', emoji: '🧃', bg_color: '#fdf2f8', border_color: '#ec4899', text_color: '#701a75' }
+            ];
 
-        <!-- Recent Logs Buffer Timeline -->
-        <div x-show="logs.length > 0 && currentRole !== 'readonly'" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
-            <div class="text-[11px] font-bold uppercase text-slate-500 tracking-wider">⏱️ Real-time Transaction Ledger Streams (LIFO Buffer Timeline):</div>
-            <div class="flex flex-wrap gap-2">
-                <template x-for="log in logs" :key="log.id">
-                    <div class="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2.5 font-mono shadow-2xs">
-                        <span :class="log.type === 'INWARD' ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-rose-700 bg-rose-50 border border-rose-200'" class="font-bold px-1.5 py-0.5 rounded text-[10px]">
-                            <span x-text="log.type === 'INWARD' ? '📥 IN +' : '📤 OUT -'"></span><span x-text="log.qty"></span>
-                        </span>
-                        <span class="font-bold font-sans text-slate-800" x-text="log.item_name"></span>
-                        <span x-show="log.supplier_name" class="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded font-bold" x-text="'Vendor: ' + log.supplier_name"></span>
-                        <span x-show="log.department" class="text-[10px] bg-slate-200 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold" x-text="log.department"></span>
-                        <button x-show="isWithinOneHour(log.created_at)" @click="triggerUndo(log)" class="text-[10px] bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 px-2 py-0.5 rounded-md font-extrabold font-sans transition">↩ Rollback</button>
-                    </div>
-                </template>
-            </div>
-        </div>
+            for (const cat of defaultCategories) {
+                await setDoc(doc(dbFs, 'categories', cat.id), { 
+                    name: cat.name, 
+                    emoji: cat.emoji, 
+                    bg_color: cat.bg_color, 
+                    border_color: cat.border_color, 
+                    text_color: cat.text_color 
+                });
+            }
+        }
 
-        <!-- Live Infrastructure Ledger Board -->
-        <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
-                <div class="space-y-0.5">
-                    <div class="text-sm font-extrabold text-slate-800 uppercase tracking-wide">Live Infrastructure Ledger Engine</div>
-                    <p class="text-[11px] text-slate-500">Real-time balances matching safety parameters</p>
-                </div>
-                <!-- Filter Category Badges Hook -->
-                <div class="flex flex-wrap gap-1.5 text-xs font-bold">
-                    <button @click="filterCat = 'all'" :class="filterCat === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'" class="px-3 py-1.5 rounded-lg border shadow-2xs transition">📁 All Categories</button>
-                    <template x-for="cat in categories" :key="cat.id">
-                        <button @click="filterCat = cat.name" :style="'background-color: ' + (filterCat === cat.name ? cat.border_color : cat.bg_color) + '; color: ' + (filterCat === cat.name ? '#fff' : cat.text_color) + '; border-color: ' + cat.border_color" class="px-2.5 py-1 rounded border transition" x-text="cat.emoji + ' ' + cat.name"></button>
-                    </template>
-                </div>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-xs border-collapse">
-                    <thead>
-                        <!-- 🟢 RESTRUCTURED COLUMN HEADERS TO YOUR EXACT SEQUENCE -->
-                        <tr class="bg-slate-50 border-b text-slate-500 uppercase tracking-wider text-[11px] font-bold">
-                            <th class="p-3 w-16 text-center" x-show="currentRole === 'admin'">Move</th>
-                            <th class="p-3">Item Name</th>                       <!-- Position 1 -->
-                            <th class="p-3">Category Tag</th>                    
-                            <th class="p-3 text-center">Live Stock Balance</th>  <!-- Position 2 -->
-                            <th class="p-3">Status Threshold Vector</th>         <!-- Position 3 -->
-                            <th class="p-3 text-center">Safety Limit</th>        <!-- Position 4 -->
-                            <th class="p-3 text-center" x-show="currentRole !== 'readonly'">Unit Price (MRP)</th> <!-- Collapsible 5 -->
-                            <th class="p-3 text-right" x-show="currentRole === 'admin' || currentRole === 'inward'">Management Axis</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <template x-for="item in processedItems" :key="item.id">
-                            <tr :class="item.stock <= item.threshold ? 'bg-rose-50/40 font-medium' : 'bg-white hover:bg-slate-50/50'" class="transition">
-                                <td class="p-4 text-center space-x-1 whitespace-nowrap" x-show="currentRole === 'admin'">
-                                    <button @click="shiftOrder(item.id, 'up')" class="text-slate-400 hover:text-slate-800 font-bold">▲</button>
-                                    <button @click="shiftOrder(item.id, 'down')" class="text-slate-400 hover:text-slate-800 font-bold">▼</button>
-                                </td>
-                                
-                                <!-- 🟢 POSITION 1: Item Name -->
-                                <td class="p-4 font-extrabold text-slate-900 text-sm" x-text="item.name"></td>
-                                
-                                <td class="p-4">
-                                    <span :style="'background-color: ' + item.bg + '; color: ' + item.text_color + '; border-color: ' + item.border" class="px-2.5 py-1 rounded-md text-[10px] uppercase font-extrabold border shadow-2xs whitespace-nowrap" x-text="item.emoji + ' ' + item.category_name"></span>
-                                </td>
-                                
-                                <!-- 🟢 POSITION 2: Live Stock Balance -->
-                                <td class="p-4 text-center font-mono text-sm font-black" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="item.stock"></td>
-                                
-                                <!-- 🟢 POSITION 3: Status Threshold Vector -->
-                                <td class="p-4">
-                                    <template x-if="item.stock === 0"><span class="bg-rose-600 text-white text-[9px] px-2 py-0.5 rounded-sm font-black uppercase tracking-wider">🚨 depleted</span></template>
-                                    <template x-if="item.stock > 0 && item.stock <= item.threshold"><span class="bg-amber-500 text-slate-950 text-[9px] px-2 py-0.5 rounded-sm font-black uppercase tracking-wider">⚠️ breach limit</span></template>
-                                    <template x-if="item.stock > item.threshold"><span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] px-2 py-0.5 rounded-md font-bold">Stable Matrix</span></template>
-                                </td>
-                                
-                                <!-- 🟢 POSITION 4: Safety Limit -->
-                                <td class="p-4 text-center font-mono text-slate-400 font-medium" x-text="item.threshold"></td>
-                                
-                                <!-- 🟢 POSITION 5: Unit Price (MRP) - Hidden automatically for Readonly Scope -->
-                                <td class="p-4 text-center font-mono font-bold text-slate-700" x-show="currentRole !== 'readonly'" x-text="'₹' + (item.mrp || 0)"></td>
-                                
-                                <td class="p-4 text-right space-x-2.5 whitespace-nowrap" x-show="currentRole === 'admin' || currentRole === 'inward'">
-                                    <button @click="changeItemName(item)" class="text-slate-600 font-bold text-[11px]">✏&zwj;️ Edit Details</button>
-                                    <span class="text-slate-200">|</span>
-                                    <button @click="modifyThreshold(item)" class="text-slate-600 font-bold text-[11px]">Limit</button>
-                                    <span x-show="currentRole === 'admin'" class="text-slate-200">|</span>
-                                    <button x-show="currentRole === 'admin'" @click="purgeItem(item.id)" class="text-rose-600 font-bold text-[11px]">Purge</button>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    </main>
+        // Default seeds for Suppliers collection if completely empty
+        const supSnap = await getDocs(colRef('suppliers'));
+        if (supSnap.empty) {
+            const starterVendors = ['Seven Enterprise','Hem Enterprise','Yor Enterprise','Royal Sales','Khodiyar Aloo Bhandar','Nileshbhai','Vegetable Market','Sajan Milk Suppliers','Iqbal Laundry','Shrikhand','Dish Liquid','Balaji Dairy','Devkaran Ravji', 'Ashok Trading', 'Vivek Traders', 'Nagindas'];
+            for (const name of starterVendors) {
+                await addDoc(colRef('suppliers'), { name });
+            }
+        }
+    } catch (e) {
+        console.warn("Seeding bypassed: ", e);
+    }
+}
 
-    <!-- Modal Sheets Suite Layout templates -->
-    <div x-show="showNewItemModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
-        <div class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
-            <h3 class="text-sm font-black uppercase text-slate-800 tracking-wide border-b pb-1">➕ Append Portfolio Tracking row</h3>
-            <div class="space-y-3 text-xs">
-                <div>
-                    <label class="block font-bold text-slate-600 mb-1">Product Description Label</label>
-                    <input type="text" x-model="newItemForm.name" class="border border-slate-300 p-2 w-full rounded-md" placeholder="e.g. Cardamom Powder">
-                </div>
-                <div>
-                    <label class="block font-bold text-slate-600 mb-1">Select Base Operational Segment</label>
-                    <select x-model="newItemForm.categoryId" class="border border-slate-300 p-2 w-full rounded-md bg-white text-slate-700">
-                        <option value="">-- Assign Portfolio Group --</option>
-                        <template x-for="cat in categories" :key="cat.id">
-                            <option :value="cat.id" x-text="cat.name"></option>
-                        </template>
-                    </select>
-                </div>
-                <div>
-                    <label class="block font-bold text-slate-600 mb-1">Or Initialize New Custom Category</label>
-                    <div class="grid grid-cols-4 gap-1">
-                        <input type="text" x-model="newItemForm.newCategoryEmoji" class="border border-slate-300 p-2 rounded-md text-center text-sm col-span-1" placeholder="🍱">
-                        <input type="text" x-model="newItemForm.newCategoryName" class="border border-slate-300 p-2 rounded-md col-span-3" placeholder="Category Name">
-                    </div>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                    <div><label class="block font-bold text-slate-600 mb-1">Safety Limit</label><input type="number" x-model.number="newItemForm.threshold" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="10"></div>
-                    <div x-show="currentRole !== 'readonly'"><label class="block font-bold text-slate-600 mb-1">Unit Price (MRP)</label><input type="number" x-model.number="newItemForm.mrp" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="₹0"></div>
-                </div>
-            </div>
-            <div class="flex gap-2 pt-2">
-                <button @click="showNewItemModal = false" class="flex-1 bg-slate-100 border text-xs font-bold py-2.5 rounded-lg">Dismiss</button>
-                <button @click="submitNewItem()" class="flex-1 bg-slate-800 text-white text-xs font-bold py-2.5 rounded-lg">Commit Axis</button>
-            </div>
-        </div>
-    </div>
+window.stockApp = function() {
+    return {
+        categories: [],
+        items: [],
+        importantNotes: [],
+        logs: [],
+        users: [],
+        suppliers: [], // 🟢 Cloud synced suppliers live array
+        
+        ready: false,
+        isAuthenticated: false,
+        authChecking: true,
+        currentRole: 'readonly',
+        currentUsername: '',
+        currentUserId: null,
+        filterCat: 'all',
+        
+        loginForm: { username: '', password: '' },
+        loginError: '',
+        formInward: { itemId: '', qty: '', supplierName: '' }, 
+        formOutward: { itemId: '', department: 'Indian', qty: '' },
+        formNote: { itemName: '', pax: '', dateLabel: '' },
+        
+        showNewItemModal: false,
+        newItemForm: { name: '', categoryId: '', newCategoryEmoji: '🍱', newCategoryName: '', threshold: 0, mrp: '' },
+        showAccountModal: false,
+        accountForm: { currentPassword: '', newPassword: '' },
+        accountError: '',
+        accountSuccess: '',
+        showUserAdminModal: false,
+        newUserForm: { username: '', password: '', role: 'inward' },
+        newUserError: '',
+        departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
-    <!-- Security Popups Configuration -->
-    <div x-show="showAccountModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
-        <form @submit.prevent="changeMyPassword()" class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
-            <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">👤 Account Credentials Configuration</h3>
-            <div class="space-y-3 text-xs">
-                <input type="password" placeholder="Current Password" autocomplete="current-password" x-model="accountForm.currentPassword" class="border p-2 w-full rounded-md">
-                <input type="password" placeholder="New Structural Security Key" autocomplete="new-password" x-model="accountForm.newPassword" class="border p-2 w-full rounded-md">
-            </div>
-            <p x-show="accountError" x-text="accountError" class="text-rose-600 text-[11px] font-bold" x-cloak></p>
-            <p x-show="accountSuccess" x-text="accountSuccess" class="text-emerald-600 text-[11px] font-bold" x-cloak></p>
-            <div class="flex gap-2 pt-2">
-                <button type="button" @click="showAccountModal = false" class="flex-1 bg-slate-100 border text-xs font-bold py-2.5 rounded-lg">Dismiss</button>
-                <button type="submit" class="flex-1 bg-slate-800 text-white text-xs font-bold py-2.5 rounded-lg">Apply Update</button>
-            </div>
-        </form>
-    </div>
+        async init() {
+            await seedIfEmpty();
+            
+            onSnapshot(colRef('categories'), (snap) => { 
+                this.categories = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
+            });
+            
+            onSnapshot(colRef('items'), (snap) => { 
+                this.items = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
+            });
 
-    <div x-show="showUserAdminModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
-        <div class="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl space-y-4 border border-slate-200 max-h-[85vh] overflow-y-auto">
-            <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">🧑&zwj;💼 Authorized System Operators Directory</h3>
-            <div class="border rounded-lg bg-slate-50 overflow-hidden divide-y">
-                <template x-for="u in users" :key="u.id">
-                    <div class="p-3 flex items-center justify-between gap-3 bg-white text-xs">
-                        <div>
-                            <div class="font-extrabold text-slate-800 text-sm" x-text="u.username"></div>
-                            <div class="text-[10px] font-mono text-slate-400 uppercase" x-text="'Privilege: ' + u.role"></div>
-                        </div>
-                        <div class="flex items-center gap-1">
-                            <select @change="changeUserRole(u.id, $event.target.value)" class="border rounded p-1 bg-slate-50">
-                                <option value="admin">admin</option>
-                                <option value="inward">inward</option>
-                                <option value="outward">outward</option>
-                                <option value="readonly">readonly</option>
-                            </select>
-                            <button @click="promptResetPassword(u)" class="text-[10px] bg-slate-100 border px-2 py-1 rounded">Reset</button>
-                            <button @click="deleteUser(u.id)" class="text-[10px] bg-rose-50 border border-rose-100 text-rose-700 font-bold px-2 py-1 rounded">Purge</button>
-                        </div>
-                    </div>
-                </template>
-            </div>
-            <button @click="showUserAdminModal = false" class="w-full bg-slate-100 text-xs font-bold py-2.5 rounded-lg border">Dismiss Panel</button>
-        </div>
-    </div>
-</body>
-</html>
+            // 🟢 Synchronize Supplier names continuously with Firestore
+            onSnapshot(colRef('suppliers'), (snap) => {
+                this.suppliers = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a,b) => a.name.localeCompare(b.name));
+            });
+            
+            onSnapshot(colRef('notes'), (snap) => { 
+                this.importantNotes = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
+            });
+            
+            onSnapshot(colRef('logs'), (snap) => { 
+                const rawLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                this.logs = rawLogs
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                    .slice(0, 50)
+                    .map((l) => {
+                        const matchedItem = this.items.find((i) => String(i.id) === String(l.item_id));
+                        return { ...l, item_name: matchedItem ? matchedItem.name : 'Unknown' };
+                    });
+            });
+            
+            onSnapshot(colRef('users'), (snap) => {
+                this.users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                if (this.currentUserId) {
+                    const me = this.users.find((u) => u.id === this.currentUserId);
+                    if (!me) this.logout();
+                    else { this.currentRole = me.role; this.currentUsername = me.username; }
+                }
+                if (!this.ready) { this.ready = true; this.restoreSession(); }
+            });
+        },
+
+        restoreSession() {
+            const session = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
+            if (session) {
+                const user = this.users.find((u) => u.id === session.userId);
+                if (user) {
+                    this.currentUserId = user.id;
+                    this.currentUsername = user.username;
+                    this.currentRole = user.role;
+                    this.isAuthenticated = true;
+                }
+            }
+            this.authChecking = false;
+        },
+
+        get processedItems() {
+            let dataset = this.items.map((i) => {
+                const cat = this.categories.find((c) => c.id === i.category_id) || {};
+                return { 
+                    ...i, 
+                    category_name: cat.name || 'Unassigned', 
+                    emoji: cat.emoji || '📦',
+                    bg: cat.bg_color || '#f3f4f6', 
+                    border: cat.border_color || '#9ca3af', 
+                    text_color: cat.text_color || '#374151' 
+                };
+            });
+
+            if (this.filterCat !== 'all') {
+                dataset = dataset.filter((i) => i.category_name === this.filterCat);
+            }
+            return dataset.sort((a, b) => {
+                let aAlert = a.stock <= a.threshold ? 1 : 0;
+                let bAlert = b.stock <= b.threshold ? 1 : 0;
+                if (aAlert !== bAlert) return bAlert - aAlert;
+                return (a.order_index || 0) - (b.order_index || 0);
+            });
+        },
+
+        async verifyLogin() {
+            this.loginError = '';
+            const { username, password } = this.loginForm;
+            if (!username || !password) { this.loginError = 'Fields required'; return; }
+            const user = this.users.find((u) => u.username.toLowerCase() === username.trim().toLowerCase());
+            if (!user || (await sha256(password)) !== user.passwordHash) { this.loginError = 'Invalid credentials'; return; }
+            this.currentUserId = user.id;
+            this.currentUsername = user.username;
+            this.currentRole = user.role;
+            this.isAuthenticated = true;
+            this.loginForm.password = '';
+            sessionStorage.setItem(SESSION_KEY, JSON.stringify({ userId: user.id }));
+        },
+
+        logout() {
+            sessionStorage.removeItem(SESSION_KEY);
+            this.isAuthenticated = false;
+            this.currentRole = 'readonly';
+            this.currentUsername = '';
+            this.currentUserId = null;
+        },
+
+        isWithinOneHour(timestamp) {
+            if (!timestamp) return false;
+            return Date.now() - new Date(timestamp).getTime() < 60 * 60 * 1000;
+        },
+
+        async submitNewNote() {
+            if (!this.formNote.itemName || !this.formNote.pax || !this.formNote.dateLabel) return;
+            await addDoc(colRef('notes'), { item_name: this.formNote.itemName.trim(), pax: parseInt(this.formNote.pax) || 0, date_label: this.formNote.dateLabel.trim() });
+            this.formNote = { itemName: '', pax: '', dateLabel: '' };
+        },
+
+        async deleteNote(noteId) { await deleteDoc(doc(dbFs, 'notes', noteId)); },
+        async changeItemName(item) {
+            // 1. Prompt for Item Name Change
+            let updatedName = prompt(`[1/3] Update Name for "${item.name}":`, item.name);
+            if (updatedName === null) return; // Operator canceled sequence
+            if (!updatedName.trim()) return alert("Item Name cannot be left completely blank.");
+
+            // 2. Prompt for Supplier Modification
+            let catList = this.suppliers.map((s, idx) => `${idx + 1}. ${s.name}`).join('\n');
+            let currentLog = this.logs.find(l => String(l.item_id) === String(item.id) && l.type === 'INWARD');
+            let fallbackVendor = currentLog ? currentLog.supplier_name : 'General Vendor';
+            
+            let vendorChoice = prompt(`[2/3] Choose New Supplier Number for "${updatedName.trim()}":\n\n${catList}\n\nType "NEW" to provision a fresh vendor.`);
+            if (vendorChoice === null) return;
+
+            let finalVendor = fallbackVendor;
+            if (vendorChoice.trim().toUpperCase() === "NEW") {
+                let freshName = prompt("Enter New Supplier Identity Label:");
+                if (freshName?.trim()) {
+                    finalVendor = freshName.trim();
+                    const matchEx = this.suppliers.find(s => s.name.toLowerCase() === finalVendor.toLowerCase());
+                    if (!matchEx) await addDoc(colRef('suppliers'), { name: finalVendor });
+                }
+            } else {
+                let sIdx = parseInt(vendorChoice) - 1;
+                if (sIdx >= 0 && sIdx < this.suppliers.length) {
+                    finalVendor = this.suppliers[sIdx].name;
+                }
+            }
+
+            // 3. Prompt for MRP Price Change
+            let promptPrice = prompt(`[3/3] Update Maximum Retail Price (MRP) for "${updatedName.trim()}":`, item.mrp || 0);
+            if (promptPrice === null) return;
+            let finalPrice = Number(promptPrice);
+            if (isNaN(finalPrice) || finalPrice < 0) return alert("Please enter a valid numeric pricing attribute.");
+
+            // 4. Batch Commit structural payload mutations safely to Cloud Firestore
+            try {
+                await updateDoc(doc(dbFs, 'items', item.id), { 
+                    name: updatedName.trim(),
+                    mrp: finalPrice
+                });
+
+                // Update supplier trace history tags on corresponding logs for precise reporting
+                let matchingLogs = this.logs.filter(l => String(l.item_id) === String(item.id) && l.type === 'INWARD');
+                for (let log of matchingLogs) {
+                    await updateDoc(doc(dbFs, 'logs', log.id), { supplier_name: finalVendor });
+                }
+
+                alert(`🎯 "${item.name}" updated successfully across your inventory grids!`);
+            } catch (error) {
+                alert("Cloud mutation failed: " + error.message);
+            }
+        },
+        async modifyMrp(item) {
+            let promptVal = prompt('Update Maximum Retail Price (MRP) for ' + item.name + ':', item.mrp || 0);
+            if (promptVal !== null) {
+                let numericPrice = Number(promptVal);
+                if (isNaN(numericPrice) || numericPrice < 0) return alert("Please enter a valid numeric pricing value.");
+                await updateDoc(doc(dbFs, 'items', item.id), { mrp: numericPrice });
+            }
+        },
+        async purgeItem(id) { if (confirm('Purge item entry?')) await deleteDoc(doc(dbFs, 'items', id)); },
+
+        async shiftOrder(id, direction) {
+            const sorted = [...this.items].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
+            const idx = sorted.findIndex((i) => i.id === id);
+            if (idx === -1) return;
+            const swapIdx = idx + (direction === 'up' ? -1 : 1);
+            if (swapIdx < 0 || swapIdx >= sorted.length) return;
+            await updateDoc(doc(dbFs, 'items', sorted[idx].id), { order_index: sorted[swapIdx].order_index || 0 });
+            await updateDoc(doc(dbFs, 'items', sorted[swapIdx].id), { order_index: sorted[idx].order_index || 0 });
+        },
+
+        async submitNewItem() {
+            if (!this.newItemForm.name.trim()) return;
+            let categoryId = this.newItemForm.categoryId || null;
+            if (!categoryId && this.newItemForm.newCategoryName.trim()) {
+                const name = this.newItemForm.newCategoryName.trim();
+                const existing = this.categories.find((c) => c.name.toLowerCase() === name.toLowerCase());
+                if (existing) categoryId = existing.id;
+                else {
+                    const palette = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+                    const newCatRef = await addDoc(colRef('categories'), { 
+                        name, 
+                        emoji: this.newItemForm.newCategoryEmoji || '🍱',
+                        bg_color: palette.bg, 
+                        border_color: palette.border, 
+                        text_color: palette.text 
+                    });
+                    categoryId = newCatRef.id;
+                }
+            }
+            if (!categoryId) return;
+            const maxOrder = this.items.reduce((m, i) => Math.max(m, i.order_index || 0), 0);
+            await addDoc(colRef('items'), { 
+                name: this.newItemForm.name.trim(), 
+                category_id: categoryId, 
+                stock: 0, 
+                threshold: this.newItemForm.threshold || 0, 
+                mrp: Number(this.newItemForm.mrp || 0),
+                order_index: maxOrder + 1 
+            });
+            this.newItemForm = { name: '', categoryId: '', newCategoryEmoji: '🍱', newCategoryName: '', threshold: 0, mrp: '' };
+            this.showNewItemModal = false;
+        },
+
+        async handleCsvUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const text = e.target.result;
+                const lines = text.split('\n');
+                let addedCount = 0;
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    const columns = lines[i].split(',');
+                    if (columns.length >= 4) {
+                        const name = columns[0].trim();
+                        const categoryName = columns[1].trim();
+                        const qty = parseInt(columns[2]) || 0;
+                        const threshold = parseInt(columns[3]) || 0;
+                        const mrp = columns[4] ? Number(columns[4].trim()) || 0 : 0;
+
+                        let cat = this.categories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
+                        let categoryId = cat ? cat.id : (await addDoc(colRef('categories'), { name: categoryName, emoji: '🍱', bg_color: '#f3f4f6', border_color: '#9ca3af', text_color: '#374151' })).id;
+
+                        const existingItem = this.items.find((it) => it.name.toLowerCase() === name.toLowerCase());
+                        if (existingItem) {
+                            await updateDoc(doc(dbFs, 'items', existingItem.id), { stock: existingItem.stock + qty, threshold, mrp });
+                        } else {
+                            const maxOrder = this.items.reduce((m, it) => Math.max(m, it.order_index || 0), 0);
+                            await addDoc(colRef('items'), { name, category_id: categoryId, stock: qty, threshold, mrp, order_index: maxOrder + 1 });
+                        }
+                        addedCount++;
+                    }
+                }
+                alert(`CSV Ingested successfully. Rows populated: ${addedCount}`);
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        },
+
+        async addInward() {
+            if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) {
+                return alert('Select missing fields including supplier vendor.');
+            }
+            const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId));
+            if (!target) return alert('Selected item could not be found.');
+            const qty = parseInt(this.formInward.qty);
+            if (!qty || qty <= 0) return alert('Enter a positive quantity.');
+            
+            let vendor = this.formInward.supplierName.trim();
+            
+            // 🟢 CLOUD INTERCEPT: Create new supplier entry directly insideFirestore
+            if (vendor === "_NEW_") {
+                let newVendorName = prompt("Enter new Supplier/Vendor Name:");
+                if (!newVendorName || !newVendorName.trim()) {
+                    return alert("Inward transaction abandoned. Supplier name required.");
+                }
+                vendor = newVendorName.trim();
+                
+                // Save vendor permanently to Firestore so everyone gets it immediately
+                const matchEx = this.suppliers.find(s => s.name.toLowerCase() === vendor.toLowerCase());
+                if (!matchEx) {
+                    await addDoc(colRef('suppliers'), { name: vendor });
+                }
+            }
+            
+            try {
+                await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock || 0) + qty });
+                await addDoc(colRef('logs'), {
+                    type: 'INWARD',
+                    item_id: target.id,
+                    qty,
+                    supplier_name: vendor, 
+                    department: null,
+                    created_at: new Date().toISOString(),
+                    created_by_name: this.currentUsername,
+                });
+                this.formInward = { itemId: '', qty: '', supplierName: '' };
+            } catch (error) {
+                alert("Database write error: " + error.message);
+            }
+        },
+
+        async deductOutward() {
+            if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
+            const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId));
+            if (!target) return alert('Selected item could not be found.');
+            const qty = parseInt(this.formOutward.qty);
+            if (!qty || qty <= 0) return alert('Enter a positive quantity.');
+            if (Number(target.stock || 0) < qty) return alert('Operation Denied: Insufficient stock balance.');
+            
+            try {
+                await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock) - qty });
+                await addDoc(colRef('logs'), {
+                    type: 'OUTWARD',
+                    item_id: target.id,
+                    qty,
+                    department: this.formOutward.department,
+                    created_at: new Date().toISOString(),
+                    created_by_name: this.currentUsername,
+                });
+                this.formOutward = { itemId: '', department: 'Indian', qty: '' };
+            } catch (error) {
+                alert("Database write error: " + error.message);
+            }
+        },
+
+        async triggerUndo(log) {
+            const item = this.items.find((i) => String(i.id) === String(log.item_id));
+            if (!item) return alert('The original tracking entry row no longer exists.');
+            if (!this.isWithinOneHour(log.created_at)) return alert('Action window expired.');
+            
+            try {
+                if (log.type === 'INWARD') {
+                    await updateDoc(doc(dbFs, 'items', item.id), { stock: Math.max(0, Number(item.stock || 0) - Number(log.qty)) });
+                } else {
+                    await updateDoc(doc(dbFs, 'items', item.id), { stock: Number(item.stock || 0) + Number(log.qty) });
+                }
+                await deleteDoc(doc(dbFs, 'logs', log.id));
+            } catch (error) {
+                alert("Undo action failed: " + error.message);
+            }
+        },
+
+        async changeMyPassword() {
+            this.accountError = ''; this.accountSuccess = '';
+            const { currentPassword, newPassword } = this.accountForm;
+            if (newPassword.length < 6) { this.accountError = 'Min 6 characters'; return; }
+            const user = this.users.find((u) => u.id === this.currentUserId);
+            if ((await sha256(currentPassword)) !== user.passwordHash) { this.accountError = 'Incorrect current password'; return; }
+            await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: await sha256(newPassword) });
+            this.accountSuccess = 'Password updated successfully.';
+            this.accountForm = { currentPassword: '', newPassword: '' };
+        },
+
+        async createUser() {
+            const { username, password, role = 'inward' } = this.newUserForm;
+            if (!username || password.length < 6) return;
+            await addDoc(colRef('users'), { username: username.trim(), passwordHash: await sha256(password), role });
+            this.newUserForm = { username: '', password: '', role: 'inward' };
+        },
+
+        async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
+        async deleteUser(userId) { if (confirm('Permanently delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
+        
+        async promptResetPassword(user) {
+            let newPass = prompt(`Enter new password for ${user.username} (Min 6 chars):`);
+            if (!newPass) return;
+            if (newPass.trim().length < 6) return alert('Password must be at least 6 characters.');
+            try {
+                const hashed = await sha256(newPass.trim());
+                await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: hashed });
+                alert(`Password for ${user.username} has been reset successfully!`);
+            } catch (error) { alert("Reset failed: " + error.message); }
+        },
+
+        downloadInwardSupplierReport() {
+            const inwards = this.logs.filter(l => l.type === 'INWARD');
+            if (!inwards.length) return alert("No active inward logs found to generate a ledger.");
+
+            const supplierGroups = {};
+            inwards.forEach(log => {
+                const sName = log.supplier_name && log.supplier_name.trim() !== "" ? log.supplier_name.trim() : 'Historical / Unassigned Vendor';
+                if (!supplierGroups[sName]) supplierGroups[sName] = [];
+                supplierGroups[sName].push(log);
+            });
+
+            const sheetMatrix = [];
+
+            Object.keys(supplierGroups).forEach(supplier => {
+                sheetMatrix.push([`🚚 SUPPLIER LEDGER: ${supplier.toUpperCase()}`]);
+                sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE (MRP)", "TOTAL VALUATION"]);
+
+                let grandTotal = 0;
+
+                supplierGroups[supplier].forEach(log => {
+                    const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
+                    const name = log.item_name || linkedItem.name || 'Unknown Item';
+                    const qty = parseInt(log.qty) || 0;
+                    const price = parseFloat(linkedItem.mrp) || 0;
+                    const totalCost = qty * price;
+                    grandTotal += totalCost;
+
+                    sheetMatrix.push([name, qty, `₹${price}`, `₹${totalCost}`]);
+                });
+
+                sheetMatrix.push(["", "", "GRAND TOTAL:", `₹${grandTotal}`]);
+                sheetMatrix.push([]); 
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Supplier Inward Breakdown");
+
+            ws['!cols'] = [{wch: 32}, {wch: 20}, {wch: 18}, {wch: 22}];
+            XLSX.writeFile(wb, `Supplier_Inward_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        },
+
+        downloadExcelReport() {
+            const getLocalDateString = (offsetDays) => {
+                const d = new Date();
+                d.setDate(d.getDate() - offsetDays);
+                return d.toISOString().slice(0, 10); 
+            };
+
+            const formatHeaderLabel = (dateStr) => {
+                const parts = dateStr.split('-');
+                if (parts.length !== 3) return dateStr;
+                const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+                return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); 
+            };
+
+            const targetDays = [];
+            for (let i = 0; i < 30; i++) {
+                targetDays.push(getLocalDateString(i));
+            }
+
+            const headerRow = ["DATE", "TOTAL STOCK"];
+            targetDays.forEach(dateStr => {
+                const dayLabel = formatHeaderLabel(dateStr);
+                headerRow.push(`${dayLabel}IN`);
+                headerRow.push(`${dayLabel}OUT`);
+            });
+
+            const matrixData = [headerRow, ["ITEM NAME"]];
+
+            this.processedItems.forEach(item => {
+                const row = [item.name, item.stock];
+
+                targetDays.forEach(targetDate => {
+                    let dayInwards = this.logs.filter(l => 
+                        l.created_at && 
+                        String(l.item_id) === String(item.id) && 
+                        l.type === 'INWARD' && 
+                        l.created_at.slice(0, 10) === targetDate
+                    );
+                    row.push(dayInwards.length ? `+${dayInwards.reduce((sum, l) => sum + (parseInt(l.qty) || 0), 0)}` : "0");
+
+                    let dayOutwards = this.logs.filter(l => 
+                        l.created_at && 
+                        String(l.item_id) === String(item.id) && 
+                        l.type === 'OUTWARD' && 
+                        l.created_at.slice(0, 10) === targetDate
+                    );
+                    if (dayOutwards.length) {
+                        let stackedOut = dayOutwards.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n");
+                        row.push(stackedOut);
+                    } else {
+                        row.push("0");
+                    }
+                });
+
+                matrixData.push(row);
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(matrixData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "30-Day LIFO Ledger");
+
+            const colWidths = [{wch: 24}, {wch: 14}];
+            for (let i = 0; i < 60; i++) {
+                colWidths.push({ wch: i % 2 === 0 ? 14 : 26 });
+            }
+            ws['!cols'] = colWidths;
+
+            const currentDayString = getLocalDateString(0);
+            XLSX.writeFile(wb, `Stock_Rolling_Report_${currentDayString}.xlsx`);
+        }
+    };
+};
+console.log("stockApp object closure successfully mapped to global scope.");
