@@ -1,8 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyBlLa6-W94ZFzL5H1Z2xNKzpPYc7sKkiqA",
   authDomain: "restaurant-inventory-5505f.firebaseapp.com",
@@ -13,10 +11,9 @@ const firebaseConfig = {
   measurementId: "G-LCFKRKMN3F"
 };
 
-// Initialize Firebase
-console.log("Firebase config loaded. Initializing app...");
+console.log("Firebase system core initializing sequence mounting...");
 
 export const app = initializeApp(firebaseConfig);
 export const dbFs = getFirestore(app);
 
-console.log("Firebase & Firestore initialized successfully.");
+console.log("Firestore secure cloud routing mapped successfully.");
