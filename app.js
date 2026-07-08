@@ -1,4 +1,3 @@
-// app.js
 import { dbFs } from './firebase-config.js'; 
 import {
     collection,
@@ -64,6 +63,15 @@ async function seedIfEmpty() {
                 });
             }
         }
+
+        // Default seeds for Suppliers collection if completely empty
+        const supSnap = await getDocs(colRef('suppliers'));
+        if (supSnap.empty) {
+            const starterVendors = ['Seven Enterprise','Hem Enterprise','Yor Enterprise','Royal Sales','Khodiyar Aloo Bhandar','Nileshbhai','Vegetable Market','Sajan Milk Suppliers','Iqbal Laundry','Shrikhand','Dish Liquid','Balaji Dairy','Devkaran Ravji', 'Ashok Trading', 'Vivek Traders', 'Nagindas'];
+            for (const name of starterVendors) {
+                await addDoc(colRef('suppliers'), { name });
+            }
+        }
     } catch (e) {
         console.warn("Seeding bypassed: ", e);
     }
@@ -76,6 +84,7 @@ window.stockApp = function() {
         importantNotes: [],
         logs: [],
         users: [],
+        suppliers: [], // 🟢 Cloud synced suppliers live array
         
         ready: false,
         isAuthenticated: false,
@@ -87,7 +96,7 @@ window.stockApp = function() {
         
         loginForm: { username: '', password: '' },
         loginError: '',
-        formInward: { itemId: '', qty: '', supplierName: '' }, // 🟢 Added supplierName mapping key
+        formInward: { itemId: '', qty: '', supplierName: '' }, 
         formOutward: { itemId: '', department: 'Indian', qty: '' },
         formNote: { itemName: '', pax: '', dateLabel: '' },
         
@@ -111,6 +120,11 @@ window.stockApp = function() {
             
             onSnapshot(colRef('items'), (snap) => { 
                 this.items = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
+            });
+
+            // 🟢 Synchronize Supplier names continuously with Firestore
+            onSnapshot(colRef('suppliers'), (snap) => {
+                this.suppliers = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a,b) => a.name.localeCompare(b.name));
             });
             
             onSnapshot(colRef('notes'), (snap) => { 
@@ -220,7 +234,7 @@ window.stockApp = function() {
             if (promptVal !== null) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parseInt(promptVal) || 0 });
         },
         async modifyMrp(item) {
-            let promptVal = prompt(`Update Maximum Retail Price (MRP) for ${item.name}:`, item.mrp || 0);
+            let promptVal = prompt('Update Maximum Retail Price (MRP) for ' + item.name + ':', item.mrp || 0);
             if (promptVal !== null) {
                 let numericPrice = Number(promptVal);
                 if (isNaN(numericPrice) || numericPrice < 0) return alert("Please enter a valid numeric pricing value.");
@@ -320,16 +334,18 @@ window.stockApp = function() {
             
             let vendor = this.formInward.supplierName.trim();
             
-            // 🟢 INTERCEPT: If operator chose to add a new supplier, prompt them right here
+            // 🟢 CLOUD INTERCEPT: Create new supplier entry directly insideFirestore
             if (vendor === "_NEW_") {
                 let newVendorName = prompt("Enter new Supplier/Vendor Name:");
                 if (!newVendorName || !newVendorName.trim()) {
                     return alert("Inward transaction abandoned. Supplier name required.");
                 }
                 vendor = newVendorName.trim();
-                // Save it to the active memory selection deck for next use on the screen
-                if (!this.suppliers.includes(vendor)) {
-                    this.suppliers.push(vendor);
+                
+                // Save vendor permanently to Firestore so everyone gets it immediately
+                const matchEx = this.suppliers.find(s => s.name.toLowerCase() === vendor.toLowerCase());
+                if (!matchEx) {
+                    await addDoc(colRef('suppliers'), { name: vendor });
                 }
             }
             
@@ -349,6 +365,7 @@ window.stockApp = function() {
                 alert("Database write error: " + error.message);
             }
         },
+
         async deductOutward() {
             if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
             const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId));
@@ -422,22 +439,19 @@ window.stockApp = function() {
             } catch (error) { alert("Reset failed: " + error.message); }
         },
 
-        // 🟢 NEW FEATURE: PARSES VENDOR INWARDS INTO SEPARATE TABLES VERTICALLY
         downloadInwardSupplierReport() {
             const inwards = this.logs.filter(l => l.type === 'INWARD');
             if (!inwards.length) return alert("No active inward logs found to generate a ledger.");
 
-            // Group transactions by supplier key string signatures
             const supplierGroups = {};
             inwards.forEach(log => {
-                const sName = log.supplier_name || 'General Vendor';
+                const sName = log.supplier_name && log.supplier_name.trim() !== "" ? log.supplier_name.trim() : 'Historical / Unassigned Vendor';
                 if (!supplierGroups[sName]) supplierGroups[sName] = [];
                 supplierGroups[sName].push(log);
             });
 
             const sheetMatrix = [];
 
-            // Compile clean block charts per distinct merchant identity
             Object.keys(supplierGroups).forEach(supplier => {
                 sheetMatrix.push([`🚚 SUPPLIER LEDGER: ${supplier.toUpperCase()}`]);
                 sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE (MRP)", "TOTAL VALUATION"]);
@@ -452,78 +466,90 @@ window.stockApp = function() {
                     const totalCost = qty * price;
                     grandTotal += totalCost;
 
-                    sheetMatrix.push([name, qty, price, totalCost]);
-                });
-
-                sheetMatrix.push(["", "", "GRAND TOTAL:", grandTotal]);
-                sheetMatrix.push([]); // Spacer row to separate table views vertically
-            });
-
-            const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Supplier Inward Breakdown");
-
-            ws['!cols'] = [{wch: 28}, {wch: 18}, {wch: 18}, {wch: 20}];
-            XLSX.writeFile(wb, `Supplier_Inward_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
-        },
-
-        ddownloadInwardSupplierReport() {
-            // 1. Filter out only INWARD transactions from the live cloud log cache
-            const inwards = this.logs.filter(l => l.type === 'INWARD');
-            if (!inwards.length) {
-                return alert("No inward logs found in the system registry to compile a report.");
-            }
-
-            // 2. Group transactions by supplier names safely
-            const supplierGroups = {};
-            inwards.forEach(log => {
-                // Fallback to "Historical / Unassigned Vendor" if supplier_name doesn't exist yet
-                const sName = log.supplier_name && log.supplier_name.trim() !== "" 
-                    ? log.supplier_name.trim() 
-                    : 'Historical / Unassigned Vendor';
-                
-                if (!supplierGroups[sName]) {
-                    supplierGroups[sName] = [];
-                }
-                supplierGroups[sName].push(log);
-            });
-
-            const sheetMatrix = [];
-
-            // 3. Loop through vendors and build clean standalone column blocks
-            Object.keys(supplierGroups).forEach(supplier => {
-                // Table Title Header Block
-                sheetMatrix.push([`🚚 SUPPLIER LEDGER: ${supplier.toUpperCase()}`]);
-                sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE (MRP)", "TOTAL VALUATION"]);
-
-                let grandTotal = 0;
-
-                supplierGroups[supplier].forEach(log => {
-                    // Pull item metrics securely from local data arrays
-                    const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                    
-                    const name = log.item_name || linkedItem.name || 'Unknown Portfolio Item';
-                    const qty = parseInt(log.qty) || 0;
-                    const price = parseFloat(linkedItem.mrp) || 0;
-                    const totalCost = qty * price;
-                    grandTotal += totalCost;
-
                     sheetMatrix.push([name, qty, `₹${price}`, `₹${totalCost}`]);
                 });
 
-                // Inject Bottom Totals Summary row
                 sheetMatrix.push(["", "", "GRAND TOTAL:", `₹${grandTotal}`]);
-                sheetMatrix.push([]); // Empty spacing block to separate tables vertically
+                sheetMatrix.push([]); 
             });
 
-            // 4. Compile and bundle to binary file spreadsheet
             const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Supplier Inward Breakdown");
 
-            // Format boundaries so layout fits cleanly
             ws['!cols'] = [{wch: 32}, {wch: 20}, {wch: 18}, {wch: 22}];
             XLSX.writeFile(wb, `Supplier_Inward_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        },
+
+        downloadExcelReport() {
+            const getLocalDateString = (offsetDays) => {
+                const d = new Date();
+                d.setDate(d.getDate() - offsetDays);
+                return d.toISOString().slice(0, 10); 
+            };
+
+            const formatHeaderLabel = (dateStr) => {
+                const parts = dateStr.split('-');
+                if (parts.length !== 3) return dateStr;
+                const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+                return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); 
+            };
+
+            const targetDays = [];
+            for (let i = 0; i < 30; i++) {
+                targetDays.push(getLocalDateString(i));
+            }
+
+            const headerRow = ["DATE", "TOTAL STOCK"];
+            targetDays.forEach(dateStr => {
+                const dayLabel = formatHeaderLabel(dateStr);
+                headerRow.push(`${dayLabel}IN`);
+                headerRow.push(`${dayLabel}OUT`);
+            });
+
+            const matrixData = [headerRow, ["ITEM NAME"]];
+
+            this.processedItems.forEach(item => {
+                const row = [item.name, item.stock];
+
+                targetDays.forEach(targetDate => {
+                    let dayInwards = this.logs.filter(l => 
+                        l.created_at && 
+                        String(l.item_id) === String(item.id) && 
+                        l.type === 'INWARD' && 
+                        l.created_at.slice(0, 10) === targetDate
+                    );
+                    row.push(dayInwards.length ? `+${dayInwards.reduce((sum, l) => sum + (parseInt(l.qty) || 0), 0)}` : "0");
+
+                    let dayOutwards = this.logs.filter(l => 
+                        l.created_at && 
+                        String(l.item_id) === String(item.id) && 
+                        l.type === 'OUTWARD' && 
+                        l.created_at.slice(0, 10) === targetDate
+                    );
+                    if (dayOutwards.length) {
+                        let stackedOut = dayOutwards.map(l => `-${l.qty} (${l.department || 'General'})`).join("\r\n");
+                        row.push(stackedOut);
+                    } else {
+                        row.push("0");
+                    }
+                });
+
+                matrixData.push(row);
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(matrixData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "30-Day LIFO Ledger");
+
+            const colWidths = [{wch: 24}, {wch: 14}];
+            for (let i = 0; i < 60; i++) {
+                colWidths.push({ wch: i % 2 === 0 ? 14 : 26 });
+            }
+            ws['!cols'] = colWidths;
+
+            const currentDayString = getLocalDateString(0);
+            XLSX.writeFile(wb, `Stock_Rolling_Report_${currentDayString}.xlsx`);
         }
     };
 };
