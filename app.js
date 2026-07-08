@@ -104,7 +104,7 @@ window.stockApp = function() {
         showAccountModal: false,
         showUserAdminModal: false,
         
-        newItemForm: { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' }, // 🟢 Added supplierName pointer
+        newItemForm: { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' }, 
         accountForm: { currentPassword: '', newPassword: '' },
         accountError: '',
         accountSuccess: '',
@@ -170,13 +170,13 @@ window.stockApp = function() {
             });
         },
 
-        // 🟢 CASCADING FILTER: Computes items matching the selected inward supplier
+        // 🟢 CASCADING FILTER 1: Inward Manual Dropdown Filter
         get filteredInwardItems() {
             if (!this.formInward.supplierName) return [];
             return this.items.filter(i => i.supplier_name === this.formInward.supplierName);
         },
 
-        // 🟢 CASCADING FILTER: Computes items matching the selected order supplier
+        // 🟢 CASCADING FILTER 2: Purchase Order Desk Dropdown Filter
         get filteredOrderDeskItems() {
             if (!this.orderDesk.supplierId) return [];
             const vendor = this.suppliers.find(s => String(s.id) === String(this.orderDesk.supplierId));
@@ -284,13 +284,13 @@ window.stockApp = function() {
         logout() { sessionStorage.removeItem(SESSION_KEY); this.isAuthenticated = false; this.currentRole = 'readonly'; this.currentUsername = ''; this.currentUserId = null; },
         async deleteNote(noteId) { await deleteDoc(doc(dbFs, 'notes', noteId)); },
         
-        // 🟢 COMBINED ASSET EDITOR: Updates Name, Core Supplier assigned tag, and Price point together
+        // 🟢 WIRED BINDING AXIS: Links edits directly to item's persistent supplier tag
         async changeItemName(item) {
             let updatedName = prompt(`[1/3] Update Name for "${item.name}":`, item.name);
             if (!updatedName?.trim()) return;
 
             let catList = this.suppliers.map((s, idx) => `${idx + 1}. ${s.name}`).join('\n');
-            let vendorChoice = prompt(`[2/3] Assign New Main Supplier for "${updatedName.trim()}":\n\n${catList}\n\nOr leave blank to retain: "${item.supplier_name || 'None'}"`);
+            let vendorChoice = prompt(`[2/3] Assign New Supplier for "${updatedName.trim()}":\n\n${catList}\n\nOr leave blank to keep: "${item.supplier_name || 'None'}"`);
             
             let finalVendor = item.supplier_name || 'General Vendor';
             if (vendorChoice?.trim()) {
@@ -309,10 +309,10 @@ window.stockApp = function() {
                     supplier_name: finalVendor,
                     mrp: Number(promptPrice) || 0 
                 });
-                alert("Item updated!");
+                alert("Item updated successfully!");
             } catch (e) { alert(e.message); }
         },
-        
+
         async modifyThreshold(item) {
             let promptVal = prompt('Update safety limit:', item.threshold);
             if (promptVal !== null) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parseInt(promptVal) || 0 });
@@ -325,16 +325,16 @@ window.stockApp = function() {
             await updateDoc(doc(dbFs, 'items', sorted[idx].id), { order_index: sorted[swapIdx].order_index || 0 });
             await updateDoc(doc(dbFs, 'items', sorted[swapIdx].id), { order_index: sorted[idx].order_index || 0 });
         },
-        
+
         async submitNewItem() {
             if (!this.newItemForm.name.trim() || !this.newItemForm.categoryId || !this.newItemForm.supplierName) {
-                return alert("Please fill out all product parameters including default Supplier.");
+                return alert("Please fill out all parameters including Supplier binding.");
             }
             const maxOrder = this.items.reduce((m, i) => Math.max(m, i.order_index || 0), 0);
             await addDoc(colRef('items'), { 
                 name: this.newItemForm.name.trim(), 
                 category_id: this.newItemForm.categoryId, 
-                supplier_name: this.newItemForm.supplierName, // 🟢 Saved default linked master supplier parameter
+                supplier_name: this.newItemForm.supplierName, 
                 stock: 0, 
                 threshold: this.newItemForm.threshold || 0, 
                 mrp: Number(this.newItemForm.mrp || 0), 
@@ -368,6 +368,7 @@ window.stockApp = function() {
             };
             reader.readAsText(file);
         },
+
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) return alert('Select missing fields.');
             const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); if (!target) return alert('Selected item could not be found.');
@@ -385,6 +386,7 @@ window.stockApp = function() {
                 this.formInward = { itemId: '', qty: '', supplierName: '' };
             } catch (error) { alert("Database write error: " + error.message); }
         },
+
         async deductOutward() {
             if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
             const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId)); if (!target) return alert('Item not found.');
@@ -396,6 +398,7 @@ window.stockApp = function() {
                 this.formOutward = { itemId: '', department: 'Indian', qty: '' };
             } catch (error) { alert("Error: " + error.message); }
         },
+
         async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
         async deleteUser(userId) { if (confirm('Delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
         
@@ -409,12 +412,14 @@ window.stockApp = function() {
             this.accountSuccess = 'Password updated successfully.';
             this.accountForm = { currentPassword: '', newPassword: '' };
         },
+
         async createUser() {
             const { username, password, role = 'inward' } = this.newUserForm;
             if (!username || password.length < 6) return;
             await addDoc(colRef('users'), { username: username.trim(), passwordHash: await sha256(password), role });
             this.newUserForm = { username: '', password: '', role: 'inward' };
         },
+
         async promptResetPassword(user) {
             let newPass = prompt(`Enter new password for ${user.username} (Min 6 chars):`);
             if (!newPass || newPass.trim().length < 6) return alert('Min 6 characters required.');
@@ -424,6 +429,7 @@ window.stockApp = function() {
                 alert("Password reset completed successfully!");
             } catch (error) { alert("Reset failed: " + error.message); }
         },
+
         downloadInwardSupplierReport() {
             const inwards = this.logs.filter(l => l.type === 'INWARD'); if (!inwards.length) return alert("No inward data.");
             const supplierGroups = {};
@@ -445,6 +451,7 @@ window.stockApp = function() {
             const ws = XLSX.utils.aoa_to_sheet(sheetMatrix); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Supplier Inward Breakdown");
             XLSX.writeFile(wb, `Supplier_Inward_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
         },
+
         downloadExcelReport() {
             const getLocalDateString = (offsetDays) => { const d = new Date(); d.setDate(d.getDate() - offsetDays); return d.toISOString().slice(0, 10); };
             const formatHeaderLabel = (dateStr) => { const parts = dateStr.split('-'); if (parts.length !== 3) return dateStr; const dateObj = new Date(parts[0], parts[1] - 1, parts[2]); return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); };
