@@ -268,11 +268,29 @@
                                         
                                         <td class="py-5 px-4 text-center font-mono text-sm font-black tracking-wide whitespace-nowrap" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="item.stock"></td>
                                         
-                                        <td class="py-5 px-4 whitespace-nowrap">
-                                            <template x-if="item.stock === 0"><span class="bg-rose-600 text-white text-[9px] px-2.5 py-1 rounded font-black uppercase tracking-wider shadow-2xs">🚨 depleted</span></template>
-                                            <template x-if="item.stock > 0 && item.stock <= item.threshold"><span class="bg-amber-500 text-slate-950 text-[9px] px-2.5 py-1 rounded font-black uppercase tracking-wider shadow-2xs">⚠️ breach limit</span></template>
-                                            <template x-if="item.stock > item.threshold"><span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] px-2.5 py-0.5 rounded-md font-bold whitespace-nowrap">Stable Matrix</span></template>
-                                        </td>
+                                        <!-- Locate the Status Vector column cell inside index.html and update it to this: -->
+<td class="py-5 px-4 whitespace-nowrap">
+    <!-- 1. Depleted State (Stock is exactly 0) -->
+    <template x-if="item.stock === 0">
+        <span class="bg-rose-100 text-rose-800 border border-rose-200 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">
+            Out of stock
+        </span>
+    </template>
+    
+    <!-- 2. Breach State (Stock is greater than 0, but less than or equal to threshold limit) -->
+    <template x-if="item.stock > 0 && item.stock <= item.threshold">
+        <span class="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">
+            Low stock
+        </span>
+    </template>
+    
+    <!-- 3. Safe State (Stock is healthy and above threshold parameters) -->
+    <template x-if="item.stock > item.threshold">
+        <span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">
+            Healthy
+        </span>
+    </template>
+</td>
                                         
                                         <td class="py-5 px-4 font-bold text-slate-600 text-xs whitespace-nowrap">
                                             <span class="bg-slate-50 px-2.5 py-1 rounded border border-slate-200" x-text="item.supplier_name || 'General Vendor'"></span>
