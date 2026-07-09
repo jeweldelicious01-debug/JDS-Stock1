@@ -98,7 +98,7 @@ window.stockApp = function() {
             selectedItemId: '',
             selectedQty: '',
             basket: [] 
-        }, // 🟢 FIXED COMMA: Resolves the Uncaught SyntaxError instantly
+        }, 
         
         showNewItemModal: false,
         showAccountModal: false,
@@ -170,7 +170,6 @@ window.stockApp = function() {
             });
         },
 
-        // 🟢 FULLY DYNAMIC CASCADING FILTERS (No hardcoded names!)
         get filteredInwardItems() {
             if (!this.formInward.supplierName) return [];
             const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
@@ -292,33 +291,13 @@ window.stockApp = function() {
         async deleteNote(noteId) { await deleteDoc(doc(dbFs, 'notes', noteId)); },
         
         async changeItemName(item) {
-            let updatedName = prompt(`[1/3] Update Name for "${item.name}":`, item.name);
-            if (!updatedName?.trim()) return;
-
-            let catList = this.suppliers.map((s, idx) => `${idx + 1}. ${s.name}`).join('\n');
-            let vendorChoice = prompt(`[2/3] Assign New Supplier for "${updatedName.trim()}":\n\n${catList}\n\nOr leave blank to keep: "${item.supplier_name || 'None'}"`);
-            
-            let finalVendor = item.supplier_name || (this.suppliers[0] ? this.suppliers[0].name : 'General Vendor');
-            if (vendorChoice?.trim()) {
-                let sIdx = parseInt(vendorChoice) - 1;
-                if (sIdx >= 0 && sIdx < this.suppliers.length) {
-                    finalVendor = this.suppliers[sIdx].name;
-                }
-            }
-
-            let promptPrice = prompt(`[3/3] Update MRP for "${updatedName.trim()}":`, item.mrp || 0); 
-            if (promptPrice === null) return;
-
+            let updatedName = prompt(`Update Name for "${item.name}":`, item.name); if (!updatedName?.trim()) return;
+            let promptPrice = prompt(`Update MRP for "${updatedName.trim()}":`, item.mrp || 0); if (promptPrice === null) return;
             try {
-                await updateDoc(doc(dbFs, 'items', item.id), { 
-                    name: updatedName.trim(), 
-                    supplier_name: finalVendor,
-                    mrp: Number(promptPrice) || 0 
-                });
-                alert("Item updated successfully!");
+                await updateDoc(doc(dbFs, 'items', item.id), { name: updatedName.trim(), mrp: Number(promptPrice) || 0 });
+                alert("Item details edited.");
             } catch (e) { alert(e.message); }
         },
-
         async modifyThreshold(item) {
             let promptVal = prompt('Update safety limit:', item.threshold);
             if (promptVal !== null) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parseInt(promptVal) || 0 });
@@ -331,25 +310,13 @@ window.stockApp = function() {
             await updateDoc(doc(dbFs, 'items', sorted[idx].id), { order_index: sorted[swapIdx].order_index || 0 });
             await updateDoc(doc(dbFs, 'items', sorted[swapIdx].id), { order_index: sorted[idx].order_index || 0 });
         },
-
         async submitNewItem() {
-            if (!this.newItemForm.name.trim() || !this.newItemForm.categoryId || !this.newItemForm.supplierName) {
-                return alert("Please fill out all parameters including Supplier binding.");
-            }
+            if (!this.newItemForm.name.trim() || !this.newItemForm.categoryId) return;
             const maxOrder = this.items.reduce((m, i) => Math.max(m, i.order_index || 0), 0);
-            await addDoc(colRef('items'), { 
-                name: this.newItemForm.name.trim(), 
-                category_id: this.newItemForm.categoryId, 
-                supplier_name: this.newItemForm.supplierName, 
-                stock: 0, 
-                threshold: this.newItemForm.threshold || 0, 
-                mrp: Number(this.newItemForm.mrp || 0), 
-                order_index: maxOrder + 1 
-            });
-            this.newItemForm = { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' };
+            await addDoc(colRef('items'), { name: this.newItemForm.name.trim(), category_id: this.newItemForm.categoryId, stock: 0, threshold: this.newItemForm.threshold || 0, mrp: Number(this.newItemForm.mrp || 0), order_index: maxOrder + 1 });
+            this.newItemForm = { name: '', categoryId: '', newCategoryEmoji: '🍱', newCategoryName: '', threshold: 0, mrp: '' };
             this.showNewItemModal = false;
         },
-
         async handleCsvUpload(event) {
             const file = event.target.files[0]; if (!file) return;
             const reader = new FileReader();
@@ -454,6 +421,7 @@ window.stockApp = function() {
             const ws = XLSX.utils.aoa_to_sheet(sheetMatrix); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Supplier Inward Breakdown");
             XLSX.writeFile(wb, `Supplier_Inward_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
         },
+        
         downloadExcelReport() {
             const getLocalDateString = (offsetDays) => { const d = new Date(); d.setDate(d.getDate() - offsetDays); return d.toISOString().slice(0, 10); };
             const formatHeaderLabel = (dateStr) => { const parts = dateStr.split('-'); if (parts.length !== 3) return dateStr; const dateObj = new Date(parts[0], parts[1] - 1, parts[2]); return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); };
@@ -473,19 +441,18 @@ window.stockApp = function() {
             const ws = XLSX.utils.aoa_to_sheet(matrixData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "30-Day LIFO Ledger");
             const colWidths = [{wch: 24}, {wch: 14}]; for (let i = 0; i < 60; i++) colWidths.push({ wch: i % 2 === 0 ? 14 : 26 });
             ws['!cols'] = colWidths; XLSX.writeFile(wb, `Stock_Rolling_Report_${getLocalDateString(0)}.xlsx`);
-            / 🟢 THE FIX: Wait until this module runs, then announce stockApp is available
+        }
+    };
+};
+
+// 🟢 THE BOOTSTRAP FIX: Clean binding to ensure Alpine can find components on race condition loads
 document.addEventListener('DOMContentLoaded', () => {
-    // Register the component on Alpine's global object hook directly
     if (window.Alpine) {
         window.Alpine.data('stockApp', window.stockApp);
     } else {
-        // If Alpine hasn't run its script block yet, wait for it to wake up
         document.addEventListener('alpine:init', () => {
             window.Alpine.data('stockApp', window.stockApp);
         });
     }
     console.log("🚀 stockApp successfully bound to global Alpine execution hooks.");
 });
-        }
-    };
-};
