@@ -1,679 +1,434 @@
-/**
- * Restaurant Stock Manager & Event Control Engine - Core Logic Module
- * Framework Bindings: Firebase Firestore SDK v10+, Alpine.js v3 Integration Engine
- * Architectural Profile: Enterprise Real-Time Cloud Synchronization Matrix
- */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurant Stock Manager & Event Control Engine</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script type="module" src="app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <style>[x-cloak] { display: none !important; }</style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp()" x-init="init()">
 
-import { dbFs } from './firebase-config.js'; 
-import {
-    collection,
-    doc,
-    getDocs,
-    setDoc,
-    addDoc,
-    updateDoc,
-    deleteDoc,
-    onSnapshot,
-} from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
-
-// Key constant utilized to safely partition separate local sessionStorage buckets
-const SESSION_KEY = 'restaurantStockSession_v1';
-
-/**
- * Utility Helper: Shorthand abstraction wrapper around Firestore's collection instantiation module
- * @param {string} name - Name target of the target Firestore database collection segment
- */
-const colRef = (name) => collection(dbFs, name);
-
-/**
- * Utility Cryptography Engine: Generates an asymmetrical SHA-256 string hash mapping signature
- * Used safely on client view environments for localized credential cross-verifications
- * @param {string} text - Plain text variable targeted for binary encryption hashing
- */
-async function sha256(text) {
-    const enc = new TextEncoder().encode(text);
-    const hashBuf = await crypto.subtle.digest('SHA-256', enc);
-    return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-/**
- * Database Seeding Strategy Rule: Checks Firestore on boot and constructs initial master documents
- * Provisions fallbacks if standard data indices are completely blank or uninitialized
- */
-async function seedIfEmpty() {
-    try {
-        // Step 1: Analyze user collection records
-        const usersSnap = await getDocs(colRef('users'));
-        if (usersSnap.empty) {
-            const adminHash = await sha256('ChangeMe123!');
-            await setDoc(doc(dbFs, 'users', 'admin-seed'), { username: 'admin', passwordHash: adminHash, role: 'admin' });
-            await setDoc(doc(dbFs, 'users', 'order-seed'), { username: 'order', passwordHash: await sha256('Order123!'), role: 'order' });
-            await setDoc(doc(dbFs, 'users', 'inward-seed'), { username: 'inward', passwordHash: await sha256('Inward123!'), role: 'inward' });
-        }
-
-        // Step 2: Establish the 13 foundational kitchen inventory tracking categories
-        const catSnap = await getDocs(colRef('categories'));
-        if (catSnap.size < 13) {
-            const defaultCategories = [
-                { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334151' },
-                { id: 'frozen', name: 'Frozen', emoji: '❄️', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#083344' },
-                { id: 'masala', name: 'Masala', emoji: '🍛', bg_color: '#fff7ed', border_color: '#f97316', text_color: '#7c2d12' },
-                { id: 'grain', name: 'Grain', emoji: '🌾', bg_color: '#fefce8', border_color: '#eab308', text_color: '#713f12' },
-                { id: 'vegetables', name: 'Vegetables', emoji: '🥦', bg_color: '#f0fdf4', border_color: '#22c55e', text_color: '#14532d' },
-                { id: 'bottle', name: 'Bottle', emoji: '🍾', bg_color: '#f5f5f4', border_color: '#737367', text_color: '#1c1917' },
-                { id: 'pasta', name: 'Pasta', emoji: '🍝', bg_color: '#fffbeb', border_color: '#f59e0b', text_color: '#78350f' },
-                { id: 'dairy', name: 'Dairy', emoji: '🥛', bg_color: '#eff6ff', border_color: '#3b82f6', text_color: '#1e40af' },
-                { id: 'disposables', name: 'Disposables', emoji: '🥤', bg_color: '#fafafa', border_color: '#a3a3a3', text_color: '#171717' },
-                { id: 'flour', name: 'Flour', emoji: '🥡', bg_color: '#fdf6f0', border_color: '#cca47c', text_color: '#4a3319' },
-                { id: 'tin', name: 'Tin', emoji: '🥫', bg_color: '#f0fdfa', border_color: '#14b8a6', text_color: '#115e59' },
-                { id: 'khademasala', name: 'KhadeMasala', emoji: '🌶️', bg_color: '#fff1f2', border_color: '#f43f5e', text_color: '#4c0519' },
-                { id: 'beverages', name: 'Beverages', emoji: '🧃', bg_color: '#fdf2f8', border_color: '#ec4899', text_color: '#701a75' }
-            ];
-            for (const cat of defaultCategories) {
-                await setDoc(doc(dbFs, 'categories', cat.id), { name: cat.name, emoji: cat.emoji, bg_color: cat.bg_color, border_color: cat.border_color, text_color: cat.text_color });
-            }
-        }
-
-        // Step 3: Populate baseline structural vendor records
-        const supSnap = await getDocs(colRef('suppliers'));
-        if (supSnap.empty) {
-            await addDoc(colRef('suppliers'), { name: 'Laxmi Traders', phone: '919999999999' });
-            await addDoc(colRef('suppliers'), { name: 'Balaji Food Products', phone: '918888888888' });
-        }
-    } catch (e) {
-        console.warn("Seeding initialization bypassed safely: ", e);
-    }
-}
-
-/**
- * Master Alpine Component Constructor Object
- * Exposed via global window instance namespace layout architecture
- */
-window.stockApp = function() {
-    return {
-        // --- REACTIVE ARRAY STORAGE REGISTRIES ---
-        categories: [],
-        items: [],
-        importantNotes: [],
-        logs: [],
-        users: [],
-        suppliers: [], 
-        purchaseOrders: [], 
-        
-        // --- STRUCTURAL STATUS STATE TRACKERS ---
-        ready: false,
-        isAuthenticated: false,
-        authChecking: true,
-        currentRole: 'readonly',
-        currentUsername: '',
-        currentUserId: null,
-        filterCat: 'all',
-        orderViewTab: 'pending', // Toggles order desk state views: 'pending' | 'history'
-        eventAlertMessage: '',   // Broadcast banner message vector tracking property
-        
-        // --- REAL-TIME DATA CAPTURE OBJECT BINDINGS ---
-        loginForm: { username: '', password: '' },
-        loginError: '',
-        formInward: { itemId: '', qty: '', supplierName: '' }, 
-        formOutward: { itemId: '', department: 'Indian', qty: '' },
-        formNote: { itemName: '', pax: '', dateLabel: '' },
-        
-        // --- PURCHASE ORDER BASKET MATRIX ---
-        orderDesk: {
-            supplierId: '',
-            selectedItemId: '',
-            selectedQty: '',
-            basket: [] 
-        }, 
-        
-        // --- SESSION REVERSAL TRANSACTION TRACKERS (UNDO ENGINE) ---
-        lastLogId: null,
-        lastLogType: '', // Tracks transaction classification signatures: 'INWARD' | 'OUTWARD'
-        
-        // --- REACTIVE INTERFACE MODAL CONTROLLERS ---
-        showNewItemModal: false,
-        showAccountModal: false,
-        showUserAdminModal: false,
-        
-        // --- DATA INGESTION BLUEPRINTS ---
-        newItemForm: { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' }, 
-        newCategoryForm: { name: '', emoji: '📦', paletteIndex: 0 },
-        
-        // Static color configurations schema presets used when saving custom category styles
-        paletteOptions: [
-            { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af' }, 
-            { bg: '#fffbeb', border: '#f59e0b', text: '#92400e' }, 
-            { bg: '#f0fdf4', border: '#22c55e', text: '#166534' }, 
-            { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8' }, 
-            { bg: '#fdf2f8', border: '#ec4899', text: '#9d174d' },
-            { bg: '#f8fafc', border: '#64748b', text: '#334151' }
-        ],
-
-        accountForm: { currentPassword: '', newPassword: '' },
-        accountError: '',
-        accountSuccess: '',
-        newUserForm: { username: '', password: '', role: 'inward' },
-        newUserError: '',
-        departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
-
-        /**
-         * Initialize Component: Boots master cloud listeners on real-time channels
-         */
-        async init() {
-            // Guarantee base seed layers exist in firestore collection indices
-            await seedIfEmpty();
+    <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
+        <div class="bg-white p-8 rounded-xl max-w-sm w-full shadow-2xl border border-slate-200 text-center">
+            <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-4 border border-amber-200">🔑</div>
+            <h3 class="text-xl font-extrabold tracking-tight text-slate-800 uppercase mb-1">System Portal</h3>
+            <p class="text-xs text-slate-500 mb-6">Inventory Ledger Authentication</p>
             
-            // Register high-performance real-time query channel snapshots
-            onSnapshot(colRef('categories'), (snap) => { this.categories = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
-            onSnapshot(colRef('items'), (snap) => { this.items = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
-            onSnapshot(colRef('suppliers'), (snap) => { this.suppliers = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a,b) => a.name.localeCompare(b.name)); });
+            <form @submit.prevent="verifyLogin()" class="space-y-4 text-left text-xs">
+                <div>
+                    <label class="block font-bold mb-1 text-slate-700 tracking-wide uppercase text-[10px]">Operator Username</label>
+                    <input type="text" x-model="loginForm.username" placeholder="e.g. order or inward" class="border border-slate-300 p-2.5 w-full rounded-lg bg-slate-50 focus:ring-2 focus:ring-slate-500">
+                </div>
+                <div>
+                    <label class="block font-bold mb-1 text-slate-700 tracking-wide uppercase text-[10px]">Passphrase Code</label>
+                    <input type="password" x-model="loginForm.password" placeholder="••••••••" class="border border-slate-300 p-2.5 w-full rounded-lg text-center tracking-widest font-mono bg-slate-50 text-base focus:ring-2 focus:ring-slate-500">
+                </div>
+                <button type="submit" class="bg-slate-800 hover:bg-slate-900 text-white w-full py-3 rounded-lg font-bold text-xs mt-4 uppercase tracking-wider shadow-md transition">Unlock Corporate Dashboard</button>
+            </form>
+            <p x-show="loginError" x-text="loginError" class="text-rose-600 text-xs font-bold text-center mt-3" x-cloak></p>
+        </div>
+    </div>
 
-            onSnapshot(colRef('purchase_orders'), (snap) => {
-                this.purchaseOrders = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-            });
-
-            // Listens dynamically for Admin broadcast updates concerning major banquets
-            onSnapshot(colRef('system_settings'), (snap) => {
-                const docMatch = snap.docs.find(d => d.id === 'event_alert');
-                if (docMatch) this.eventAlertMessage = docMatch.data().message || '';
-            });
-            
-            onSnapshot(colRef('notes'), (snap) => { this.importantNotes = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
-            onSnapshot(colRef('logs'), (snap) => { 
-                const rawLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-                this.logs = rawLogs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 50).map((l) => {
-                    const matchedItem = this.items.find((i) => String(i.id) === String(l.item_id));
-                    return { ...l, item_name: matchedItem ? matchedItem.name : 'Unknown' };
-                });
-            });
-
-            // Evaluates platform operator state and fires session check triggers upon loading sequence completion
-            onSnapshot(colRef('users'), (snap) => {
-                this.users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-                if (this.currentUserId) {
-                    const me = this.users.find((u) => u.id === this.currentUserId);
-                    if (!me) this.logout();
-                    else { this.currentRole = me.role; this.currentUsername = me.username; }
-                }
-                if (!this.ready) { this.ready = true; this.restoreSession(); }
-            });
-        },
-
-        /**
-         * Session Security Controller: Cross-checks browser tokens against memory scopes
-         */
-        restoreSession() {
-            const session = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
-            if (session) {
-                const user = this.users.find((u) => u.id === session.userId);
-                if (user) {
-                    this.currentUserId = user.id; this.currentUsername = user.username; this.currentRole = user.role; this.isAuthenticated = true;
-                }
-            }
-            this.authChecking = false;
-        },
-
-        /**
-         * Computed Data Getter: Computes sorting patterns, applies category filters,
-         * and bubbles warning breaches straight to the top of the workspace dashboard data table grid view.
-         */
-        get processedItems() {
-            let dataset = this.items.map((i) => {
-                const cat = this.categories.find((c) => c.id === i.category_id) || {};
-                return { ...i, category_name: cat.name || 'Unassigned', emoji: cat.emoji || '📦', bg: cat.bg_color || '#f3f4f6', border: cat.border_color || '#9ca3af', text_color: cat.text_color || '#374151' };
-            });
-            if (this.filterCat !== 'all') dataset = dataset.filter((i) => i.category_name === this.filterCat);
-            return dataset.sort((a, b) => {
-                let aAlert = a.stock <= a.threshold ? 1 : 0; let bAlert = b.stock <= b.threshold ? 1 : 0;
-                if (aAlert !== bAlert) return bAlert - aAlert;
-                return (a.order_index || 0) - (b.order_index || 0);
-            });
-        },
-
-        /**
-         * Cascading Dropdown Filter 1: Returns items belonging to the selected inward supplier.
-         * Resolves fallback options if legacy items don't have explicit supplier keys attached.
-         */
-        get filteredInwardItems() {
-            if (!this.formInward.supplierName) return [];
-            const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
-            return this.items.filter(i => {
-                const itemSupplier = i.supplier_name || defaultSupplier;
-                return itemSupplier === this.formInward.supplierName;
-            });
-        },
-
-        /**
-         * Cascading Dropdown Filter 2: Returns items matching the target vendor chosen inside procurement panels.
-         */
-        get filteredOrderDeskItems() {
-            if (!this.orderDesk.supplierId) return [];
-            const vendor = this.suppliers.find(s => String(s.id) === String(this.orderDesk.supplierId));
-            if (!vendor) return [];
-            const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
-            return this.items.filter(i => {
-                const itemSupplier = i.supplier_name || defaultSupplier;
-                return itemSupplier === vendor.name;
-            });
-        },
-
-        /**
-         * Computed Order Tracker Split: Automatically partitions active pending orders from completed transactions.
-         */
-        get processedPurchaseOrders() {
-            if (this.orderViewTab === 'pending') {
-                return this.purchaseOrders.filter(o => o.status === 'PENDING');
-            } else {
-                return this.purchaseOrders.filter(o => o.status !== 'PENDING');
-            }
-        },
-
-        /**
-         * Procurement Handler: Validates and appends item draft rows onto localized request basket arrays
-         */
-        addItemToOrder() {
-            if (!this.orderDesk.selectedItemId || !this.orderDesk.selectedQty) return alert("Select an item and input quantity.");
-            const targetItem = this.items.find(i => String(i.id) === String(this.orderDesk.selectedItemId));
-            if (!targetItem) return;
-
-            this.orderDesk.basket.push({
-                id: targetItem.id,
-                name: targetItem.name,
-                qty: parseInt(this.orderDesk.selectedQty) || 1
-            });
-            this.orderDesk.selectedItemId = '';
-            this.orderDesk.selectedQty = '';
-        },
-
-        /**
-         * Procurement Handler: Splices item indexes out of current draft order array collections
-         */
-        removeOrderBasketItem(index) { this.orderDesk.basket.splice(index, 1); },
-
-        /**
-         * Integration Engine API: Saves the pending purchase order to the database, converts layout arrays 
-         * into markdown text blocks, and launches an external automated WhatsApp transmission thread window.
-         */
-        async sendWhatsAppOrder() {
-            if (!this.orderDesk.supplierId || !this.orderDesk.basket.length) return alert("Supplier choice or draft basket is empty.");
-            const vendor = this.suppliers.find(s => String(s.id) === String(this.orderDesk.supplierId));
-            if (!vendor) return;
-
-            try {
-                // Step 1: Write tracking row to cloud to guarantee visibility logs can map it later
-                await addDoc(colRef('purchase_orders'), {
-                    supplier_name: vendor.name,
-                    items: this.orderDesk.basket,
-                    status: 'PENDING',
-                    created_at: new Date().toISOString(),
-                    created_by: this.currentUsername
-                });
-
-                // Step 2: Formulate plain markdown structural format for suppliers
-                let textMessage = `📋 *PURCHASE ORDER: ${vendor.name.toUpperCase()}*\n`;
-                textMessage += `Date: ${new Date().toLocaleDateString('en-GB')}\n`;
-                textMessage += `------------------------------------\n`;
-                this.orderDesk.basket.forEach((item, index) => {
-                    textMessage += `${index + 1}. *${item.name}* — Qty: ${item.qty}\n`;
-                });
-                textMessage += `------------------------------------\n`;
-                textMessage += `Please fulfill this request at your earliest availability. Thank you!`;
-
-                const urlSafeMessage = encodeURIComponent(textMessage);
-                const targetPhone = vendor.phone ? vendor.phone.replace(/\D/g, '') : '';
-                window.open(`https://wa.me/${targetPhone}?text=${urlSafeMessage}`, '_blank');
-
-                this.orderDesk.basket = [];
-                this.orderDesk.supplierId = '';
-            } catch (e) {
-                alert("Error staging order tracking row: " + e.message);
-            }
-        },
-
-        /**
-         * Inward Verification System: Processes arrived delivery orders. Supports modifying input quantities 
-         * to handle partial deliveries, automatically calculating differences, updating warehouse balances, 
-         * and marking history states as RECEIVED, PARTIAL, or DECLINED cleanly.
-         */
-        async approveIncomingOrder(order) {
-            if (order.status !== 'PENDING') return;
-            if (!confirm(`Confirm stock ingestion from ${order.supplier_name}? Live balances will update based on the quantities listed below.`)) return;
-
-            try {
-                let hasMissingItems = false;
-                let hasReceivedItems = false;
-
-                for (let record of order.items) {
-                    const arrivedQty = parseInt(record.qty) || 0;
-                    if (arrivedQty < 0) return alert("Quantities cannot be negative numbers.");
-                    if (arrivedQty === 0) hasMissingItems = true;
-
-                    const targetItem = this.items.find(i => String(i.id) === String(record.id));
-                    if (targetItem && arrivedQty > 0) {
-                        hasReceivedItems = true;
-                        // Mutation Transaction: Commit physical count updates straight to live cloud storage balance properties
-                        await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: Number(targetItem.stock || 0) + arrivedQty });
-                        await addDoc(colRef('logs'), { type: 'INWARD', item_id: targetItem.id, qty: arrivedQty, supplier_name: order.supplier_name, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
-                    }
-                }
-
-                // Conditional Evaluation: Flags structural archival statuses based on delivery accuracy outcomes
-                let finalStatus = 'RECEIVED';
-                if (hasMissingItems && hasReceivedItems) finalStatus = 'PARTIAL';
-                else if (!hasReceivedItems) finalStatus = 'DECLINED';
-
-                await updateDoc(doc(dbFs, 'purchase_orders', order.id), { status: finalStatus, items: order.items, resolved_at: new Date().toISOString(), resolved_by: this.currentUsername });
-                alert(`Order marked as [${finalStatus}]. Balances synchronized cleanly.`);
-            } catch (error) { alert("Approval processing error: " + error.message); }
-        },
-
-        /**
-         * Inward Verification System: Rejects a pending consignment entirely, moving it out of the active log desk views
-         */
-        async declineIncomingOrder(order) {
-            if (order.status !== 'PENDING') return;
-            if (!confirm(`Are you sure you want to DECLINE and cancel this order from ${order.supplier_name}?`)) return;
-            try {
-                await updateDoc(doc(dbFs, 'purchase_orders', order.id), { status: 'DECLINED', resolved_at: new Date().toISOString(), resolved_by: this.currentUsername });
-                alert("Order successfully canceled and marked as DECLINED.");
-            } catch (error) { alert("Error canceling order: " + error.message); }
-        },
-
-        /**
-         * Broadcast Controller: Publishes major event banners globally to coordinate high-volume requirements across all logging stations.
-         */
-        async setBigFunctionEventAlert() {
-            let promptMsg = prompt("Enter Big Function Event Alert parameters (or leave totally blank to wipe alert banner):", this.eventAlertMessage);
-            if (promptMsg === null) return;
-            try {
-                await setDoc(doc(dbFs, 'system_settings', 'event_alert'), {
-                    message: promptMsg.trim(),
-                    updated_at: new Date().toISOString(),
-                    updated_by: this.currentUsername
-                });
-                alert("Global Big Function Notification state successfully distributed.");
-            } catch (e) { alert("Write access failed: " + e.message); }
-        },
-
-        /**
-         * Authentication Controller: Intercepts logins, validates passwords against cryptographically hashed hashes,
-         * and mounts fresh data state views inside localized session caches.
-         */
-        async verifyLogin() {
-            this.loginError = '';
-            const { username, password } = this.loginForm;
-            if (!username || !password) { this.loginError = 'Fields required'; return; }
-            const user = this.users.find((u) => u.username.toLowerCase() === username.trim().toLowerCase());
-            if (!user || (await sha256(password)) !== user.passwordHash) { this.loginError = 'Invalid credentials'; return; }
-            this.currentUserId = user.id; this.currentUsername = user.username; this.currentRole = user.role; this.isAuthenticated = true;
-            this.loginForm.password = '';
-            sessionStorage.setItem(SESSION_KEY, JSON.stringify({ userId: user.id }));
-        },
-
-        /**
-         * Authentication Controller: Flushes browser session states and reduces user authorization roles to Read-Only
-         */
-        logout() { sessionStorage.removeItem(SESSION_KEY); this.isAuthenticated = false; this.currentRole = 'readonly'; this.currentUsername = ''; this.currentUserId = null; },
-        async deleteNote(noteId) { await deleteDoc(doc(dbFs, 'notes', noteId)); },
+    <main class="max-w-6xl mx-auto p-4 space-y-6" x-show="isAuthenticated" x-cloak>
         
-        /**
-         * Asset Manager Prompt: Standard configuration wizard sequence. Updates product descriptions,
-         * links items to custom suppliers via simple coded listings, and edits MRP values in single operational runs.
-         */
-        async changeItemName(item) {
-            let updatedName = prompt(`[1/3] Update Name for "${item.name}":`, item.name);
-            if (updatedName === null) return;
-            if (!updatedName.trim()) return alert("Item Name cannot be empty.");
+        <template x-if="ready">
+            <div class="space-y-6">
+                
+                <div x-show="eventAlertMessage" x-transition class="bg-amber-500 border-2 border-amber-600 p-3.5 rounded-xl flex items-center gap-3 shadow-md animate-pulse" x-cloak>
+                    <span class="text-xl">⚠️</span>
+                    <div class="text-slate-950 text-xs font-black uppercase tracking-wider flex-1">
+                        <span class="underline">BIG FUNCTION / EVENT SYSTEM ALERT:</span> 
+                        <span class="font-bold font-mono" x-text="eventAlertMessage"></span>
+                    </div>
+                </div>
 
-            let catList = this.suppliers.map((s, idx) => `${idx + 1}. ${s.name}`).join('\n');
-            let vendorChoice = prompt(`[2/3] Choose Supplier Number for "${updatedName.trim()}":\n\n${catList}\n\nOr type "NEW" to provision a fresh vendor registry directly.`);
-            if (vendorChoice === null) return;
+                <header class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center gap-4 flex-wrap">
+                    <div class="space-y-1">
+                        <h1 class="text-2xl font-black tracking-tight text-slate-800 flex items-center gap-2">📊 Restaurant Inventory Operations</h1>
+                        <p class="text-xs text-slate-500">Logged in as <span class="font-bold text-slate-800" x-text="currentUsername"></span> <span class="mx-2 text-slate-300">|</span> Security Scope: <span class="bg-slate-100 text-slate-800 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-slate-200" x-text="currentRole"></span></p>
+                    </div>
+                    <div class="flex gap-2 items-center flex-wrap">
+                        <button x-show="currentRole === 'admin'" @click="setBigFunctionEventAlert()" class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg font-bold tracking-wide shadow-sm transition">🚨 Setup Event Alert</button>
+                        <button @click="showAccountModal = true" class="text-xs bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2 rounded-lg font-bold tracking-wide transition shadow-sm">👤 Security Settings</button>
+                        <button x-show="currentRole === 'admin'" @click="showUserAdminModal = true" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg font-bold tracking-wide border border-indigo-200 transition shadow-sm">🧑‍💼 Operator & Category Management</button>
+                        <button x-show="currentRole === 'admin' || currentRole === 'inward'" @click="downloadInwardSupplierReport()" class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg font-bold tracking-wide flex items-center gap-1.5 transition shadow-md">🧾 Supplier Inward Report (.xlsx)</button>
+                        <button @click="downloadExcelReport()" class="text-xs bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg font-bold tracking-wide flex items-center gap-1.5 transition shadow-md">📊 Export 30-Day Excel (.xlsx)</button>
+                        <button @click="logout()" class="text-xs bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold px-3 py-2 rounded-lg transition">🔒 Close Session</button>
+                    </div>
+                </header>
 
-            let finalVendor = item.supplier_name || (this.suppliers[0] ? this.suppliers[0].name : 'General Vendor');
-            if (vendorChoice.trim().toUpperCase() === "NEW") {
-                let freshName = prompt("Enter Fresh Supplier Label:");
-                if (freshName?.trim()) {
-                    finalVendor = freshName.trim();
-                    const matchEx = this.suppliers.find(s => s.name.toLowerCase() === finalVendor.toLowerCase());
-                    if (!matchEx) await addDoc(colRef('suppliers'), { name: finalVendor, phone: '' });
-                }
-            } else if (vendorChoice.trim() !== "") {
-                let sIdx = parseInt(vendorChoice) - 1;
-                if (sIdx >= 0 && sIdx < this.suppliers.length) finalVendor = this.suppliers[sIdx].name;
-            }
+                <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'order'">
+                    <div class="text-xs font-black uppercase tracking-wider text-indigo-800 border-b border-slate-100 pb-2">📝 Automated Supplier Purchase Order Desk</div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                        <div class="bg-slate-50 p-3 rounded-lg border">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Target Supplier</label>
+                            <select x-model="orderDesk.supplierId" @change="orderDesk.selectedItemId = ''" class="border p-2.5 rounded-md w-full bg-white font-bold text-slate-700">
+                                <option value="">-- Choose Vendor --</option>
+                                <template x-for="sup in suppliers" :key="sup.id">
+                                    <option :value="sup.id" x-text="sup.name"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-lg border md:col-span-2 space-y-3">
+                            <div class="flex gap-2 items-end">
+                                <div class="flex-1">
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Select Product Item (Filtered by Supplier)</label>
+                                    <select x-model="orderDesk.selectedItemId" :disabled="!orderDesk.supplierId" class="border p-2 rounded-md w-full bg-white font-medium text-slate-700 disabled:opacity-50">
+                                        <option value="">-- Choose Product --</option>
+                                        <template x-for="item in filteredOrderDeskItems" :key="item.id">
+                                            <option :value="item.id" x-text="item.name"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div class="w-24">
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Qty</label>
+                                    <input type="number" x-model.number="orderDesk.selectedQty" placeholder="10" class="border p-2 rounded-md w-full text-center bg-white font-mono font-bold">
+                                </div>
+                                <button @click="addItemToOrder()" class="bg-indigo-700 text-white font-bold px-4 py-2 rounded-md transition uppercase text-[11px]">Add Item</button>
+                            </div>
+                            <div class="border rounded-md bg-white p-2.5 space-y-1.5" x-show="orderDesk.basket.length > 0">
+                                <template x-for="(b, idx) in orderDesk.basket" :key="idx">
+                                    <div class="flex justify-between items-center text-xs bg-slate-50 border p-1 rounded font-mono">
+                                        <span>📌 <span class="font-sans" x-text="b.name"></span> — Qty: <span class="font-bold text-indigo-600" x-text="b.qty"></span></span>
+                                        <button @click="removeOrderBasketItem(idx)" class="text-rose-600 font-bold px-1 text-[11px]">Remove</button>
+                                    </div>
+                                </template>
+                            </div>
+                            <button @click="sendWhatsAppOrder()" x-show="orderDesk.basket.length > 0 && orderDesk.supplierId" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-center uppercase tracking-wider transition shadow-sm">
+                                📱 Send Thread to Supplier WhatsApp
+                            </button>
+                        </div>
+                    </div>
+                </section>
 
-            let promptPrice = prompt(`[3/3] Update Unit Price (MRP) for "${updatedName.trim()}":`, item.mrp || 0);
-            if (promptPrice === null) return;
-            let finalPrice = Number(promptPrice);
-            if (isNaN(finalPrice) || finalPrice < 0) return alert("Enter valid numerical amount.");
+                <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-2 flex-wrap gap-2">
+                        <div class="text-xs font-black uppercase tracking-wider text-emerald-800">📦 Purchase Orders Verification Workspace</div>
+                        <div class="flex gap-1 bg-slate-100 p-1 rounded-lg text-[11px] font-bold">
+                            <button @click="orderViewTab = 'pending'" :class="orderViewTab === 'pending' ? 'bg-white text-emerald-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'" class="px-3 py-1 rounded-md transition">⏳ Active Pending</button>
+                            <button @click="orderViewTab = 'history'" :class="orderViewTab === 'history' ? 'bg-white text-indigo-800 shadow-xs' : 'text-slate-500 hover:text-slate-800'" class="px-3 py-1 rounded-md transition">📜 History Log Registry</button>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <template x-for="order in processedPurchaseOrders" :key="order.id">
+                            <div class="border p-4 rounded-xl space-y-3 transition bg-white" 
+                                 :class="order.status === 'PENDING' ? 'border-amber-300 bg-amber-50/10' : order.status === 'DECLINED' ? 'border-rose-200 bg-rose-50/10 opacity-75' : order.status === 'PARTIAL' ? 'border-orange-200 bg-orange-50/10' : 'border-slate-200 bg-slate-50/40'">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <span class="text-sm font-black text-slate-800" x-text="order.supplier_name"></span>
+                                        <div class="text-[10px] text-slate-400 font-mono" x-text="'Issued by: ' + order.created_by + ' | ' + new Date(order.created_at).toLocaleDateString('en-GB')"></div>
+                                        <template x-if="order.resolved_at">
+                                            <div class="text-[9px] text-slate-500 font-mono" x-text="'Handled by: ' + order.resolved_by + ' @ ' + new Date(order.resolved_at).toLocaleDateString('en-GB')"></div>
+                                        </template>
+                                    </div>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase shadow-3xs" 
+                                          :class="order.status === 'PENDING' ? 'bg-amber-100 text-amber-800 border border-amber-200' : order.status === 'PARTIAL' ? 'bg-orange-100 text-orange-800 border border-orange-200' : order.status === 'DECLINED' ? 'bg-rose-100 text-rose-800 border border-rose-200' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'" 
+                                          x-text="order.status === 'PENDING' ? '⏳ Pending Supply' : order.status === 'PARTIAL' ? '⚠️ Partial Delivery' : order.status === 'DECLINED' ? '❌ Declined/Void' : '✅ Received'">
+                                    </span>
+                                </div>
+                                <div class="bg-white border rounded-lg p-2.5 divide-y font-mono space-y-1 shadow-2xs">
+                                    <template x-for="it in order.items">
+                                        <div class="flex justify-between items-center py-1 text-xs">
+                                            <span class="font-sans text-slate-700 font-medium" x-text="it.name"></span>
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="text-slate-400 text-[11px]" x-text="order.status === 'PENDING' ? 'Recv Qty:' : 'Ingested:'"></span>
+                                                <input type="number" x-model.number="it.qty" :disabled="order.status !== 'PENDING'" class="w-14 border text-center rounded p-0.5 bg-slate-50 font-bold text-slate-900 focus:ring-1 focus:ring-emerald-500 disabled:opacity-75">
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div class="flex gap-2" x-show="order.status === 'PENDING'">
+                                    <button @click="declineIncomingOrder(order)" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2 rounded-lg transition uppercase tracking-wider text-[11px] shadow-sm">
+                                        ❌ Decline & Cancel
+                                    </button>
+                                    <button @click="approveIncomingOrder(order)" class="flex-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2 px-4 rounded-lg transition uppercase tracking-wider text-[11px] shadow-sm">
+                                        ✔ Approve & Ingest Stock
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="processedPurchaseOrders.length === 0">
+                            <div class="col-span-2 text-center text-slate-400 font-medium py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 uppercase tracking-wide text-[11px]">
+                                No records present inside this segment folder.
+                            </div>
+                        </template>
+                    </div>
+                </section>
 
-            try {
-                await updateDoc(doc(dbFs, 'items', item.id), { name: updatedName.trim(), supplier_name: finalVendor, mrp: finalPrice });
-                alert("Matrix attributes successfully configured.");
-            } catch (e) { alert(e.message); }
-        },
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="currentRole === 'admin' || currentRole === 'inward' || currentRole === 'outward'">
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
+                        <div class="text-xs font-bold uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2">📥 Log New Inward Manual Consignment</div>
+                        <div class="grid grid-cols-4 gap-3 text-xs">
+                            <div class="col-span-2">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">First Select Supplier</label>
+                                <select x-model="formInward.supplierName" @change="formInward.itemId = ''" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-bold text-slate-700">
+                                    <option value="">-- Choose Supplier --</option>
+                                    <template x-for="sup in suppliers" :key="sup.id">
+                                        <option :value="sup.name" x-text="sup.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Select Product (Filtered)</label>
+                                <select x-model="formInward.itemId" :disabled="!formInward.supplierName" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-medium text-slate-700 disabled:opacity-50">
+                                    <option value="">-- Select Product --</option>
+                                    <template x-for="item in filteredInwardItems" :key="item.id">
+                                        <option :value="item.id" x-text="item.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div class="col-span-4">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Units</label>
+                                <input type="number" x-model.number="formInward.qty" placeholder="Units" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
+                            </div>
+                        </div>
+                        <button @click="addInward()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2.5 rounded-lg shadow-sm transition uppercase tracking-wider mt-2">Commit Inward Entry to Cloud</button>
+                        
+                        <div x-show="lastLogId && lastLogType === 'INWARD'" x-transition class="mt-2" x-cloak>
+                            <button @click="undoLastTransaction()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs py-2 rounded-lg transition uppercase tracking-wider shadow-xs flex items-center justify-center gap-1.5">
+                                ↩️ Undo / Redo Last Inward Entry
+                            </button>
+                        </div>
 
-        async modifyThreshold(item) {
-            let promptVal = prompt('Update safety limit:', item.threshold);
-            if (promptVal !== null) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parseInt(promptVal) || 0 });
-        },
-        async purgeItem(id) { if (confirm('Purge item entry?')) await deleteDoc(doc(dbFs, 'items', id)); },
-        
-        /**
-         * Re-ordering Sorting Utility: Shifts display parameters and adjusts index sorting weights across Firestore sheets
-         */
-        async shiftOrder(id, direction) {
-            const sorted = [...this.items].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
-            const idx = sorted.findIndex((i) => i.id === id); if (idx === -1) return;
-            const swapIdx = idx + (direction === 'up' ? -1 : 1); if (swapIdx < 0 || swapIdx >= sorted.length) return;
-            await updateDoc(doc(dbFs, 'items', sorted[idx].id), { order_index: sorted[swapIdx].order_index || 0 });
-            await updateDoc(doc(dbFs, 'items', sorted[swapIdx].id), { order_index: sorted[idx].order_index || 0 });
-        },
+                        <div class="pt-3 border-t border-dashed border-slate-200 flex flex-col gap-3" x-show="currentRole === 'admin'">
+                            <button @click="showNewItemModal = true" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 rounded-md transition shadow-xs text-xs">➕ Add New Item Portfolio Axis</button>
+                        </div>
+                    </div>
 
-        /**
-         * Portfolio Handler: Saves new physical item lines into localized stock tracking structures
-         */
-        async submitNewItem() {
-            if (!this.newItemForm.name.trim() || !this.newItemForm.categoryId || !this.newItemForm.supplierName) return alert("Please map all tags.");
-            const maxOrder = this.items.reduce((m, i) => Math.max(m, i.order_index || 0), 0);
-            await addDoc(colRef('items'), { name: this.newItemForm.name.trim(), category_id: this.newItemForm.categoryId, supplier_name: this.newItemForm.supplierName, stock: 0, threshold: this.newItemForm.threshold || 0, mrp: Number(this.newItemForm.mrp || 0), order_index: maxOrder + 1 });
-            this.newItemForm = { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' };
-            this.showNewItemModal = false;
-        },
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'outward'">
+                        <div class="text-xs font-bold uppercase tracking-wider text-rose-800 border-b border-slate-100 pb-2">📤 Issue Line Outward Allocation</div>
+                        <div class="grid grid-cols-3 gap-3 text-xs">
+                            <select x-model="formOutward.itemId" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-medium text-slate-700">
+                                <option value="">-- Item --</option>
+                                <template x-for="item in items" :key="item.id">
+                                    <option :value="item.id" x-text="item.name"></option>
+                                </template>
+                            </select>
+                            <select x-model="formOutward.department" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-bold text-slate-700">
+                                <template x-for="dept in departments" :key="dept">
+                                    <option :value="dept" x-text="dept"></option>
+                                </template>
+                            </select>
+                            <input type="number" x-model.number="formOutward.qty" placeholder="Units" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
+                        </div>
+                        <button @click="deductOutward()" class="w-full bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold py-2.5 rounded-lg shadow-sm transition uppercase tracking-wider">Execute Deduction & Issue Stock</button>
+                        
+                        <div x-show="lastLogId && lastLogType === 'OUTWARD'" x-transition class="mt-2" x-cloak>
+                            <button @click="undoLastTransaction()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs py-2 rounded-lg transition uppercase tracking-wider shadow-xs flex items-center justify-center gap-1.5">
+                                ↩️ Undo / Redo Last Outward Entry
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
-        /**
-         * Portfolio Customizer Method: Builds entirely custom category blocks dynamically from client views.
-         * Generates text badge style maps matching selected visual color options and saves them live.
-         */
-        async submitNewCategory() {
-            if (!this.newCategoryForm.name.trim() || !this.newCategoryForm.emoji.trim()) return alert("Fields required.");
-            const standardizedId = this.newCategoryForm.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (!standardizedId) return alert("Invalid layout name.");
-            if (this.categories.find(c => c.id === standardizedId)) return alert("Category already exists.");
-            const chosenPalette = this.paletteOptions[this.newCategoryForm.paletteIndex || 0];
-            try {
-                await setDoc(doc(dbFs, 'categories', standardizedId), { name: this.newCategoryForm.name.trim(), emoji: this.newCategoryForm.emoji.trim(), bg_color: chosenPalette.bg, border_color: chosenPalette.border, text_color: chosenPalette.text });
-                alert(`📁 Category Matrix "${this.newCategoryForm.name.trim()}" successfully deployed live!`);
-                this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
-            } catch (err) { alert(err.message); }
-        },
+                <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
+                        <div class="space-y-0.5">
+                            <div class="text-sm font-extrabold text-slate-800 uppercase tracking-wide">Live Infrastructure Ledger Engine</div>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5 text-xs font-bold">
+                            <button @click="filterCat = 'all'" :class="filterCat === 'all' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'" class="px-3 py-1.5 rounded-lg border shadow-2xs transition">📁 All Categories</button>
+                            <template x-for="cat in categories" :key="cat.id">
+                                <button @click="filterCat = cat.name" :style="'background-color: ' + (filterCat === cat.name ? cat.border_color : cat.bg_color) + '; color: ' + (filterCat === cat.name ? '#fff' : cat.text_color) + '; border-color: ' + cat.border_color" class="px-2.5 py-1 rounded border transition" x-text="cat.emoji + ' ' + cat.name"></button>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 border-b border-slate-200 text-slate-600 uppercase tracking-wider text-[10px] font-black">
+                                    <th class="py-4 px-4 w-16 text-center" x-show="currentRole === 'admin'">Move</th>
+                                    <th class="py-4 px-4 min-w-[180px]">Item Name</th>
+                                    <th class="py-4 px-4 text-center w-28">Live Stock Balance</th>
+                                    <th class="py-4 px-4 w-32">Status Vector</th>
+                                    <th class="py-4 px-4 min-w-[150px]">Assigned Supplier</th>
+                                    <th class="py-4 px-4 text-center w-28" x-show="currentRole !== 'readonly'">Unit Price (MRP)</th>
+                                    <th class="py-4 px-4 w-36">Category Tag</th>
+                                    <th class="py-4 px-4 text-center w-24">Safety Limit</th>
+                                    <th class="py-4 px-4 text-right min-w-[160px]" x-show="currentRole === 'admin' || currentRole === 'inward'">Management Axis</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 bg-white">
+                                <template x-for="item in processedItems" :key="item.id">
+                                    <tr :class="item.stock <= item.threshold ? 'bg-rose-50/60 font-medium' : 'hover:bg-slate-50/70'" class="transition">
+                                        
+                                        <td class="py-5 px-4 text-center space-x-1 whitespace-nowrap" x-show="currentRole === 'admin'">
+                                            <button @click="shiftOrder(item.id, 'up')" class="text-slate-400 hover:text-slate-800 font-bold px-0.5">▲</button>
+                                            <button @click="shiftOrder(item.id, 'down')" class="text-slate-400 hover:text-slate-800 font-bold px-0.5">▼</button>
+                                        </td>
+                                        
+                                        <td class="py-5 px-4 font-extrabold text-slate-900 text-sm tracking-tight whitespace-nowrap" x-text="item.name"></td>
+                                        
+                                        <td class="py-5 px-4 text-center font-mono text-sm font-black tracking-wide whitespace-nowrap" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="item.stock"></td>
+                                        
+                                        <td class="py-5 px-4 whitespace-nowrap">
+                                            <template x-if="item.stock === 0"><span class="bg-rose-600 text-white text-[9px] px-2.5 py-1 rounded font-black uppercase tracking-wider shadow-2xs">🚨 depleted</span></template>
+                                            <template x-if="item.stock > 0 && item.stock <= item.threshold"><span class="bg-amber-500 text-slate-950 text-[9px] px-2.5 py-1 rounded font-black uppercase tracking-wider shadow-2xs">⚠️ breach limit</span></template>
+                                            <template x-if="item.stock > item.threshold"><span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] px-2.5 py-0.5 rounded-md font-bold whitespace-nowrap">Stable Matrix</span></template>
+                                        </td>
+                                        
+                                        <td class="py-5 px-4 font-bold text-slate-600 text-xs whitespace-nowrap">
+                                            <span class="bg-slate-50 px-2.5 py-1 rounded border border-slate-200" x-text="item.supplier_name || 'General Vendor'"></span>
+                                        </td>
+                                        
+                                        <td class="py-5 px-4 text-center font-mono font-bold text-slate-700 text-sm whitespace-nowrap" x-show="currentRole !== 'readonly'" x-text="'₹' + (item.mrp || 0)"></td>
+                                        
+                                        <td class="py-5 px-4 whitespace-nowrap">
+                                            <span :style="'background-color: ' + item.bg + '; color: ' + item.text_color + '; border-color: ' + item.border" class="px-3 py-1 rounded-md text-[10px] uppercase font-black border tracking-wide shadow-3xs" x-text="item.emoji + ' ' + item.category_name"></span>
+                                        </td>
+                                        
+                                        <td class="py-5 px-4 text-center font-mono text-slate-400 font-bold text-xs whitespace-nowrap" x-text="item.threshold"></td>
+                                        
+                                        <td class="py-5 px-4 text-right space-x-2 whitespace-nowrap font-bold" x-show="currentRole === 'admin' || currentRole === 'inward'">
+                                            <button @click="changeItemName(item)" class="text-slate-600 hover:text-indigo-600 text-[11px] transition">✏️ Edit Details</button>
+                                            <span class="text-slate-300 font-normal">|</span>
+                                            <button @click="modifyThreshold(item)" class="text-slate-600 hover:text-amber-600 text-[11px] transition">Limit</button>
+                                            <span x-show="currentRole === 'admin'" class="text-slate-300 font-normal">|</span>
+                                            <button x-show="currentRole === 'admin'" @click="purgeItem(item.id)" class="text-rose-600 hover:text-rose-800 text-[11px] transition">Purge</button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+                <div x-show="showAccountModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
+                    <form @submit.prevent="changeMyPassword()" class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
+                        <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">👤 Security Key Settings</h3>
+                        <div class="space-y-3 text-xs">
+                            <input type="password" placeholder="Current Passphrase" autocomplete="current-password" x-model="accountForm.currentPassword" class="border p-2 w-full rounded-md bg-slate-50">
+                            <input type="password" placeholder="New Secret Security Key" autocomplete="new-password" x-model="accountForm.newPassword" class="border p-2 w-full rounded-md bg-slate-50">
+                        </div>
+                        <p x-show="accountError" x-text="accountError" class="text-rose-600 text-[11px] font-bold" x-cloak></p>
+                        <p x-show="accountSuccess" x-text="accountSuccess" class="text-emerald-600 text-[11px] font-bold" x-cloak></p>
+                        <div class="flex gap-2 pt-2">
+                            <button type="button" @click="showAccountModal = false" class="flex-1 bg-slate-100 border text-xs font-bold py-2 rounded-lg">Dismiss</button>
+                            <button type="submit" class="flex-1 bg-slate-800 text-white text-xs font-bold py-2 rounded-lg">Apply Passphrase Update</button>
+                        </div>
+                    </form>
+                </div>
 
-        /**
-         * Bulk Data Parser Engine: Deconstructs raw CSV matrices and updates cloud entities sequentially
-         */
-        async handleCsvUpload(event) {
-            const file = event.target.files[0]; if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const text = e.target.result; const lines = text.split('\n');
-                for (let i = 1; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue;
-                    const columns = lines[i].split(',');
-                    if (columns.length >= 4) {
-                        const name = columns[0].trim(); const categoryName = columns[1].trim(); const qty = parseInt(columns[2]) || 0; const threshold = parseInt(columns[3]) || 0; const mrp = columns[4] ? Number(columns[4].trim()) || 0 : 0;
-                        let cat = this.categories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
-                        let categoryId = cat ? cat.id : (await addDoc(colRef('categories'), { name: categoryName, emoji: '🍱', bg_color: '#f3f4f6', border_color: '#9ca3af', text_color: '#374151' })).id;
-                        const existingItem = this.items.find((it) => it.name.toLowerCase() === name.toLowerCase());
-                        if (existingItem) await updateDoc(doc(dbFs, 'items', existingItem.id), { stock: existingItem.stock + qty, threshold, mrp });
-                        else {
-                            const maxOrder = this.items.reduce((m, it) => Math.max(m, it.order_index || 0), 0);
-                            await addDoc(colRef('items'), { name, category_id: categoryId, supplier_name: 'General Vendor', stock: qty, threshold, mrp, order_index: maxOrder + 1 });
-                        }
-                    }
-                }
-                alert("CSV Ingested."); event.target.value = '';
-            };
-            reader.readAsText(file);
-        },
+                <div x-show="showUserAdminModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
+                    <div class="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl space-y-5 border border-slate-200 max-h-[90vh] overflow-y-auto">
+                        <div>
+                            <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1 mb-2">🧑‍💼 Authorized System Operators Directory</h3>
+                            <div class="border rounded-lg bg-slate-50 overflow-hidden divide-y max-h-36 overflow-y-auto">
+                                <template x-for="u in users" :key="u.id">
+                                    <div class="p-2.5 flex items-center justify-between gap-3 bg-white text-xs">
+                                        <div>
+                                            <div class="font-extrabold text-slate-800 text-sm" x-text="u.username"></div>
+                                            <div class="text-[10px] font-mono text-slate-400 uppercase" x-text="'Scope: ' + u.role"></div>
+                                        </div>
+                                        <div class="flex items-center gap-1.5">
+                                            <select @change="changeUserRole(u.id, $event.target.value)" class="border rounded p-1 bg-slate-50 text-[11px] font-bold">
+                                                <option value="admin" :selected="u.role === 'admin'">admin</option>
+                                                <option value="inward" :selected="u.role === 'inward'">inward</option>
+                                                <option value="outward" :selected="u.role === 'outward'">outward</option>
+                                                <option value="order" :selected="u.role === 'order'">order</option>
+                                                <option value="readonly" :selected="u.role === 'readonly'">readonly</option>
+                                            </select>
+                                            <button @click="promptResetPassword(u)" class="text-[10px] bg-slate-50 hover:bg-slate-100 border px-2 py-1 rounded font-medium">Reset Key</button>
+                                            <button @click="deleteUser(u.id)" class="text-[10px] bg-rose-50 border border-rose-100 text-rose-700 font-bold px-2 py-1 rounded">Delete</button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            <div class="mt-3 grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2 rounded-lg border">
+                                <input type="text" x-model="newUserForm.username" placeholder="New Operator Username" class="border p-2 rounded bg-white">
+                                <input type="password" x-model="newUserForm.password" placeholder="Passphrase (6+ chars)" class="border p-2 rounded bg-white">
+                                <select x-model="newUserForm.role" class="border p-2 rounded bg-white font-bold col-span-2">
+                                    <option value="inward">inward</option>
+                                    <option value="outward">outward</option>
+                                    <option value="order">order</option>
+                                    <option value="readonly">readonly</option>
+                                </select>
+                                <button @click="createUser()" class="w-full bg-slate-800 text-white font-bold py-2 rounded text-xs uppercase tracking-wide col-span-2">Save Operator to Cloud</button>
+                            </div>
+                        </div>
 
-        /**
-         * Manual Logger Axis (Inward): Updates individual inventory quantities manually.
-         * Saves transaction reference pointers locally to enable quick session rollbacks.
-         */
-        async addInward() {
-            if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) return alert('Select missing fields.');
-            const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); if (!target) return alert('Selected item could not be found.');
-            const qty = parseInt(this.formInward.qty); if (!qty || qty <= 0) return alert('Enter a positive quantity.');
-            let vendor = this.formInward.supplierName.trim();
-            if (vendor === "_NEW_") {
-                let newVendorName = prompt("Enter new Supplier Name:"); if (!newVendorName || !newVendorName.trim()) return alert("Supplier name required.");
-                vendor = newVendorName.trim();
-                const matchEx = this.suppliers.find(s => s.name.toLowerCase() === vendor.toLowerCase());
-                if (!matchEx) await addDoc(colRef('suppliers'), { name: vendor, phone: '' });
-            }
-            try {
-                await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock || 0) + qty });
-                const docRef = await addDoc(colRef('logs'), { type: 'INWARD', item_id: target.id, qty, supplier_name: vendor, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
-                this.lastLogId = docRef.id; this.lastLogType = 'INWARD'; // Assign references to feed localized undo buttons
-                this.formInward = { itemId: '', qty: '', supplierName: '' };
-            } catch (error) { alert("Database write error: " + error.message); }
-        },
+                        <div class="border-t pt-3">
+                            <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1 mb-2">📁 Provision Custom Inventory Category Axis</h3>
+                            <div class="grid grid-cols-3 gap-2 text-xs bg-slate-50 p-3 rounded-lg border space-y-1">
+                                <div class="col-span-2">
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Category Name</label>
+                                    <input type="text" x-model="newCategoryForm.name" placeholder="e.g. Sauces or Spices" class="border p-2 rounded bg-white w-full">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Visual Emoji</label>
+                                    <input type="text" x-model="newCategoryForm.emoji" placeholder="🥫" class="border p-2 rounded bg-white w-full text-center text-sm">
+                                </div>
+                                <div class="col-span-3">
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Select Palette Theme Accent</label>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <template x-for="(p, idx) in paletteOptions" :key="idx">
+                                            <button @click="newCategoryForm.paletteIndex = idx" 
+                                                    :style="'background-color: ' + p.bg + '; color: ' + p.text + '; border-color: ' + p.border"
+                                                    :class="newCategoryForm.paletteIndex === idx ? 'ring-2 ring-slate-900 border-2 scale-95' : 'opacity-80'"
+                                                    class="p-2 rounded border text-[10px] uppercase font-black transition tracking-wider text-center"
+                                                    type="button"
+                                                    x-text="idx === 0 ? 'Blue' : idx === 1 ? 'Amber' : idx === 2 ? 'Green' : idx === 3 ? 'Purple' : idx === 4 ? 'Pink' : 'Slate'">
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+                                <button @click="submitNewCategory()" type="button" class="w-full bg-indigo-700 hover:bg-indigo-800 text-white font-bold py-2.5 rounded text-xs uppercase tracking-wide col-span-3 shadow-xs">
+                                    Deploy Fresh Category Segment Live
+                                </button>
+                            </div>
+                        </div>
 
-        /**
-         * Manual Logger Axis (Outward): Records internal stock distributions and line allocation deductions
-         */
-        async deductOutward() {
-            if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
-            const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId)); if (!target) return alert('Item not found.');
-            const qty = parseInt(this.formOutward.qty); if (!qty || qty <= 0) return alert('Enter positive quantity.');
-            if (Number(target.stock || 0) < qty) return alert('Insufficient stock.');
-            try {
-                await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock) - qty });
-                const docRef = await addDoc(colRef('logs'), { type: 'OUTWARD', item_id: target.id, qty, department: this.formOutward.department, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
-                this.lastLogId = docRef.id; this.lastLogType = 'OUTWARD'; // Assign references to feed localized undo buttons
-                this.formOutward = { itemId: '', department: 'Indian', qty: '' };
-            } catch (error) { alert("Error: " + error.message); }
-        },
+                        <button @click="showUserAdminModal = false" class="w-full bg-slate-100 text-xs font-bold py-2.5 rounded-lg border mt-2">Dismiss Administration Suite</button>
+                    </div>
+                </div>
 
-        /**
-         * Reversal Component Logic (Undo / Redo): Looks up the most recent session operation log ID,
-         * performs the inverse calculation on the asset row, and safely deletes the invalid log record from the cloud.
-         */
-        async undoLastTransaction() {
-            if (!this.lastLogId) return alert("No recent log found.");
-            if (!confirm(`Are you sure you want to REVERT your last ${this.lastLogType} entry?`)) return;
-            try {
-                const logsSnap = await getDocs(colRef('logs'));
-                const targetingLog = logsSnap.docs.find(d => d.id === this.lastLogId);
-                if (!targetingLog) { this.lastLogId = null; return; }
-                const logData = targetingLog.data();
-                const targetItem = this.items.find(i => String(i.id) === String(logData.item_id));
-                if (!targetItem) return;
-                let balanceCorrection = logData.type === 'INWARD' ? Number(targetItem.stock || 0) - parseInt(logData.qty) : Number(targetItem.stock || 0) + parseInt(logData.qty);
-                if (balanceCorrection < 0) return alert("Rollback denied.");
-                await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: balanceCorrection });
-                await deleteDoc(doc(dbFs, 'logs', this.lastLogId));
-                alert(`Rolled back successfully for "${targetItem.name}".`);
-                this.lastLogId = null; this.lastLogType = '';
-            } catch (e) { alert(e.message); }
-        },
+                <div x-show="showNewItemModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
+                    <div class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
+                        <h3 class="text-sm font-black uppercase text-slate-800 tracking-wide border-b pb-1">➕ Append Portfolio Tracking row</h3>
+                        <div class="space-y-3 text-xs">
+                            <div>
+                                <label class="block font-bold text-slate-600 mb-1">Product Description Label</label>
+                                <input type="text" x-model="newItemForm.name" class="border border-slate-300 p-2 w-full rounded-md" placeholder="e.g. Cardamom Powder">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-slate-600 mb-1">Select Base Segment ID</label>
+                                <select x-model="newItemForm.categoryId" class="border border-slate-300 p-2 w-full rounded-md bg-white text-slate-700">
+                                    <option value="">-- Assign Portfolio Group --</option>
+                                    <template x-for="cat in categories" :key="cat.id">
+                                        <option :value="cat.id" x-text="cat.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block font-bold text-slate-600 mb-1">Link Default Supplier/Vendor</label>
+                                <select x-model="newItemForm.supplierName" class="border border-slate-300 p-2 w-full rounded-md bg-white text-slate-700">
+                                    <option value="">-- Choose Supplier --</option>
+                                    <template x-for="sup in suppliers" :key="sup.id">
+                                        <option :value="sup.name" x-text="sup.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div><label class="block font-bold text-slate-600 mb-1">Safety Limit</label><input type="number" x-model.number="newItemForm.threshold" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="10"></div>
+                                <div x-show="currentRole !== 'readonly'"><label class="block font-bold text-slate-600 mb-1">Unit Price (MRP)</label><input type="number" x-model.number="newItemForm.mrp" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="₹0"></div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 pt-2">
+                            <button @click="showNewItemModal = false" class="flex-1 bg-slate-100 border text-xs font-bold py-2 rounded-lg">Dismiss</button>
+                            <button @click="submitNewItem()" class="flex-1 bg-slate-800 text-white text-xs font-bold py-2 rounded-lg">Commit Axis</button>
+                        </div>
+                    </div>
+                </div>
 
-        async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
-        async deleteUser(userId) { if (confirm('Delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
-        
-        async changeMyPassword() {
-            this.accountError = ''; this.accountSuccess = '';
-            const { currentPassword, newPassword } = this.accountForm;
-            if (newPassword.length < 6) { this.accountError = 'Min 6 characters'; return; }
-            const user = this.users.find((u) => u.id === this.currentUserId);
-            if ((await sha256(currentPassword)) !== user.passwordHash) { this.accountError = 'Incorrect password'; return; }
-            await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: await sha256(newPassword) });
-            this.accountSuccess = 'Password updated.';
-            this.accountForm = { currentPassword: '', newPassword: '' };
-        },
-
-        createUser() {
-            const { username, password, role = 'inward' } = this.newUserForm;
-            if (!username || password.length < 6) return;
-            addDoc(colRef('users'), { username: username.trim(), passwordHash: sha256(password), role });
-            this.newUserForm = { username: '', password: '', role: 'inward' };
-        },
-        async promptResetPassword(user) {
-            let newPass = prompt(`Enter new password (Min 6 chars):`);
-            if (!newPass || newPass.trim().length < 6) return;
-            try {
-                await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: await sha256(newPass.trim()) });
-                alert("Password updated!");
-            } catch (error) { alert(error.message); }
-        },
-
-        /**
-         * Financial Audit Tool: Regroups historical transaction rows by vendor name properties
-         * and writes complete accounting tables cleanly into structured .xlsx spread documents.
-         */
-        downloadInwardSupplierReport() {
-            const inwards = this.logs.filter(l => l.type === 'INWARD'); if (!inwards.length) return alert("No inward data.");
-            const supplierGroups = {};
-            inwards.forEach(log => {
-                const sName = log.supplier_name || 'Historical Vendor';
-                if (!supplierGroups[sName]) supplierGroups[sName] = []; supplierGroups[sName].push(log);
-            });
-            const sheetMatrix = [];
-            Object.keys(supplierGroups).forEach(supplier => {
-                sheetMatrix.push([`Supplier: ${supplier.toUpperCase()}`]); sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE", "TOTAL VALUATION"]);
-                let grandTotal = 0;
-                supplierGroups[supplier].forEach(log => {
-                    const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                    const name = log.item_name || linkedItem.name; const qty = parseInt(log.qty) || 0; const price = parseFloat(linkedItem.mrp) || 0; const totalCost = qty * price; grandTotal += totalCost;
-                    sheetMatrix.push([name, qty, `₹${price}`, `₹${totalCost}`]);
-                });
-                sheetMatrix.push(["", "", "GRAND TOTAL:", `₹${grandTotal}`]); sheetMatrix.push([]); 
-            });
-            const ws = XLSX.utils.aoa_to_sheet(sheetMatrix); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Supplier Inward Breakdown");
-            XLSX.writeFile(wb, `Supplier_Inward_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
-        },
-
-        /**
-         * Management Dashboard Report: Compiles stock histories from the last 30 days into 
-         * spreadsheet matrices, tracking inward entries and outward allocations by department names.
-         */
-        downloadExcelReport() {
-            const getLocalDateString = (offsetDays) => { const d = new Date(); d.setDate(d.getDate() - offsetDays); return d.toISOString().slice(0, 10); };
-            const formatHeaderLabel = (dateStr) => { const parts = dateStr.split('-'); if (parts.length !== 3) return dateStr; const dateObj = new Date(parts[0], parts[1] - 1, parts[2]); return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); };
-            const targetDays = []; for (let i = 0; i < 30; i++) targetDays.push(getLocalDateString(i));
-            const headerRow = ["DATE", "TOTAL STOCK"]; targetDays.forEach(dateStr => { const dayLabel = formatHeaderLabel(dateStr); headerRow.push(`${dayLabel}IN`); headerRow.push(`${dayLabel}OUT`); });
-            const matrixData = [headerRow, ["ITEM NAME"]];
-            this.processedItems.forEach(item => {
-                const row = [item.name, item.stock];
-                targetDays.forEach(targetDate => {
-                    let dayInwards = this.logs.filter(l => l.created_at && String(l.item_id) === String(item.id) && l.type === 'INWARD' && l.created_at.slice(0, 10) === targetDate);
-                    row.push(dayInwards.length ? `+${dayInwards.reduce((sum, l) => sum + (parseInt(l.qty) || 0), 0)}` : "0");
-                    let dayOutwards = this.logs.filter(l => l.created_at && String(l.item_id) === String(item.id) && l.type === 'OUTWARD' && l.created_at.slice(0, 10) === targetDate);
-                    if (dayOutwards.length) { row.push(dayOutwards.map(l => `-${l.qty} (${l.department || 'General'})`).join("\n")); } else { row.push("0"); }
-                });
-                matrixData.push(row);
-            });
-            const ws = XLSX.utils.aoa_to_sheet(matrixData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "30-Day LIFO Ledger");
-            const colWidths = [{wch: 24}, {wch: 14}]; for (let i = 0; i < 60; i++) colWidths.push({ wch: i % 2 === 0 ? 14 : 26 });
-            ws['!cols'] = colWidths; XLSX.writeFile(wb, `Stock_Rolling_Report_${getLocalDateString(0)}.xlsx`);
-        }
-    };
-};
-
-// --- INITIALIZATION INTERCEPT SYNC LAYERS ---
-// Synchronizes modular scripts with DOM lifecycles to prevent timing issues when using deferred loaders
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.Alpine) { window.Alpine.data('stockApp', window.stockApp); } 
-    else { document.addEventListener('alpine:init', () => { window.Alpine.data('stockApp', window.stockApp); }); }
-});
+            </div>
+        </template>
+    </main>
+</body>
+</html>
