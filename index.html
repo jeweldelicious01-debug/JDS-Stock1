@@ -4,25 +4,112 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Restaurant Stock Manager & Event Control Engine</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script type="module" src="app.js"></script>
+    
     <script>
-  function stockApp() {
-    return {
-      stocks: [],
-      init() {
-        console.log('Stock app initialized!');
-      }
-    }
-  }
-</script>
+        // Use alpine:init event listener to safely register state objects globally 
+        // without worrying about script execution timing issues.
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('stockApp', () => ({
+                // Auth & UI State Vectors
+                isAuthenticated: false,
+                authChecking: false,
+                loginError: '',
+                showAccountModal: false,
+                showUserAdminModal: false,
+                showNewItemModal: false,
+                currentUsername: 'Operator',
+                currentRole: 'admin', // Options: admin, order, inward, outward, readonly
+                filterCat: 'all',
 
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+                // Form Schemas
+                loginForm: { username: '', password: '' },
+                orderDesk: { supplierId: '', selectedItemId: '', selectedQty: 1, basket: [] },
+                formInward: { supplierName: '', itemId: '', qty: null },
+                formOutward: { itemId: '', department: 'Kitchen', qty: null },
+                newItemForm: { name: '', categoryId: '', supplierName: '', threshold: 10, mrp: null },
+
+                // Mock Collections Data (Will map seamlessly with your backend/app.js arrays)
+                suppliers: [
+                    { id: '1', name: 'Global Foods Wholesalers' },
+                    { id: '2', name: 'Fresh Produce Hub' }
+                ],
+                categories: [
+                    { id: 'cat1', name: 'Spices', emoji: '🌶️', bg_color: '#fef2f2', text_color: '#991b1b', border_color: '#fee2e2' },
+                    { id: 'cat2', name: 'Dairy', emoji: '🧀', bg_color: '#fefcbf', text_color: '#744210', border_color: '#fef08a' }
+                ],
+                departments: ['Kitchen', 'Bar', 'Bakery', 'Front Desk'],
+                items: [
+                    { id: 'i1', name: 'Cardamom Powder', category_name: 'Spices', categoryId: 'cat1', stock: 12, threshold: 15, mrp: 450, emoji: '🌶️', bg: '#fef2f2', text_color: '#991b1b', border: '#fee2e2' },
+                    { id: 'i2', name: 'Cheddar Cheese Block', category_name: 'Dairy', categoryId: 'cat2', stock: 0, threshold: 5, mrp: 850, emoji: '🧀', bg: '#fefcbf', text_color: '#744210', border: '#fef08a' }
+                ],
+                purchaseOrders: [
+                    { id: 'po1', supplier_name: 'Global Foods Wholesalers', created_by: 'order_manager', created_at: new Date(), status: 'PENDING', items: [{ name: 'Cardamom Powder', qty: 25 }] }
+                ],
+
+                // Computed Properties (Getters)
+                get filteredOrderDeskItems() {
+                    return this.items;
+                },
+                get filteredInwardItems() {
+                    if (!this.formInward.supplierName) return [];
+                    return this.items;
+                },
+                get processedItems() {
+                    if (this.filterCat === 'all') return this.items;
+                    return this.items.filter(item => item.category_name === this.filterCat);
+                },
+
+                // Logic Execution Matrix Methods
+                init() {
+                    console.log('Stock Engine Matrix initialized safely!');
+                },
+                verifyLogin() {
+                    if(this.loginForm.username) {
+                        this.isAuthenticated = true;
+                        this.currentUsername = this.loginForm.username;
+                    } else {
+                        this.loginError = 'Invalid credentials verification footprint.';
+                    }
+                },
+                logout() {
+                    this.isAuthenticated = false;
+                    this.loginForm.username = '';
+                    this.loginForm.password = '';
+                },
+                addItemToOrder() {
+                    if(!this.orderDesk.selectedItemId) return;
+                    const item = this.items.find(i => i.id === this.orderDesk.selectedItemId);
+                    if(item) {
+                        this.orderDesk.basket.push({ name: item.name, qty: this.orderDesk.selectedQty || 1 });
+                    }
+                },
+                removeOrderBasketItem(idx) {
+                    this.orderDesk.basket.splice(idx, 1);
+                },
+                sendWhatsAppOrder() { alert('Forwarding dispatch payload via WhatsApp Web gateway...'); },
+                approveIncomingOrder(order) { order.status = 'RECEIVED'; },
+                addInward() { alert('Manual consignment ingested successfully.'); },
+                deductOutward() { alert('Allocation units deducted from local vector matrix.'); },
+                shiftOrder(id, direction) { console.log(`Moving row element ${id} state index ${direction}`); },
+                changeItemName(item) { alert(`Editing element details context for: ${item.name}`); },
+                modifyThreshold(item) { alert(`Altering safety limit for: ${item.name}`); },
+                purgeItem(id) { this.items = this.items.filter(i => i.id !== id); },
+                submitNewItem() { alert('Appending tracking target parameters to cloud state storage.'); this.showNewItemModal = false; },
+                downloadInwardSupplierReport() { alert('Compiling supplier delivery reports to XML schema stream.'); },
+                downloadExcelReport() { alert('Parsing ledger dataset history rows into standard open-xml worksheet binary data stream.'); }
+            }));
+        });
+    </script>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
     <style>[x-cloak] { display: none !important; }</style>
 </head>
-<body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp()" x-init="init()">
+<body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp()">
 
     <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
         <div class="bg-white p-8 rounded-xl max-w-sm w-full shadow-2xl border border-slate-200 text-center">
@@ -51,6 +138,7 @@
                 <p class="text-xs text-slate-500">Logged in as <span class="font-bold text-slate-800" x-text="currentUsername"></span> <span class="mx-2 text-slate-300">|</span> Security Scope: <span class="bg-slate-100 text-slate-800 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-slate-200" x-text="currentRole"></span></p>
             </div>
             <div class="flex gap-2 items-center flex-wrap">
+                <button @click="showNewItemModal = true" class="text-xs bg-slate-800 hover:bg-slate-900 text-white px-3 py-2 rounded-lg font-bold tracking-wide transition shadow-sm">➕ Add Custom Item Target</button>
                 <button @click="showAccountModal = true" class="text-xs bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2 rounded-lg font-bold tracking-wide transition shadow-sm">👤 Security Settings</button>
                 <button x-show="currentRole === 'admin'" @click="showUserAdminModal = true" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg font-bold tracking-wide border border-indigo-200 transition shadow-sm">🧑‍💼 Operator Management</button>
                 <button x-show="currentRole === 'admin' || currentRole === 'inward'" @click="downloadInwardSupplierReport()" class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg font-bold tracking-wide flex items-center gap-1.5 transition shadow-md">🧾 Supplier Inward Report (.xlsx)</button>
