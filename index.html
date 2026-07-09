@@ -4,22 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Restaurant Stock Manager & Event Control Engine</title>
-    
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script type="module" src="app.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    
     <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp()" x-init="init()">
 
+    <!-- Authentication Screen Overlay -->
     <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
         <div class="bg-white p-8 rounded-xl max-w-sm w-full shadow-2xl border border-slate-200 text-center">
             <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-4 border border-amber-200">🔑</div>
             <h3 class="text-xl font-extrabold tracking-tight text-slate-800 uppercase mb-1">System Portal</h3>
             <p class="text-xs text-slate-500 mb-6">Inventory Ledger Authentication</p>
-            
             <form @submit.prevent="verifyLogin()" class="space-y-4 text-left text-xs">
                 <div>
                     <label class="block font-bold mb-1 text-slate-700 tracking-wide uppercase text-[10px]">Operator Username</label>
@@ -35,17 +33,28 @@
         </div>
     </div>
 
+    <!-- Active Management Dashboard Workspace -->
     <main class="max-w-6xl mx-auto p-4 space-y-6" x-show="isAuthenticated" x-cloak>
-        
         <template x-if="ready">
             <div class="space-y-6">
                 
-                <div x-show="eventAlertMessage" x-transition class="bg-amber-500 border-2 border-amber-600 p-3.5 rounded-xl flex items-center gap-3 shadow-md animate-pulse" x-cloak>
-                    <span class="text-xl">⚠️</span>
-                    <div class="text-slate-950 text-xs font-black uppercase tracking-wider flex-1">
-                        <span class="underline">BIG FUNCTION / EVENT SYSTEM ALERT:</span> 
-                        <span class="font-bold font-mono" x-text="eventAlertMessage"></span>
-                    </div>
+                <!-- 🟢 MULTI-EVENT SYSTEM ALERTS BANNER STACK -->
+                <!-- Loops exclusively through non-expired future/present rows and shows structured event metrics -->
+                <div class="space-y-3" x-show="activeLiveEvents.length > 0" x-cloak>
+                    <template x-for="ev in activeLiveEvents" :key="ev.id">
+                        <div class="bg-amber-500 border-2 border-amber-600 p-4 rounded-xl flex items-start gap-3.5 shadow-md">
+                            <span class="text-2xl mt-0.5">🚨</span>
+                            <div class="flex-1 text-slate-950 text-xs uppercase">
+                                <div class="font-black text-sm tracking-tight mb-1" x-text="ev.title"></div>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 font-bold bg-amber-600/20 p-2 rounded-lg border border-amber-600/30">
+                                    <div>📅 Date: <span class="font-mono" x-text="new Date(ev.date).toLocaleDateString('en-GB')"></span></div>
+                                    <div>⏰ Time: <span class="font-mono" x-text="ev.time"></span></div>
+                                    <div>👥 Expected Pax: <span class="font-mono font-black text-sm" x-text="ev.pax"></span></div>
+                                    <div>📦 Core Items: <span class="font-sans font-extrabold" x-text="ev.target_items || 'All Kitchen Rows'"></span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
                 </div>
 
                 <header class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center gap-4 flex-wrap">
@@ -54,7 +63,8 @@
                         <p class="text-xs text-slate-500">Logged in as <span class="font-bold text-slate-800" x-text="currentUsername"></span> <span class="mx-2 text-slate-300">|</span> Security Scope: <span class="bg-slate-100 text-slate-800 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-slate-200" x-text="currentRole"></span></p>
                     </div>
                     <div class="flex gap-2 items-center flex-wrap">
-                        <button x-show="currentRole === 'admin'" @click="setBigFunctionEventAlert()" class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg font-bold tracking-wide shadow-sm transition">🚨 Setup Event Alert</button>
+                        <!-- 🟢 NEW ADITIONAL MODAL CONTROL LINK FOR EVENTS SETUP -->
+                        <button x-show="currentRole === 'admin'" @click="showEventAdminModal = true" class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg font-bold tracking-wide shadow-sm transition">📋 Setup Function Alerts</button>
                         <button @click="showAccountModal = true" class="text-xs bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2 rounded-lg font-bold tracking-wide transition shadow-sm">👤 Security Settings</button>
                         <button x-show="currentRole === 'admin'" @click="showUserAdminModal = true" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg font-bold tracking-wide border border-indigo-200 transition shadow-sm">🧑‍💼 Operator & Category Management</button>
                         <button x-show="currentRole === 'admin' || currentRole === 'inward'" @click="downloadInwardSupplierReport()" class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg font-bold tracking-wide flex items-center gap-1.5 transition shadow-md">🧾 Supplier Inward Report (.xlsx)</button>
@@ -63,6 +73,7 @@
                     </div>
                 </header>
 
+                <!-- Supplier Purchase Order Desk -->
                 <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'order'">
                     <div class="text-xs font-black uppercase tracking-wider text-indigo-800 border-b border-slate-100 pb-2">📝 Automated Supplier Purchase Order Desk</div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
@@ -107,6 +118,7 @@
                     </div>
                 </section>
 
+                <!-- Order Verification Desk -->
                 <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
                     <div class="flex justify-between items-center border-b border-slate-100 pb-2 flex-wrap gap-2">
                         <div class="text-xs font-black uppercase tracking-wider text-emerald-800">📦 Purchase Orders Verification Workspace</div>
@@ -162,6 +174,7 @@
                     </div>
                 </section>
 
+                <!-- Manual Operation Desks -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="currentRole === 'admin' || currentRole === 'inward' || currentRole === 'outward'">
                     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
                         <div class="text-xs font-bold uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2">📥 Log New Inward Manual Consignment</div>
@@ -228,6 +241,7 @@
                     </div>
                 </div>
 
+                <!-- Ledger Board Table -->
                 <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
                         <div class="space-y-0.5">
@@ -258,52 +272,25 @@
                             <tbody class="divide-y divide-slate-200 bg-white">
                                 <template x-for="item in processedItems" :key="item.id">
                                     <tr :class="item.stock <= item.threshold ? 'bg-rose-50/60 font-medium' : 'hover:bg-slate-50/70'" class="transition">
-                                        
                                         <td class="py-5 px-4 text-center space-x-1 whitespace-nowrap" x-show="currentRole === 'admin'">
                                             <button @click="shiftOrder(item.id, 'up')" class="text-slate-400 hover:text-slate-800 font-bold px-0.5">▲</button>
                                             <button @click="shiftOrder(item.id, 'down')" class="text-slate-400 hover:text-slate-800 font-bold px-0.5">▼</button>
                                         </td>
-                                        
                                         <td class="py-5 px-4 font-extrabold text-slate-900 text-sm tracking-tight whitespace-nowrap" x-text="item.name"></td>
-                                        
                                         <td class="py-5 px-4 text-center font-mono text-sm font-black tracking-wide whitespace-nowrap" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="item.stock"></td>
-                                        
-                                        <!-- Locate the Status Vector column cell inside index.html and update it to this: -->
-<td class="py-5 px-4 whitespace-nowrap">
-    <!-- 1. Depleted State (Stock is exactly 0) -->
-    <template x-if="item.stock === 0">
-        <span class="bg-rose-100 text-rose-800 border border-rose-200 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">
-            Out of stock
-        </span>
-    </template>
-    
-    <!-- 2. Breach State (Stock is greater than 0, but less than or equal to threshold limit) -->
-    <template x-if="item.stock > 0 && item.stock <= item.threshold">
-        <span class="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">
-            Low stock
-        </span>
-    </template>
-    
-    <!-- 3. Safe State (Stock is healthy and above threshold parameters) -->
-    <template x-if="item.stock > item.threshold">
-        <span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">
-            Healthy
-        </span>
-    </template>
-</td>
-                                        
+                                        <td class="py-5 px-4 whitespace-nowrap">
+                                            <template x-if="item.stock === 0"><span class="bg-rose-100 text-rose-800 border border-rose-200 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">Out of stock</span></template>
+                                            <template x-if="item.stock > 0 && item.stock <= item.threshold"><span class="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">Low stock</span></template>
+                                            <template x-if="item.stock > item.threshold"><span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">Healthy</span></template>
+                                        </td>
                                         <td class="py-5 px-4 font-bold text-slate-600 text-xs whitespace-nowrap">
                                             <span class="bg-slate-50 px-2.5 py-1 rounded border border-slate-200" x-text="item.supplier_name || 'General Vendor'"></span>
                                         </td>
-                                        
                                         <td class="py-5 px-4 text-center font-mono font-bold text-slate-700 text-sm whitespace-nowrap" x-show="currentRole !== 'readonly'" x-text="'₹' + (item.mrp || 0)"></td>
-                                        
                                         <td class="py-5 px-4 whitespace-nowrap">
                                             <span :style="'background-color: ' + item.bg + '; color: ' + item.text_color + '; border-color: ' + item.border" class="px-3 py-1 rounded-md text-[10px] uppercase font-black border tracking-wide shadow-3xs" x-text="item.emoji + ' ' + item.category_name"></span>
                                         </td>
-                                        
                                         <td class="py-5 px-4 text-center font-mono text-slate-400 font-bold text-xs whitespace-nowrap" x-text="item.threshold"></td>
-                                        
                                         <td class="py-5 px-4 text-right space-x-2 whitespace-nowrap font-bold" x-show="currentRole === 'admin' || currentRole === 'inward'">
                                             <button @click="changeItemName(item)" class="text-slate-600 hover:text-indigo-600 text-[11px] transition">✏️ Edit Details</button>
                                             <span class="text-slate-300 font-normal">|</span>
@@ -318,6 +305,69 @@
                     </div>
                 </section>
                 
+                <!-- 🟢 NEW MODAL CONSOLE: MASTER STRUCTURED EVENT MANAGER (ADMIN EXCLUSIVE) -->
+                <div x-show="showEventAdminModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
+                    <div class="bg-white p-6 rounded-xl max-w-xl w-full shadow-2xl space-y-5 border border-slate-200 max-h-[85vh] overflow-y-auto">
+                        <div class="flex justify-between items-center border-b pb-2">
+                            <h3 class="text-sm font-black uppercase text-slate-800 tracking-wider">📋 Function Event Broadcast Directory</h3>
+                            <button @click="showEventAdminModal = false" class="text-slate-400 text-sm font-bold">✕</button>
+                        </div>
+
+                        <!-- Sub-Segment A: Active Events Table List (Provides deletion capability) -->
+                        <div class="space-y-2">
+                            <div class="text-[11px] font-black text-slate-400 uppercase tracking-wide">Live Active Alerts Registry</div>
+                            <div class="border rounded-lg divide-y bg-slate-50 max-h-40 overflow-y-auto overflow-x-hidden">
+                                <template x-for="ev in events" :key="ev.id">
+                                    <div class="p-2.5 bg-white flex justify-between items-center text-xs gap-3">
+                                        <div class="space-y-0.5">
+                                            <div class="font-extrabold text-slate-800 text-sm" x-text="ev.title"></div>
+                                            <div class="text-[10px] text-slate-500 font-medium font-mono" x-text="'Date: ' + ev.date + ' | Time: ' + ev.time + ' | Pax: ' + ev.pax"></div>
+                                        </div>
+                                        <button @click="purgeEventAlert(ev.id)" class="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold border border-rose-200 px-2.5 py-1 rounded text-[11px] transition whitespace-nowrap">
+                                            Delete Alert
+                                        </button>
+                                    </div>
+                                </template>
+                                <template x-if="events.length === 0">
+                                    <div class="p-4 text-center text-slate-400 font-mono text-[11px]">No operational event alerts deployed.</div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Sub-Segment B: Provision Structured Forms Group -->
+                        <form @submit.prevent="submitNewEvent()" class="space-y-3 border-t pt-3">
+                            <div class="text-[11px] font-black text-slate-400 uppercase tracking-wide">Deploy Fresh Event Parameters</div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                                <div class="md:col-span-2">
+                                    <label class="block font-bold text-slate-600 mb-0.5">Event Function Heading Title</label>
+                                    <input type="text" x-model="formEvent.title" placeholder="e.g. Marriage Banquet or Corporate Dinner" class="border p-2 rounded bg-slate-50 w-full font-bold">
+                                </div>
+                                <div>
+                                    <label class="block font-bold text-slate-600 mb-0.5">Scheduled Target Date</label>
+                                    <input type="date" x-model="formEvent.date" class="border p-2 rounded bg-slate-50 w-full font-mono">
+                                </div>
+                                <div>
+                                    <label class="block font-bold text-slate-600 mb-0.5">Scheduled Time Slot</label>
+                                    <input type="text" x-model="formEvent.time" placeholder="e.g. 7:00 PM onwards" class="border p-2 rounded bg-slate-50 w-full font-mono">
+                                </div>
+                                <div>
+                                    <label class="block font-bold text-slate-600 mb-0.5">Expected Guest Count (Pax)</label>
+                                    <input type="number" x-model.number="formEvent.pax" placeholder="e.g. 350" class="border p-2 rounded bg-slate-50 w-full font-mono font-bold">
+                                </div>
+                                <div>
+                                    <label class="block font-bold text-slate-600 mb-0.5">Critical Inventory Items Needed</label>
+                                    <input type="text" x-model="formEvent.targetItems" placeholder="e.g. Paneer, Dairy, Disposables" class="border p-2 rounded bg-slate-50 w-full">
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full bg-indigo-700 hover:bg-indigo-800 text-white font-black py-2.5 rounded-lg text-xs uppercase tracking-wider transition shadow-sm">
+                                Broadcast Event Notification to Workspace Terminals
+                            </button>
+                        </form>
+                        <button @click="showEventAdminModal = false" class="w-full bg-slate-100 text-xs font-bold py-2 rounded-lg border">Close Panel</button>
+                    </div>
+                </div>
+
+                <!-- Passphrase Modal -->
                 <div x-show="showAccountModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <form @submit.prevent="changeMyPassword()" class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
                         <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">👤 Security Key Settings</h3>
@@ -334,6 +384,7 @@
                     </form>
                 </div>
 
+                <!-- Unified Directory Suite -->
                 <div x-show="showUserAdminModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl space-y-5 border border-slate-200 max-h-[90vh] overflow-y-auto">
                         <div>
@@ -407,6 +458,7 @@
                     </div>
                 </div>
 
+                <!-- Portfolio Creation Modal -->
                 <div x-show="showNewItemModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
                         <h3 class="text-sm font-black uppercase text-slate-800 tracking-wide border-b pb-1">➕ Append Portfolio Tracking row</h3>
