@@ -473,6 +473,19 @@ window.stockApp = function() {
             const ws = XLSX.utils.aoa_to_sheet(matrixData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "30-Day LIFO Ledger");
             const colWidths = [{wch: 24}, {wch: 14}]; for (let i = 0; i < 60; i++) colWidths.push({ wch: i % 2 === 0 ? 14 : 26 });
             ws['!cols'] = colWidths; XLSX.writeFile(wb, `Stock_Rolling_Report_${getLocalDateString(0)}.xlsx`);
+            / 🟢 THE FIX: Wait until this module runs, then announce stockApp is available
+document.addEventListener('DOMContentLoaded', () => {
+    // Register the component on Alpine's global object hook directly
+    if (window.Alpine) {
+        window.Alpine.data('stockApp', window.stockApp);
+    } else {
+        // If Alpine hasn't run its script block yet, wait for it to wake up
+        document.addEventListener('alpine:init', () => {
+            window.Alpine.data('stockApp', window.stockApp);
+        });
+    }
+    console.log("🚀 stockApp successfully bound to global Alpine execution hooks.");
+});
         }
     };
 };
