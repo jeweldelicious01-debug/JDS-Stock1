@@ -12,6 +12,7 @@
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp()" x-init="init()">
 
+    <!-- Authentication Screen Overlay -->
     <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
         <div class="bg-white p-8 rounded-xl max-w-sm w-full shadow-2xl border border-slate-200 text-center">
             <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-4 border border-amber-200">🔑</div>
@@ -32,8 +33,10 @@
         </div>
     </div>
 
+    <!-- Active Management Dashboard Dashboard Workspace -->
     <main class="max-w-6xl mx-auto p-4 space-y-6" x-show="isAuthenticated" x-cloak>
         
+        <!-- Safety Guard Loop protects workspace properties from early load failures -->
         <template x-if="ready">
             <div class="space-y-6">
                 
@@ -51,6 +54,7 @@
                     </div>
                 </header>
 
+                <!-- Supplier Purchase Order Desk -->
                 <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'order'">
                     <div class="text-xs font-black uppercase tracking-wider text-indigo-800 border-b border-slate-100 pb-2">📝 Automated Supplier Purchase Order Desk</div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
@@ -69,6 +73,7 @@
                                     <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Select Product Item (Filtered by Supplier)</label>
                                     <select x-model="orderDesk.selectedItemId" :disabled="!orderDesk.supplierId" class="border p-2 rounded-md w-full bg-white font-medium text-slate-700 disabled:opacity-50">
                                         <option value="">-- Choose Product --</option>
+                                        <!-- 🟢 FIXED: Now loops through filtered list instead of master list -->
                                         <template x-for="item in filteredOrderDeskItems" :key="item.id">
                                             <option :value="item.id" x-text="item.name"></option>
                                         </template>
@@ -95,6 +100,7 @@
                     </div>
                 </section>
 
+                <!-- Order Verification & Stock Ingest Desk -->
                 <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3" x-show="currentRole === 'admin' || currentRole === 'inward'">
                     <div class="text-xs font-black uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2">📦 Pending Orders Verification & Stock Approval Desk</div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -120,12 +126,13 @@
                                 </div>
                                 <button @click="approveIncomingOrder(order)" x-show="order.status === 'PENDING'" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2 rounded-lg transition uppercase tracking-wider text-[11px] shadow-sm">
                                     ✔ Approve Consignment & Ingest Stock
-</button>
+                                </button>
                             </div>
                         </template>
                     </div>
                 </section>
 
+                <!-- Manual Operation Desks -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="currentRole === 'admin' || currentRole === 'inward' || currentRole === 'outward'">
                     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
                         <div class="text-xs font-bold uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2">📥 Log New Inward Manual Consignment</div>
@@ -143,6 +150,7 @@
                                 <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Select Product (Filtered)</label>
                                 <select x-model="formInward.itemId" :disabled="!formInward.supplierName" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-medium text-slate-700 disabled:opacity-50">
                                     <option value="">-- Select Product --</option>
+                                    <!-- 🟢 FIXED: Correctly configured loop context -->
                                     <template x-for="item in filteredInwardItems" :key="item.id">
                                         <option :value="item.id" x-text="item.name"></option>
                                     </template>
@@ -154,6 +162,9 @@
                             </div>
                         </div>
                         <button @click="addInward()" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2.5 rounded-lg shadow-sm transition uppercase tracking-wider mt-2">Commit Inward Entry to Cloud</button>
+                        <div class="pt-3 border-t border-dashed border-slate-200 flex flex-col gap-3" x-show="currentRole === 'admin'">
+                            <button @click="showNewItemModal = true" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 rounded-md transition shadow-xs text-xs">➕ Add New Item Portfolio Axis</button>
+                        </div>
                     </div>
 
                     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'outward'">
@@ -176,6 +187,7 @@
                     </div>
                 </div>
 
+                <!-- Ledger Infrastructure Board Table -->
                 <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
                         <div class="space-y-0.5">
@@ -235,6 +247,7 @@
                     </div>
                 </section>
                 
+                <!-- Security Passphrase Modal -->
                 <div x-show="showAccountModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <form @submit.prevent="changeMyPassword()" class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
                         <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">👤 Security Key Settings</h3>
@@ -251,6 +264,7 @@
                     </form>
                 </div>
 
+                <!-- Operator Accounts Admin Directory Panel -->
                 <div x-show="showUserAdminModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl space-y-4 border border-slate-200 max-h-[85vh] overflow-y-auto">
                         <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">🧑‍💼 Authorized System Operators Directory</h3>
@@ -293,6 +307,7 @@
                     </div>
                 </div>
 
+                <!-- Portfolio Entry Modal Window -->
                 <div x-show="showNewItemModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
                         <h3 class="text-sm font-black uppercase text-slate-800 tracking-wide border-b pb-1">➕ Append Portfolio Tracking row</h3>
