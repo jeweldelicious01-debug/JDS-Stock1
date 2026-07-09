@@ -1,3 +1,9 @@
+/**
+ * Restaurant Stock Manager & Event Control Engine - Core Logic Module
+ * Framework Bindings: Firebase Firestore SDK v10+, Alpine.js v3 Integration Engine
+ * Architectural Profile: Enterprise Real-Time Cloud Synchronization Matrix
+ */
+
 import { dbFs } from './firebase-config.js'; 
 import {
     collection,
@@ -10,17 +16,33 @@ import {
     onSnapshot,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
 
+// Key constant utilized to safely partition separate local sessionStorage buckets
 const SESSION_KEY = 'restaurantStockSession_v1';
+
+/**
+ * Utility Helper: Shorthand abstraction wrapper around Firestore's collection instantiation module
+ * @param {string} name - Name target of the target Firestore database collection segment
+ */
 const colRef = (name) => collection(dbFs, name);
 
+/**
+ * Utility Cryptography Engine: Generates an asymmetrical SHA-256 string hash mapping signature
+ * Used safely on client view environments for localized credential cross-verifications
+ * @param {string} text - Plain text variable targeted for binary encryption hashing
+ */
 async function sha256(text) {
     const enc = new TextEncoder().encode(text);
     const hashBuf = await crypto.subtle.digest('SHA-256', enc);
     return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * Database Seeding Strategy Rule: Checks Firestore on boot and constructs initial master documents
+ * Provisions fallbacks if standard data indices are completely blank or uninitialized
+ */
 async function seedIfEmpty() {
     try {
+        // Step 1: Analyze user collection records
         const usersSnap = await getDocs(colRef('users'));
         if (usersSnap.empty) {
             const adminHash = await sha256('ChangeMe123!');
@@ -29,6 +51,7 @@ async function seedIfEmpty() {
             await setDoc(doc(dbFs, 'users', 'inward-seed'), { username: 'inward', passwordHash: await sha256('Inward123!'), role: 'inward' });
         }
 
+        // Step 2: Establish the 13 foundational kitchen inventory tracking categories
         const catSnap = await getDocs(colRef('categories'));
         if (catSnap.size < 13) {
             const defaultCategories = [
@@ -51,31 +74,33 @@ async function seedIfEmpty() {
             }
         }
 
+        // Step 3: Populate baseline structural vendor records
         const supSnap = await getDocs(colRef('suppliers'));
         if (supSnap.empty) {
             await addDoc(colRef('suppliers'), { name: 'Laxmi Traders', phone: '919999999999' });
             await addDoc(colRef('suppliers'), { name: 'Balaji Food Products', phone: '918888888888' });
         }
     } catch (e) {
-        console.warn("Seeding bypassed: ", e);
+        console.warn("Seeding initialization bypassed safely: ", e);
     }
 }
 
+/**
+ * Master Alpine Component Constructor Object
+ * Exposed via global window instance namespace layout architecture
+ */
 window.stockApp = function() {
     return {
+        // --- REACTIVE ARRAY STORAGE REGISTRIES ---
         categories: [],
         items: [],
-        importantNotes: [],
         logs: [],
         users: [],
         suppliers: [], 
         purchaseOrders: [], 
+        events: [], // Holds live event alert rows streamed down from Firestore
         
-        // 🟢 NEW STATE ARRAYS: Real-time Multi-Event Engine Trackers
-        events: [],
-        formEvent: { title: '', date: '', time: '', pax: '', targetItems: '' },
-        showEventAdminModal: false,
-        
+        // --- STRUCTURAL STATUS STATE TRACKERS ---
         ready: false,
         isAuthenticated: false,
         authChecking: true,
@@ -83,15 +108,18 @@ window.stockApp = function() {
         currentUsername: '',
         currentUserId: null,
         filterCat: 'all',
+        orderViewTab: 'pending', // Toggles order desk state views: 'pending' | 'history'
         
-        orderViewTab: 'pending', 
-        
+        // --- REAL-TIME DATA CAPTURE OBJECT BINDINGS ---
         loginForm: { username: '', password: '' },
         loginError: '',
         formInward: { itemId: '', qty: '', supplierName: '' }, 
         formOutward: { itemId: '', department: 'Indian', qty: '' },
-        formNote: { itemName: '', pax: '', dateLabel: '' },
         
+        // Form object context tracking for scheduling complex high-pax catered events
+        formEvent: { title: '', date: '', time: '', pax: '', targetItems: '' },
+        
+        // --- PURCHASE ORDER BASKET MATRIX ---
         orderDesk: {
             supplierId: '',
             selectedItemId: '',
@@ -99,16 +127,21 @@ window.stockApp = function() {
             basket: [] 
         }, 
         
+        // --- SESSION REVERSAL TRANSACTION TRACKERS (UNDO ENGINE) ---
         lastLogId: null,
-        lastLogType: '',
+        lastLogType: '', // Tracks transaction classification signatures: 'INWARD' | 'OUTWARD'
         
+        // --- REACTIVE INTERFACE MODAL CONTROLLERS ---
         showNewItemModal: false,
         showAccountModal: false,
         showUserAdminModal: false,
+        showEventAdminModal: false, // Toggles specialized banquet alert management panel view
         
+        // --- DATA INGESTION BLUEPRINTS ---
         newItemForm: { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' }, 
-        
         newCategoryForm: { name: '', emoji: '📦', paletteIndex: 0 },
+        
+        // Static color configurations schema presets used when saving custom category styles
         paletteOptions: [
             { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af' }, 
             { bg: '#fffbeb', border: '#f59e0b', text: '#92400e' }, 
@@ -125,24 +158,24 @@ window.stockApp = function() {
         newUserError: '',
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
+        /**
+         * Initialize Component: Boots master cloud listeners on real-time channels
+         */
         async init() {
+            // Guarantee base seed layers exist in firestore collection indices
             await seedIfEmpty();
             
+            // Register high-performance real-time query channel snapshots
             onSnapshot(colRef('categories'), (snap) => { this.categories = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
             onSnapshot(colRef('items'), (snap) => { this.items = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
             onSnapshot(colRef('suppliers'), (snap) => { this.suppliers = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a,b) => a.name.localeCompare(b.name)); });
+            onSnapshot(colRef('events'), (snap) => { this.events = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
 
             onSnapshot(colRef('purchase_orders'), (snap) => {
                 this.purchaseOrders = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
                     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             });
-
-            // 🟢 MULTI-EVENT SYNC: Listens to the events collection in real-time
-            onSnapshot(colRef('events'), (snap) => {
-                this.events = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-            });
             
-            onSnapshot(colRef('notes'), (snap) => { this.importantNotes = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
             onSnapshot(colRef('logs'), (snap) => { 
                 const rawLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                 this.logs = rawLogs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 50).map((l) => {
@@ -150,6 +183,8 @@ window.stockApp = function() {
                     return { ...l, item_name: matchedItem ? matchedItem.name : 'Unknown' };
                 });
             });
+
+            // Evaluates platform operator state and fires session check triggers upon loading sequence completion
             onSnapshot(colRef('users'), (snap) => {
                 this.users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                 if (this.currentUserId) {
@@ -161,6 +196,9 @@ window.stockApp = function() {
             });
         },
 
+        /**
+         * Session Security Controller: Cross-checks browser tokens against memory scopes
+         */
         restoreSession() {
             const session = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
             if (session) {
@@ -172,6 +210,10 @@ window.stockApp = function() {
             this.authChecking = false;
         },
 
+        /**
+         * Computed Data Getter: Computes sorting patterns, applies category filters,
+         * and bubbles warning breaches straight to the top of the workspace dashboard data table grid view.
+         */
         get processedItems() {
             let dataset = this.items.map((i) => {
                 const cat = this.categories.find((c) => c.id === i.category_id) || {};
@@ -185,6 +227,10 @@ window.stockApp = function() {
             });
         },
 
+        /**
+         * Cascading Dropdown Filter 1: Returns items belonging to the selected inward supplier.
+         * Resolves fallback options if legacy items don't have explicit supplier keys attached.
+         */
         get filteredInwardItems() {
             if (!this.formInward.supplierName) return [];
             const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
@@ -194,6 +240,9 @@ window.stockApp = function() {
             });
         },
 
+        /**
+         * Cascading Dropdown Filter 2: Returns items matching the target vendor chosen inside procurement panels.
+         */
         get filteredOrderDeskItems() {
             if (!this.orderDesk.supplierId) return [];
             const vendor = this.suppliers.find(s => String(s.id) === String(this.orderDesk.supplierId));
@@ -205,6 +254,9 @@ window.stockApp = function() {
             });
         },
 
+        /**
+         * Computed Order Tracker Split: Automatically partitions active pending orders from completed transactions.
+         */
         get processedPurchaseOrders() {
             if (this.orderViewTab === 'pending') {
                 return this.purchaseOrders.filter(o => o.status === 'PENDING');
@@ -213,14 +265,21 @@ window.stockApp = function() {
             }
         },
 
-        // 🟢 NEW FILTER GETTER: Automatically drops expired alerts after the event date has passed
+        /**
+         * 🟢 AUTOMATED VANISHING EVENTS FILTER GETTER
+         * Parses and evaluates event date codes dynamically against local machine calendar clocks.
+         * If the event scheduled date is older than today, it automatically filters it out of view.
+         */
         get activeLiveEvents() {
-            const clientDateString = new Date().toISOString().slice(0, 10); // Standard 'YYYY-MM-DD' formatting template
+            const clientDateString = new Date().toISOString().slice(0, 10); // Outputs clean target comparison map 'YYYY-MM-DD'
             return this.events.filter(event => {
-                return event.date >= clientDateString; // Retains event if the target date is today or in the future
+                return event.date >= clientDateString; // Only true if event is today or scheduled for the future
             }).sort((a, b) => a.date.localeCompare(b.date));
         },
 
+        /**
+         * Procurement Handler: Validates and appends item draft rows onto localized request basket arrays
+         */
         addItemToOrder() {
             if (!this.orderDesk.selectedItemId || !this.orderDesk.selectedQty) return alert("Select an item and input quantity.");
             const targetItem = this.items.find(i => String(i.id) === String(this.orderDesk.selectedItemId));
@@ -235,14 +294,22 @@ window.stockApp = function() {
             this.orderDesk.selectedQty = '';
         },
 
+        /**
+         * Procurement Handler: Splices item indexes out of current draft order array collections
+         */
         removeOrderBasketItem(index) { this.orderDesk.basket.splice(index, 1); },
 
+        /**
+         * Integration Engine API: Saves the pending purchase order to the database, converts layout arrays 
+         * into markdown text blocks, and launches an external automated WhatsApp transmission thread window.
+         */
         async sendWhatsAppOrder() {
             if (!this.orderDesk.supplierId || !this.orderDesk.basket.length) return alert("Supplier choice or draft basket is empty.");
             const vendor = this.suppliers.find(s => String(s.id) === String(this.orderDesk.supplierId));
             if (!vendor) return;
 
             try {
+                // Step 1: Write tracking row to cloud to guarantee visibility logs can map it later
                 await addDoc(colRef('purchase_orders'), {
                     supplier_name: vendor.name,
                     items: this.orderDesk.basket,
@@ -251,6 +318,7 @@ window.stockApp = function() {
                     created_by: this.currentUsername
                 });
 
+                // Step 2: Formulate plain markdown structural format for suppliers
                 let textMessage = `📋 *PURCHASE ORDER: ${vendor.name.toUpperCase()}*\n`;
                 textMessage += `Date: ${new Date().toLocaleDateString('en-GB')}\n`;
                 textMessage += `------------------------------------\n`;
@@ -271,6 +339,11 @@ window.stockApp = function() {
             }
         },
 
+        /**
+         * Inward Verification System: Processes arrived delivery orders. Supports modifying input quantities 
+         * to handle partial deliveries, automatically calculating differences, updating warehouse balances, 
+         * and marking history states as RECEIVED, PARTIAL, or DECLINED cleanly.
+         */
         async approveIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
             if (!confirm(`Confirm stock ingestion from ${order.supplier_name}? Live balances will update based on the quantities listed below.`)) return;
@@ -287,20 +360,25 @@ window.stockApp = function() {
                     const targetItem = this.items.find(i => String(i.id) === String(record.id));
                     if (targetItem && arrivedQty > 0) {
                         hasReceivedItems = true;
+                        // Mutation Transaction: Commit physical count updates straight to live cloud storage balance properties
                         await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: Number(targetItem.stock || 0) + arrivedQty });
                         await addDoc(colRef('logs'), { type: 'INWARD', item_id: targetItem.id, qty: arrivedQty, supplier_name: order.supplier_name, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
                     }
                 }
 
+                // Conditional Evaluation: Flags structural archival statuses based on delivery accuracy outcomes
                 let finalStatus = 'RECEIVED';
                 if (hasMissingItems && hasReceivedItems) finalStatus = 'PARTIAL';
-                else if (!hasReceivedItems) finalStatus = FinalStatus = 'DECLINED';
+                else if (!hasReceivedItems) finalStatus = 'DECLINED';
 
                 await updateDoc(doc(dbFs, 'purchase_orders', order.id), { status: finalStatus, items: order.items, resolved_at: new Date().toISOString(), resolved_by: this.currentUsername });
                 alert(`Order marked as [${finalStatus}]. Balances synchronized cleanly.`);
             } catch (error) { alert("Approval processing error: " + error.message); }
         },
 
+        /**
+         * Inward Verification System: Rejects a pending consignment entirely, moving it out of the active log desk views
+         */
         async declineIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
             if (!confirm(`Are you sure you want to DECLINE and cancel this order from ${order.supplier_name}?`)) return;
@@ -310,36 +388,46 @@ window.stockApp = function() {
             } catch (error) { alert("Error canceling order: " + error.message); }
         },
 
-        // 🟢 NEW ENGINE METHOD: Provisions structured banquet tracking rows straight to Cloud Firestore
+        /**
+         * 🟢 NEW MULTI-EVENT WRITER METHOD
+         * Provisions highly structured caterer allocation rows straight to the cloud events repository schema.
+         */
         async submitNewEvent() {
             const { title, date, time, pax, targetItems } = this.formEvent;
             if (!title.trim() || !date || !time || !pax) {
-                return alert("Title, Date, Scheduled Time, and Expected Pax counts are required fields.");
+                return alert("Title, Date, Time, and Pax fields are strictly mandatory parameters.");
             }
             try {
                 await addDoc(colRef('events'), {
                     title: title.trim(),
-                    date: date, // Tracks as standardized string 'YYYY-MM-DD'
-                    time: time,
+                    date: date, // Saved clean as standard picker date maps: 'YYYY-MM-DD'
+                    time: time.trim(),
                     pax: parseInt(pax) || 0,
                     target_items: targetItems.trim(),
                     created_at: new Date().toISOString(),
                     created_by: this.currentUsername
                 });
-                alert("🎯 New Event Alert registered successfully across your operations desks!");
+                alert("🎯 Dynamic banquet alert distributed successfully to all network dashboard overlays!");
                 this.formEvent = { title: '', date: '', time: '', pax: '', targetItems: '' };
             } catch (e) {
                 alert("Cloud deployment failure: " + e.message);
             }
         },
 
-        // 🟢 NEW ENGINE METHOD: Deletes any custom event alert manually from the directory panel
+        /**
+         * 🟢 MULTI-EVENT REMOVER DELETER AXIS
+         * Direct manual override deletion command handler allowing administrators to strip an active notice row early.
+         */
         async purgeEventAlert(eventId) {
-            if (confirm("Permanently purge this event alert notification from all dashboard terminals?")) {
+            if (confirm("Permanently purge this event alert from the shared system grid tables?")) {
                 await deleteDoc(doc(dbFs, 'events', eventId));
             }
         },
 
+        /**
+         * Authentication Controller: Intercepts logins, validates passwords against cryptographically hashed hashes,
+         * and mounts fresh data state views inside localized session caches.
+         */
         async verifyLogin() {
             this.loginError = '';
             const { username, password } = this.loginForm;
@@ -351,9 +439,15 @@ window.stockApp = function() {
             sessionStorage.setItem(SESSION_KEY, JSON.stringify({ userId: user.id }));
         },
 
+        /**
+         * Authentication Controller: Flushes browser session states and reduces user authorization roles to Read-Only
+         */
         logout() { sessionStorage.removeItem(SESSION_KEY); this.isAuthenticated = false; this.currentRole = 'readonly'; this.currentUsername = ''; this.currentUserId = null; },
-        async deleteNote(noteId) { await deleteDoc(doc(dbFs, 'notes', noteId)); },
         
+        /**
+         * Asset Manager Prompt: Standard configuration wizard sequence. Updates product descriptions,
+         * links items to custom suppliers via simple coded listings, and edits MRP values in single operational runs.
+         */
         async changeItemName(item) {
             let updatedName = prompt(`[1/3] Update Name for "${item.name}":`, item.name);
             if (updatedName === null) return;
@@ -392,6 +486,10 @@ window.stockApp = function() {
             if (promptVal !== null) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parseInt(promptVal) || 0 });
         },
         async purgeItem(id) { if (confirm('Purge item entry?')) await deleteDoc(doc(dbFs, 'items', id)); },
+        
+        /**
+         * Re-ordering Sorting Utility: Shifts display parameters and adjusts index sorting weights across Firestore sheets
+         */
         async shiftOrder(id, direction) {
             const sorted = [...this.items].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
             const idx = sorted.findIndex((i) => i.id === id); if (idx === -1) return;
@@ -400,6 +498,9 @@ window.stockApp = function() {
             await updateDoc(doc(dbFs, 'items', sorted[swapIdx].id), { order_index: sorted[idx].order_index || 0 });
         },
 
+        /**
+         * Portfolio Handler: Saves new physical item lines into localized stock tracking structures
+         */
         async submitNewItem() {
             if (!this.newItemForm.name.trim() || !this.newItemForm.categoryId || !this.newItemForm.supplierName) return alert("Please map all tags.");
             const maxOrder = this.items.reduce((m, i) => Math.max(m, i.order_index || 0), 0);
@@ -408,6 +509,10 @@ window.stockApp = function() {
             this.showNewItemModal = false;
         },
 
+        /**
+         * Portfolio Customizer Method: Builds entirely custom category blocks dynamically from client views.
+         * Generates text badge style maps matching selected visual color options and saves them live.
+         */
         async submitNewCategory() {
             if (!this.newCategoryForm.name.trim() || !this.newCategoryForm.emoji.trim()) return alert("Fields required.");
             const standardizedId = this.newCategoryForm.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -421,6 +526,9 @@ window.stockApp = function() {
             } catch (err) { alert(err.message); }
         },
 
+        /**
+         * Bulk Data Parser Engine: Deconstructs raw CSV matrices and updates cloud entities sequentially
+         */
         async handleCsvUpload(event) {
             const file = event.target.files[0]; if (!file) return;
             const reader = new FileReader();
@@ -446,6 +554,10 @@ window.stockApp = function() {
             reader.readAsText(file);
         },
 
+        /**
+         * Manual Logger Axis (Inward): Updates individual inventory quantities manually.
+         * Saves transaction reference pointers locally to enable quick session rollbacks.
+         */
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) return alert('Select missing fields.');
             const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); if (!target) return alert('Selected item could not be found.');
@@ -465,6 +577,9 @@ window.stockApp = function() {
             } catch (error) { alert("Database write error: " + error.message); }
         },
 
+        /**
+         * Manual Logger Axis (Outward): Records internal stock distributions and line allocation deductions
+         */
         async deductOutward() {
             if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
             const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId)); if (!target) return alert('Item not found.');
@@ -478,6 +593,10 @@ window.stockApp = function() {
             } catch (error) { alert("Error: " + error.message); }
         },
 
+        /**
+         * Reversal Component Logic (Undo / Redo): Looks up the most recent session operation log ID,
+         * performs the inverse calculation on the asset row, and safely deletes the invalid log record from the cloud.
+         */
         async undoLastTransaction() {
             if (!this.lastLogId) return alert("No recent log found.");
             if (!confirm(`Are you sure you want to REVERT your last ${this.lastLogType} entry?`)) return;
@@ -526,6 +645,10 @@ window.stockApp = function() {
             } catch (error) { alert(error.message); }
         },
 
+        /**
+         * Financial Audit Tool: Regroups historical transaction rows by vendor name properties
+         * and writes complete accounting tables cleanly into structured .xlsx spread documents.
+         */
         downloadInwardSupplierReport() {
             const inwards = this.logs.filter(l => l.type === 'INWARD'); if (!inwards.length) return alert("No inward data.");
             const supplierGroups = {};
@@ -548,6 +671,10 @@ window.stockApp = function() {
             XLSX.writeFile(wb, `Supplier_Inward_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
         },
 
+        /**
+         * Management Dashboard Report: Compiles stock histories from the last 30 days into 
+         * spreadsheet matrices, tracking inward entries and outward allocations by department names.
+         */
         downloadExcelReport() {
             const getLocalDateString = (offsetDays) => { const d = new Date(); d.setDate(d.getDate() - offsetDays); return d.toISOString().slice(0, 10); };
             const formatHeaderLabel = (dateStr) => { const parts = dateStr.split('-'); if (parts.length !== 3) return dateStr; const dateObj = new Date(parts[0], parts[1] - 1, parts[2]); return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); };
@@ -571,6 +698,8 @@ window.stockApp = function() {
     };
 };
 
+// --- INITIALIZATION INTERCEPT SYNC LAYERS ---
+// Synchronizes modular scripts with DOM lifecycles to prevent timing issues when using deferred loaders
 document.addEventListener('DOMContentLoaded', () => {
     if (window.Alpine) { window.Alpine.data('stockApp', window.stockApp); } 
     else { document.addEventListener('alpine:init', () => { window.Alpine.data('stockApp', window.stockApp); }); }
