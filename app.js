@@ -12,7 +12,6 @@ import {
 
 const SESSION_KEY = 'restaurantStockSession_v1';
 const colRef = (name) => collection(dbFs, name);
-const itemSupplier = i.supplier_name || defaultSupplier;
 
 async function sha256(text) {
     const enc = new TextEncoder().encode(text);
@@ -99,7 +98,7 @@ window.stockApp = function() {
             selectedItemId: '',
             selectedQty: '',
             basket: [] 
-        },
+        }, // 🟢 FIXED COMMA: Resolves the Uncaught SyntaxError instantly
         
         showNewItemModal: false,
         showAccountModal: false,
@@ -171,28 +170,21 @@ window.stockApp = function() {
             });
         },
 
-        / 🟢 FULLY DYNAMIC FILTER 1: Inward Manual Dropdown Filter
+        // 🟢 FULLY DYNAMIC CASCADING FILTERS (No hardcoded names!)
         get filteredInwardItems() {
             if (!this.formInward.supplierName) return [];
-            
-            // Dynamically find your first available cloud supplier name as a fallback
             const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
-            
             return this.items.filter(i => {
-                // If item has no supplier yet, fall back to your first supplier automatically
                 const itemSupplier = i.supplier_name || defaultSupplier;
                 return itemSupplier === this.formInward.supplierName;
             });
         },
 
-        // 🟢 FULLY DYNAMIC FILTER 2: Purchase Order Desk Dropdown Filter
         get filteredOrderDeskItems() {
             if (!this.orderDesk.supplierId) return [];
             const vendor = this.suppliers.find(s => String(s.id) === String(this.orderDesk.supplierId));
             if (!vendor) return [];
-            
             const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
-            
             return this.items.filter(i => {
                 const itemSupplier = i.supplier_name || defaultSupplier;
                 return itemSupplier === vendor.name;
@@ -299,7 +291,6 @@ window.stockApp = function() {
         logout() { sessionStorage.removeItem(SESSION_KEY); this.isAuthenticated = false; this.currentRole = 'readonly'; this.currentUsername = ''; this.currentUserId = null; },
         async deleteNote(noteId) { await deleteDoc(doc(dbFs, 'notes', noteId)); },
         
-        // 🟢 WIRED BINDING AXIS: Links edits directly to item's persistent supplier tag
         async changeItemName(item) {
             let updatedName = prompt(`[1/3] Update Name for "${item.name}":`, item.name);
             if (!updatedName?.trim()) return;
@@ -307,7 +298,7 @@ window.stockApp = function() {
             let catList = this.suppliers.map((s, idx) => `${idx + 1}. ${s.name}`).join('\n');
             let vendorChoice = prompt(`[2/3] Assign New Supplier for "${updatedName.trim()}":\n\n${catList}\n\nOr leave blank to keep: "${item.supplier_name || 'None'}"`);
             
-            let finalVendor = item.supplier_name || 'General Vendor';
+            let finalVendor = item.supplier_name || (this.suppliers[0] ? this.suppliers[0].name : 'General Vendor');
             if (vendorChoice?.trim()) {
                 let sIdx = parseInt(vendorChoice) - 1;
                 if (sIdx >= 0 && sIdx < this.suppliers.length) {
@@ -383,7 +374,6 @@ window.stockApp = function() {
             };
             reader.readAsText(file);
         },
-
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) return alert('Select missing fields.');
             const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); if (!target) return alert('Selected item could not be found.');
@@ -401,7 +391,6 @@ window.stockApp = function() {
                 this.formInward = { itemId: '', qty: '', supplierName: '' };
             } catch (error) { alert("Database write error: " + error.message); }
         },
-
         async deductOutward() {
             if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
             const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId)); if (!target) return alert('Item not found.');
@@ -413,7 +402,6 @@ window.stockApp = function() {
                 this.formOutward = { itemId: '', department: 'Indian', qty: '' };
             } catch (error) { alert("Error: " + error.message); }
         },
-
         async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
         async deleteUser(userId) { if (confirm('Delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
         
@@ -434,7 +422,7 @@ window.stockApp = function() {
             await addDoc(colRef('users'), { username: username.trim(), passwordHash: await sha256(password), role });
             this.newUserForm = { username: '', password: '', role: 'inward' };
         },
-
+        
         async promptResetPassword(user) {
             let newPass = prompt(`Enter new password for ${user.username} (Min 6 chars):`);
             if (!newPass || newPass.trim().length < 6) return alert('Min 6 characters required.');
@@ -466,7 +454,6 @@ window.stockApp = function() {
             const ws = XLSX.utils.aoa_to_sheet(sheetMatrix); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Supplier Inward Breakdown");
             XLSX.writeFile(wb, `Supplier_Inward_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
         },
-
         downloadExcelReport() {
             const getLocalDateString = (offsetDays) => { const d = new Date(); d.setDate(d.getDate() - offsetDays); return d.toISOString().slice(0, 10); };
             const formatHeaderLabel = (dateStr) => { const parts = dateStr.split('-'); if (parts.length !== 3) return dateStr; const dateObj = new Date(parts[0], parts[1] - 1, parts[2]); return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); };
