@@ -79,6 +79,12 @@ window.stockApp = function() {
         currentUserId: null,
         filterCat: 'all',
         
+        // 🟢 NEW STATE: Manage Order Desk Tab Views
+        orderViewTab: 'pending', // 'pending' or 'history'
+        
+        // 🟢 NEW STATE: Big Function Global System Notification Alert
+        eventAlertMessage: '',
+        
         loginForm: { username: '', password: '' },
         loginError: '',
         formInward: { itemId: '', qty: '', supplierName: '' }, 
@@ -128,6 +134,12 @@ window.stockApp = function() {
             onSnapshot(colRef('purchase_orders'), (snap) => {
                 this.purchaseOrders = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
                     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            });
+
+            // Real-time tracking loop listener for big event notifications
+            onSnapshot(colRef('system_settings'), (snap) => {
+                const docMatch = snap.docs.find(d => d.id === 'event_alert');
+                if (docMatch) this.eventAlertMessage = docMatch.data().message || '';
             });
             
             onSnapshot(colRef('notes'), (snap) => { this.importantNotes = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
@@ -191,6 +203,15 @@ window.stockApp = function() {
                 const itemSupplier = i.supplier_name || defaultSupplier;
                 return itemSupplier === vendor.name;
             });
+        },
+
+        // 🟢 NEW COMPUTED AXIS: Splits order tables between pending view and history logs
+        get processedPurchaseOrders() {
+            if (this.orderViewTab === 'pending') {
+                return this.purchaseOrders.filter(o => o.status === 'PENDING');
+            } else {
+                return this.purchaseOrders.filter(o => o.status !== 'PENDING');
+            }
         },
 
         addItemToOrder() {
@@ -280,6 +301,20 @@ window.stockApp = function() {
                 await updateDoc(doc(dbFs, 'purchase_orders', order.id), { status: 'DECLINED', resolved_at: new Date().toISOString(), resolved_by: this.currentUsername });
                 alert("Order successfully canceled and marked as DECLINED.");
             } catch (error) { alert("Error canceling order: " + error.message); }
+        },
+
+        // 🟢 NEW METHOD: Trigger dynamic alert warning blocks for massive upcoming party bookings
+        async setBigFunctionEventAlert() {
+            let promptMsg = prompt("Enter Big Function Event Alert parameters (or leave totally blank to wipe alert banner):", this.eventAlertMessage);
+            if (promptMsg === null) return;
+            try {
+                await setDoc(doc(dbFs, 'system_settings', 'event_alert'), {
+                    message: promptMsg.trim(),
+                    updated_at: new Date().toISOString(),
+                    updated_by: this.currentUsername
+                });
+                alert("Global Big Function Notification state successfully distributed.");
+            } catch (e) { alert("Write access failed: " + e.message); }
         },
 
         async verifyLogin() {
