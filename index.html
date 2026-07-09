@@ -101,37 +101,53 @@
                 </section>
 
                 <!-- Order Verification & Stock Ingest Desk -->
-                <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3" x-show="currentRole === 'admin' || currentRole === 'inward'">
-                    <div class="text-xs font-black uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2">📦 Pending Orders Verification & Stock Approval Desk</div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                        <template x-for="order in purchaseOrders" :key="order.id">
-                            <div class="border p-4 rounded-xl space-y-3 transition bg-white" :class="order.status === 'PENDING' ? 'border-amber-300 bg-amber-50/10' : 'border-slate-200 bg-slate-50/50 opacity-70'">
-                                <div class="flex justify-between items-center">
-                                    <div>
-                                        <span class="text-sm font-black text-slate-800" x-text="order.supplier_name"></span>
-                                        <div class="text-[10px] text-slate-400 font-mono" x-text="'Issued by: ' + order.created_by + ' | ' + new Date(order.created_at).toLocaleDateString('en-GB')"></div>
-                                    </div>
-                                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase" :class="order.status === 'PENDING' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'" x-text="order.status === 'PENDING' ? '⏳ Pending Supply' : '✅ Received'"></span>
-                                </div>
-                                <div class="bg-white border rounded-lg p-2.5 divide-y font-mono space-y-1">
-                                    <template x-for="it in order.items">
-                                        <div class="flex justify-between items-center py-1 text-xs">
-                                            <span class="font-sans text-slate-700 font-medium" x-text="it.name"></span>
-                                            <div class="flex items-center gap-1.5">
-                                                <span class="text-slate-400 text-[11px]">Qty:</span>
-                                                <input type="number" x-model.number="it.qty" :disabled="order.status !== 'PENDING'" class="w-14 border text-center rounded p-0.5 bg-slate-50 font-bold text-slate-900 focus:ring-1 focus:ring-emerald-500">
-                                            </div>
-                                        </div>
-                                    </template>
-                                </div>
-                                <button @click="approveIncomingOrder(order)" x-show="order.status === 'PENDING'" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2 rounded-lg transition uppercase tracking-wider text-[11px] shadow-sm">
-                                    ✔ Approve Consignment & Ingest Stock
-                                </button>
-                            </div>
-                        </template>
+                <!-- Locate the Pending Orders section card in index.html and update the inner template loop block to match this layout exactly -->
+<section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3" x-show="currentRole === 'admin' || currentRole === 'inward'">
+    <div class="text-xs font-black uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2">📦 Pending Orders Verification & Stock Approval Desk</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <template x-for="order in purchaseOrders" :key="order.id">
+            <div class="border p-4 rounded-xl space-y-3 transition bg-white" 
+                 :class="order.status === 'PENDING' ? 'border-amber-300 bg-amber-50/10' : order.status === 'DECLINED' ? 'border-rose-200 bg-rose-50/20 opacity-60' : 'border-slate-200 bg-slate-50/50 opacity-70'">
+                
+                <div class="flex justify-between items-center">
+                    <div>
+                        <span class="text-sm font-black text-slate-800" x-text="order.supplier_name"></span>
+                        <div class="text-[10px] text-slate-400 font-mono" x-text="'Issued by: ' + order.created_by + ' | ' + new Date(order.created_at).toLocaleDateString('en-GB')"></div>
                     </div>
-                </section>
-
+                    <!-- 🟢 DYNAMIC BADGES: Shows different indicators for Partial or Declined orders -->
+                    <span class="px-2 py-0.5 rounded text-[10px] font-black uppercase" 
+                          :class="order.status === 'PENDING' ? 'bg-amber-100 text-amber-800' : order.status === 'PARTIAL' ? 'bg-orange-100 text-orange-800' : order.status === 'DECLINED' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'" 
+                          x-text="order.status === 'PENDING' ? '⏳ Pending Supply' : order.status === 'PARTIAL' ? '⚠️ Partial Delivery' : order.status === 'DECLINED' ? '❌ Declined/Void' : '✅ Received'">
+                    </span>
+                </div>
+                
+                <div class="bg-white border rounded-lg p-2.5 divide-y font-mono space-y-1">
+                    <template x-for="it in order.items">
+                        <div class="flex justify-between items-center py-1 text-xs">
+                            <span class="font-sans text-slate-700 font-medium" x-text="it.name"></span>
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-slate-400 text-[11px]">Qty:</span>
+                                <!-- Operators can type lower numbers or 0 here directly if items are missing! -->
+                                <input type="number" x-model.number="it.qty" :disabled="order.status !== 'PENDING'" class="w-14 border text-center rounded p-0.5 bg-slate-50 font-bold text-slate-900 focus:ring-1 focus:ring-emerald-500">
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                
+                <!-- 🟢 ACTION BUTTONS AXIS: Side-by-side Accept and Decline options -->
+                <div class="flex gap-2" x-show="order.status === 'PENDING'">
+                    <button @click="declineIncomingOrder(order)" class="flex-1 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2 rounded-lg transition uppercase tracking-wider text-[11px] shadow-sm">
+                        ❌ Decline & Cancel
+                    </button>
+                    <button @click="approveIncomingOrder(order)" class="flex-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2 px-4 rounded-lg transition uppercase tracking-wider text-[11px] shadow-sm">
+                        ✔ Approve & Ingest Stock
+                    </button>
+                </div>
+                
+            </div>
+        </template>
+    </div>
+</section>
                 <!-- Manual Operation Desks -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="currentRole === 'admin' || currentRole === 'inward' || currentRole === 'outward'">
                     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
