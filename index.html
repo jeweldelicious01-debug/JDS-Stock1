@@ -273,48 +273,82 @@
                 </div>
 
                 <!-- Operator Accounts Admin Directory Panel -->
-                <div x-show="showUserAdminModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
-                    <div class="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl space-y-4 border border-slate-200 max-h-[85vh] overflow-y-auto">
-                        <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">🧑‍💼 Authorized System Operators Directory</h3>
-                        <div class="border rounded-lg bg-slate-50 overflow-hidden divide-y max-h-48 overflow-y-auto">
-                            <template x-for="u in users" :key="u.id">
-                                <div class="p-3 flex items-center justify-between gap-3 bg-white text-xs">
-                                    <div>
-                                        <div class="font-extrabold text-slate-800 text-sm" x-text="u.username"></div>
-                                        <div class="text-[10px] font-mono text-slate-400 uppercase" x-text="'Scope: ' + u.role"></div>
-                                    </div>
-                                    <div class="flex items-center gap-1.5">
-                                        <select @change="changeUserRole(u.id, $event.target.value)" class="border rounded p-1 bg-slate-50 text-[11px] font-bold">
-                                            <option value="admin" :selected="u.role === 'admin'">admin</option>
-                                            <option value="inward" :selected="u.role === 'inward'">inward</option>
-                                            <option value="outward" :selected="u.role === 'outward'">outward</option>
-                                            <option value="order" :selected="u.role === 'order'">order</option>
-                                            <option value="readonly" :selected="u.role === 'readonly'">readonly</option>
-                                        </select>
-                                        <button @click="promptResetPassword(u)" class="text-[10px] bg-slate-50 hover:bg-slate-100 border px-2 py-1 rounded font-medium">Reset Key</button>
-                                        <button @click="deleteUser(u.id)" class="text-[10px] bg-rose-50 border border-rose-100 text-rose-700 font-bold px-2 py-1 rounded">Delete</button>
-                                    </div>
-                                </div>
-                            </template>
+                <!-- Unified Control Panel Modal (Operators Directory + Category Generator) -->
+<div x-show="showUserAdminModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
+    <div class="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl space-y-5 border border-slate-200 max-h-[90vh] overflow-y-auto">
+        
+        <!-- SECTION 1: OPERATOR ACCOUNTS MANAGEMENT DIRECTORY -->
+        <div>
+            <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1 mb-2">🧑‍💼 Authorized System Operators Directory</h3>
+            <div class="border rounded-lg bg-slate-50 overflow-hidden divide-y max-h-36 overflow-y-auto">
+                <template x-for="u in users" :key="u.id">
+                    <div class="p-2.5 flex items-center justify-between gap-3 bg-white text-xs">
+                        <div>
+                            <div class="font-extrabold text-slate-800 text-sm" x-text="u.username"></div>
+                            <div class="text-[10px] font-mono text-slate-400 uppercase" x-text="'Scope: ' + u.role"></div>
                         </div>
-                        <div class="border-t pt-3 space-y-2">
-                            <div class="text-[11px] font-bold uppercase text-slate-400 tracking-wider">Provision New Operator Profile:</div>
-                            <div class="grid grid-cols-2 gap-2 text-xs">
-                                <input type="text" x-model="newUserForm.username" placeholder="Username" class="border p-2 rounded bg-slate-50">
-                                <input type="password" x-model="newUserForm.password" placeholder="Passphrase (6+ chars)" class="border p-2 rounded bg-slate-50">
-                                <select x-model="newUserForm.role" class="border p-2 rounded bg-slate-50 font-bold col-span-2">
-                                    <option value="inward">inward</option>
-                                    <option value="outward">outward</option>
-                                    <option value="order">order</option>
-                                    <option value="readonly">readonly</option>
-                                </select>
-                            </div>
-                            <button @click="createUser()" class="w-full bg-slate-800 text-white font-bold py-2 rounded text-xs uppercase tracking-wide">Save Operator to Cloud</button>
+                        <div class="flex items-center gap-1.5">
+                            <select @change="changeUserRole(u.id, $event.target.value)" class="border rounded p-1 bg-slate-50 text-[11px] font-bold">
+                                <option value="admin" :selected="u.role === 'admin'">admin</option>
+                                <option value="inward" :selected="u.role === 'inward'">inward</option>
+                                <option value="outward" :selected="u.role === 'outward'">outward</option>
+                                <option value="order" :selected="u.role === 'order'">order</option>
+                                <option value="readonly" :selected="u.role === 'readonly'">readonly</option>
+                            </select>
+                            <button @click="promptResetPassword(u)" class="text-[10px] bg-slate-50 hover:bg-slate-100 border px-2 py-1 rounded font-medium">Reset Key</button>
+                            <button @click="deleteUser(u.id)" class="text-[10px] bg-rose-50 border border-rose-100 text-rose-700 font-bold px-2 py-1 rounded">Delete</button>
                         </div>
-                        <button @click="showUserAdminModal = false" class="w-full bg-slate-100 text-xs font-bold py-2.5 rounded-lg border">Dismiss Panel</button>
+                    </div>
+                </template>
+            </div>
+            <div class="mt-3 grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2 rounded-lg border">
+                <input type="text" x-model="newUserForm.username" placeholder="New Operator Username" class="border p-2 rounded bg-white">
+                <input type="password" x-model="newUserForm.password" placeholder="Passphrase (6+ chars)" class="border p-2 rounded bg-white">
+                <select x-model="newUserForm.role" class="border p-2 rounded bg-white font-bold col-span-2">
+                    <option value="inward">inward</option>
+                    <option value="outward">outward</option>
+                    <option value="order">order</option>
+                    <option value="readonly">readonly</option>
+                </select>
+                <button @click="createUser()" class="w-full bg-slate-800 text-white font-bold py-2 rounded text-xs uppercase tracking-wide col-span-2">Save Operator to Cloud</button>
+            </div>
+        </div>
+
+        <!-- 🟢 SECTION 2: CREATE NEW CATEGORY SYSTEM CONTAINER -->
+        <div class="border-t pt-3">
+            <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1 mb-2">📁 Provision Custom Inventory Category Axis</h3>
+            <div class="grid grid-cols-3 gap-2 text-xs bg-slate-50 p-3 rounded-lg border space-y-1">
+                <div class="col-span-2">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Category Identifier Label Name</label>
+                    <input type="text" x-model="newCategoryForm.name" placeholder="e.g. Sauces or Spices" class="border p-2 rounded bg-white w-full">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Visual Emoji</label>
+                    <input type="text" x-model="newCategoryForm.emoji" placeholder="🥫" class="border p-2 rounded bg-white w-full text-center text-sm">
+                </div>
+                <div class="col-span-3">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Select Visual Theme Palette Aesthetic Segment</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <template x-for="(p, idx) in paletteOptions" :key="idx">
+                            <button @click="newCategoryForm.paletteIndex = idx" 
+                                    :style="'background-color: ' + p.bg + '; color: ' + p.text + '; border-color: ' + p.border"
+                                    :class="newCategoryForm.paletteIndex === idx ? 'ring-2 ring-slate-900 border-2 scale-95' : 'opacity-80'"
+                                    class="p-2 rounded border text-[10px] uppercase font-black transition tracking-wider text-center"
+                                    type="button"
+                                    x-text="idx === 0 ? 'Blue' : idx === 1 ? 'Amber' : idx === 2 ? 'Green' : idx === 3 ? 'Purple' : idx === 4 ? 'Pink' : 'Slate'">
+                            </button>
+                        </template>
                     </div>
                 </div>
+                <button @click="submitNewCategory()" type="button" class="w-full bg-indigo-700 hover:bg-indigo-800 text-white font-bold py-2.5 rounded text-xs uppercase tracking-wide col-span-3 shadow-xs">
+                    Deploy Fresh Category Segment Live
+                </button>
+            </div>
+        </div>
 
+        <button @click="showUserAdminModal = false" class="w-full bg-slate-100 text-xs font-bold py-2.5 rounded-lg border mt-2">Dismiss Administration Suite</button>
+    </div>
+</div>
                 <!-- Portfolio Entry Modal Window -->
                 <div x-show="showNewItemModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
