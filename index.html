@@ -38,19 +38,19 @@
         <template x-if="ready">
             <div class="space-y-6">
                 
-                <!-- 🟢 MULTI-EVENT SYSTEM ALERTS BANNER STACK -->
-                <!-- Loops exclusively through non-expired future/present rows and shows structured event metrics -->
+                <!-- 🟢 FIXED MULTI-EVENT ALERT BANNER DISPLAY STACK -->
                 <div class="space-y-3" x-show="activeLiveEvents.length > 0" x-cloak>
                     <template x-for="ev in activeLiveEvents" :key="ev.id">
                         <div class="bg-amber-500 border-2 border-amber-600 p-4 rounded-xl flex items-start gap-3.5 shadow-md">
                             <span class="text-2xl mt-0.5">🚨</span>
                             <div class="flex-1 text-slate-950 text-xs uppercase">
-                                <div class="font-black text-sm tracking-tight mb-1" x-text="ev.title"></div>
-                                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 font-bold bg-amber-600/20 p-2 rounded-lg border border-amber-600/30">
-                                    <div>📅 Date: <span class="font-mono" x-text="new Date(ev.date).toLocaleDateString('en-GB')"></span></div>
-                                    <div>⏰ Time: <span class="font-mono" x-text="ev.time"></span></div>
-                                    <div>👥 Expected Pax: <span class="font-mono font-black text-sm" x-text="ev.pax"></span></div>
-                                    <div>📦 Core Items: <span class="font-sans font-extrabold" x-text="ev.target_items || 'All Kitchen Rows'"></span></div>
+                                <!-- 🟢 FIXED: Using explicit dynamic string template binding for title display -->
+                                <div class="font-black text-sm tracking-tight mb-1" x-text="ev.title || ev.name || 'Unnamed Function Alert'"></div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 font-bold bg-amber-600/20 p-2 rounded-lg border border-amber-600/30 mt-2">
+                                    <div>📅 Date: <span class="font-mono font-black" x-text="ev.date || 'Today'"></span></div>
+                                    <div>⏰ Time: <span class="font-mono font-black" x-text="ev.time || 'N/A'"></span></div>
+                                    <div>👥 Expected Pax: <span class="font-mono font-black text-sm" x-text="ev.pax || 0"></span></div>
+                                    <div>📦 Core Items: <span class="font-sans font-extrabold" x-text="ev.target_items || 'General Matrix'"></span></div>
                                 </div>
                             </div>
                         </div>
@@ -63,7 +63,7 @@
                         <p class="text-xs text-slate-500">Logged in as <span class="font-bold text-slate-800" x-text="currentUsername"></span> <span class="mx-2 text-slate-300">|</span> Security Scope: <span class="bg-slate-100 text-slate-800 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-slate-200" x-text="currentRole"></span></p>
                     </div>
                     <div class="flex gap-2 items-center flex-wrap">
-                        <!-- 🟢 NEW ADITIONAL MODAL CONTROL LINK FOR EVENTS SETUP -->
+                        <!-- Admin Control Button to toggle Event Management modal -->
                         <button x-show="currentRole === 'admin'" @click="showEventAdminModal = true" class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg font-bold tracking-wide shadow-sm transition">📋 Setup Function Alerts</button>
                         <button @click="showAccountModal = true" class="text-xs bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2 rounded-lg font-bold tracking-wide transition shadow-sm">👤 Security Settings</button>
                         <button x-show="currentRole === 'admin'" @click="showUserAdminModal = true" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg font-bold tracking-wide border border-indigo-200 transition shadow-sm">🧑‍💼 Operator & Category Management</button>
@@ -164,11 +164,6 @@
                                         ✔ Approve & Ingest Stock
                                     </button>
                                 </div>
-                            </div>
-                        </template>
-                        <template x-if="processedPurchaseOrders.length === 0">
-                            <div class="col-span-2 text-center text-slate-400 font-medium py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 uppercase tracking-wide text-[11px]">
-                                No records present inside this segment folder.
                             </div>
                         </template>
                     </div>
@@ -305,7 +300,7 @@
                     </div>
                 </section>
                 
-                <!-- 🟢 NEW MODAL CONSOLE: MASTER STRUCTURED EVENT MANAGER (ADMIN EXCLUSIVE) -->
+                <!-- 🟢 MULTI-EVENT ADMINISTRATION SUITE CONSOLE MODAL -->
                 <div x-show="showEventAdminModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-xl w-full shadow-2xl space-y-5 border border-slate-200 max-h-[85vh] overflow-y-auto">
                         <div class="flex justify-between items-center border-b pb-2">
@@ -313,14 +308,15 @@
                             <button @click="showEventAdminModal = false" class="text-slate-400 text-sm font-bold">✕</button>
                         </div>
 
-                        <!-- Sub-Segment A: Active Events Table List (Provides deletion capability) -->
+                        <!-- Active Events List Section -->
                         <div class="space-y-2">
                             <div class="text-[11px] font-black text-slate-400 uppercase tracking-wide">Live Active Alerts Registry</div>
                             <div class="border rounded-lg divide-y bg-slate-50 max-h-40 overflow-y-auto overflow-x-hidden">
                                 <template x-for="ev in events" :key="ev.id">
                                     <div class="p-2.5 bg-white flex justify-between items-center text-xs gap-3">
                                         <div class="space-y-0.5">
-                                            <div class="font-extrabold text-slate-800 text-sm" x-text="ev.title"></div>
+                                            <!-- 🟢 FIXED: Safe fallbacks handle dynamic text binding safely -->
+                                            <div class="font-extrabold text-slate-800 text-sm" x-text="ev.title || ev.name"></div>
                                             <div class="text-[10px] text-slate-500 font-medium font-mono" x-text="'Date: ' + ev.date + ' | Time: ' + ev.time + ' | Pax: ' + ev.pax"></div>
                                         </div>
                                         <button @click="purgeEventAlert(ev.id)" class="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold border border-rose-200 px-2.5 py-1 rounded text-[11px] transition whitespace-nowrap">
@@ -334,12 +330,13 @@
                             </div>
                         </div>
 
-                        <!-- Sub-Segment B: Provision Structured Forms Group -->
+                        <!-- Creation Form Section -->
                         <form @submit.prevent="submitNewEvent()" class="space-y-3 border-t pt-3">
                             <div class="text-[11px] font-black text-slate-400 uppercase tracking-wide">Deploy Fresh Event Parameters</div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                                 <div class="md:col-span-2">
                                     <label class="block font-bold text-slate-600 mb-0.5">Event Function Heading Title</label>
+                                    <!-- 🟢 FIXED: Maps directly to correct setup form context parameters -->
                                     <input type="text" x-model="formEvent.title" placeholder="e.g. Marriage Banquet or Corporate Dinner" class="border p-2 rounded bg-slate-50 w-full font-bold">
                                 </div>
                                 <div>
@@ -356,7 +353,7 @@
                                 </div>
                                 <div>
                                     <label class="block font-bold text-slate-600 mb-0.5">Critical Inventory Items Needed</label>
-                                    <input type="text" x-model="formEvent.targetItems" placeholder="e.g. Paneer, Dairy, Disposables" class="border p-2 rounded bg-slate-50 w-full">
+                                    <input type="text" x-model="formEvent.targetItems" placeholder="e.g. Paneer, Dairy, Spices" class="border p-2 rounded bg-slate-50 w-full">
                                 </div>
                             </div>
                             <button type="submit" class="w-full bg-indigo-700 hover:bg-indigo-800 text-white font-black py-2.5 rounded-lg text-xs uppercase tracking-wider transition shadow-sm">
