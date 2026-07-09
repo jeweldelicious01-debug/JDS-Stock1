@@ -291,12 +291,54 @@ window.stockApp = function() {
         async deleteNote(noteId) { await deleteDoc(doc(dbFs, 'notes', noteId)); },
         
         async changeItemName(item) {
-            let updatedName = prompt(`Update Name for "${item.name}":`, item.name); if (!updatedName?.trim()) return;
-            let promptPrice = prompt(`Update MRP for "${updatedName.trim()}":`, item.mrp || 0); if (promptPrice === null) return;
+            // 1. Prompt for Item Name Change
+            let updatedName = prompt(`[1/3] Update Name for "${item.name}":`, item.name);
+            if (updatedName === null) return; // Operator canceled sequence
+            if (!updatedName.trim()) return alert("Item Name cannot be left completely blank.");
+
+            // 2. 🟢 FIXED AXIS: Prompt for Master Supplier Re-Assignment
+            let catList = this.suppliers.map((s, idx) => `${idx + 1}. ${s.name}`).join('\n');
+            let vendorChoice = prompt(
+                `[2/3] Choose New Main Supplier Number for "${updatedName.trim()}":\n\n${catList}\n\n` +
+                `Or type "NEW" to provision a fresh vendor registry directly.`
+            );
+            if (vendorChoice === null) return; // Operator canceled sequence
+
+            let finalVendor = item.supplier_name || (this.suppliers[0] ? this.suppliers[0].name : 'General Vendor');
+            
+            if (vendorChoice.trim().toUpperCase() === "NEW") {
+                let freshName = prompt("Enter Fresh Supplier Label:");
+                if (freshName?.trim()) {
+                    finalVendor = freshName.trim();
+                    const matchEx = this.suppliers.find(s => s.name.toLowerCase() === finalVendor.toLowerCase());
+                    if (!matchEx) await addDoc(collection(dbFs, 'suppliers'), { name: finalVendor, phone: '' });
+                }
+            } else if (vendorChoice.trim() !== "") {
+                let sIdx = parseInt(vendorChoice) - 1;
+                if (sIdx >= 0 && sIdx < this.suppliers.length) {
+                    finalVendor = this.suppliers[sIdx].name;
+                } else {
+                    alert("Invalid selection index. Supplier assignment left unchanged.");
+                }
+            }
+
+            // 3. Prompt for Price point mutations
+            let promptPrice = prompt(`[3/3] Update Maximum Retail Price (MRP) for "${updatedName.trim()}":`, item.mrp || 0);
+            if (promptPrice === null) return;
+            let finalPrice = Number(promptPrice);
+            if (isNaN(finalPrice) || finalPrice < 0) return alert("Please enter a valid numeric pricing attribute.");
+
+            // 4. Batch Commit structurally mutated state straight to Firebase Cloud
             try {
-                await updateDoc(doc(dbFs, 'items', item.id), { name: updatedName.trim(), mrp: Number(promptPrice) || 0 });
-                alert("Item details edited.");
-            } catch (e) { alert(e.message); }
+                await updateDoc(doc(dbFs, 'items', item.id), { 
+                    name: updatedName.trim(), 
+                    supplier_name: finalVendor, // Links item permanently to this supplier
+                    mrp: finalPrice
+                });
+                alert(`🎯 "${item.name}" updated successfully across your inventory matrices!`);
+            } catch (e) { 
+                alert("Cloud mutation failure: " + e.message); 
+            }
         },
         async modifyThreshold(item) {
             let promptVal = prompt('Update safety limit:', item.threshold);
