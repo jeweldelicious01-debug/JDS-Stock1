@@ -19,14 +19,6 @@ async function sha256(text) {
     return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-const PALETTE = [
-    { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af' }, 
-    { bg: '#fffbeb', border: '#f59e0b', text: '#92400e' }, 
-    { bg: '#f0fdf4', border: '#22c55e', text: '#166534' }, 
-    { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8' }, 
-    { bg: '#fdf2f8', border: '#ec4899', text: '#9d174d' }, 
-];
-
 async function seedIfEmpty() {
     try {
         const usersSnap = await getDocs(colRef('users'));
@@ -100,11 +92,26 @@ window.stockApp = function() {
             basket: [] 
         }, 
         
+        lastLogId: null,
+        lastLogType: '',
+        
         showNewItemModal: false,
         showAccountModal: false,
         showUserAdminModal: false,
         
         newItemForm: { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' }, 
+        
+        // 🟢 STATE HOOK: For creating a dynamic new category entry form
+        newCategoryForm: { name: '', emoji: '📦', paletteIndex: 0 },
+        paletteOptions: [
+            { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af' }, 
+            { bg: '#fffbeb', border: '#f59e0b', text: '#92400e' }, 
+            { bg: '#f0fdf4', border: '#22c55e', text: '#166534' }, 
+            { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8' }, 
+            { bg: '#fdf2f8', border: '#ec4899', text: '#9d174d' },
+            { bg: '#f8fafc', border: '#64748b', text: '#334151' }
+        ],
+
         accountForm: { currentPassword: '', newPassword: '' },
         accountError: '',
         accountSuccess: '',
@@ -117,10 +124,7 @@ window.stockApp = function() {
             
             onSnapshot(colRef('categories'), (snap) => { this.categories = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
             onSnapshot(colRef('items'), (snap) => { this.items = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
-            
-            onSnapshot(colRef('suppliers'), (snap) => {
-                this.suppliers = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a,b) => a.name.localeCompare(b.name));
-            });
+            onSnapshot(colRef('suppliers'), (snap) => { this.suppliers = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a,b) => a.name.localeCompare(b.name)); });
 
             onSnapshot(colRef('purchase_orders'), (snap) => {
                 this.purchaseOrders = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
@@ -290,19 +294,17 @@ window.stockApp = function() {
         logout() { sessionStorage.removeItem(SESSION_KEY); this.isAuthenticated = false; this.currentRole = 'readonly'; this.currentUsername = ''; this.currentUserId = null; },
         async deleteNote(noteId) { await deleteDoc(doc(dbFs, 'notes', noteId)); },
         
-       async changeItemName(item) {
-            // 1. Prompt for Item Name Change
+        async changeItemName(item) {
             let updatedName = prompt(`[1/3] Update Name for "${item.name}":`, item.name);
-            if (updatedName === null) return; // Operator canceled sequence
-            if (!updatedName.trim()) return alert("Item Name cannot be left completely blank.");
+            if (updatedName === null) return;
+            if (!updatedName.trim()) return alert("Item Name cannot be empty.");
 
-            // 2. Prompt for Master Supplier Re-Assignment
             let catList = this.suppliers.map((s, idx) => `${idx + 1}. ${s.name}`).join('\n');
             let vendorChoice = prompt(
-                `[2/3] Choose New Main Supplier Number for "${updatedName.trim()}":\n\n${catList}\n\n` +
+                `[2/3] Choose Supplier Number for "${updatedName.trim()}":\n\n${catList}\n\n` +
                 `Or type "NEW" to provision a fresh vendor registry directly.`
             );
-            if (vendorChoice === null) return; // Operator canceled sequence
+            if (vendorChoice === null) return;
 
             let finalVendor = item.supplier_name || (this.suppliers[0] ? this.suppliers[0].name : 'General Vendor');
             
@@ -311,7 +313,6 @@ window.stockApp = function() {
                 if (freshName?.trim()) {
                     finalVendor = freshName.trim();
                     const matchEx = this.suppliers.find(s => s.name.toLowerCase() === finalVendor.toLowerCase());
-                    // 🟢 FIXED: Swapped out raw method for your safe internal shortcut helper colRef()
                     if (!matchEx) await addDoc(colRef('suppliers'), { name: finalVendor, phone: '' });
                 }
             } else if (vendorChoice.trim() !== "") {
@@ -319,28 +320,21 @@ window.stockApp = function() {
                 if (sIdx >= 0 && sIdx < this.suppliers.length) {
                     finalVendor = this.suppliers[sIdx].name;
                 } else {
-                    alert("Invalid selection index. Supplier assignment left unchanged.");
+                    alert("Invalid choice. Supplier unmutated.");
                 }
             }
 
-            // 3. Prompt for Price point mutations
-            let promptPrice = prompt(`[3/3] Update Maximum Retail Price (MRP) for "${updatedName.trim()}":`, item.mrp || 0);
+            let promptPrice = prompt(`[3/3] Update Unit Price (MRP) for "${updatedName.trim()}":`, item.mrp || 0);
             if (promptPrice === null) return;
             let finalPrice = Number(promptPrice);
-            if (isNaN(finalPrice) || finalPrice < 0) return alert("Please enter a valid numeric pricing attribute.");
+            if (isNaN(finalPrice) || finalPrice < 0) return alert("Enter valid numerical amount.");
 
-            // 4. Batch Commit structurally mutated state straight to Firebase Cloud
             try {
-                await updateDoc(doc(dbFs, 'items', item.id), { 
-                    name: updatedName.trim(), 
-                    supplier_name: finalVendor, // Links item permanently to this supplier
-                    mrp: finalPrice
-                });
-                alert(`🎯 "${item.name}" updated successfully across your inventory matrices!`);
-            } catch (e) { 
-                alert("Cloud mutation failure: " + e.message); 
-            }
+                await updateDoc(doc(dbFs, 'items', item.id), { name: updatedName.trim(), supplier_name: finalVendor, mrp: finalPrice });
+                alert("Matrix attributes successfully configured.");
+            } catch (e) { alert(e.message); }
         },
+
         async modifyThreshold(item) {
             let promptVal = prompt('Update safety limit:', item.threshold);
             if (promptVal !== null) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parseInt(promptVal) || 0 });
@@ -353,13 +347,47 @@ window.stockApp = function() {
             await updateDoc(doc(dbFs, 'items', sorted[idx].id), { order_index: sorted[swapIdx].order_index || 0 });
             await updateDoc(doc(dbFs, 'items', sorted[swapIdx].id), { order_index: sorted[idx].order_index || 0 });
         },
+
         async submitNewItem() {
-            if (!this.newItemForm.name.trim() || !this.newItemForm.categoryId) return;
+            if (!this.newItemForm.name.trim() || !this.newItemForm.categoryId || !this.newItemForm.supplierName) {
+                return alert("Please map all parameter tags including Supplier assignment.");
+            }
             const maxOrder = this.items.reduce((m, i) => Math.max(m, i.order_index || 0), 0);
-            await addDoc(colRef('items'), { name: this.newItemForm.name.trim(), category_id: this.newItemForm.categoryId, stock: 0, threshold: this.newItemForm.threshold || 0, mrp: Number(this.newItemForm.mrp || 0), order_index: maxOrder + 1 });
-            this.newItemForm = { name: '', categoryId: '', newCategoryEmoji: '🍱', newCategoryName: '', threshold: 0, mrp: '' };
+            await addDoc(colRef('items'), { name: this.newItemForm.name.trim(), category_id: this.newItemForm.categoryId, supplier_name: this.newItemForm.supplierName, stock: 0, threshold: this.newItemForm.threshold || 0, mrp: Number(this.newItemForm.mrp || 0), order_index: maxOrder + 1 });
+            this.newItemForm = { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' };
             this.showNewItemModal = false;
         },
+
+        // 🟢 NEW ENGINE COMPONENT METHOD: Saves custom category blueprints to Cloud Firestore
+        async submitNewCategory() {
+            if (!this.newCategoryForm.name.trim() || !this.newCategoryForm.emoji.trim()) {
+                return alert("Category tracking name and layout emoji required.");
+            }
+            
+            const standardizedId = this.newCategoryForm.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (!standardizedId) return alert("Invalid alphabetical layout name.");
+
+            const checkDup = this.categories.find(c => c.id === standardizedId);
+            if (checkDup) return alert("A category with this structural ID signature already exists.");
+
+            const chosenPalette = this.paletteOptions[this.newCategoryForm.paletteIndex || 0];
+
+            try {
+                await setDoc(doc(dbFs, 'categories', standardizedId), {
+                    name: this.newCategoryForm.name.trim(),
+                    emoji: this.newCategoryForm.emoji.trim(),
+                    bg_color: chosenPalette.bg,
+                    border_color: chosenPalette.border,
+                    text_color: chosenPalette.text
+                });
+
+                alert(`📁 Category Matrix "${this.newCategoryForm.name.trim()}" successfully deployed live!`);
+                this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
+            } catch (err) {
+                alert("Database mutation rejection error: " + err.message);
+            }
+        },
+
         async handleCsvUpload(event) {
             const file = event.target.files[0]; if (!file) return;
             const reader = new FileReader();
@@ -384,6 +412,7 @@ window.stockApp = function() {
             };
             reader.readAsText(file);
         },
+
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) return alert('Select missing fields.');
             const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); if (!target) return alert('Selected item could not be found.');
@@ -397,10 +426,15 @@ window.stockApp = function() {
             }
             try {
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock || 0) + qty });
-                await addDoc(colRef('logs'), { type: 'INWARD', item_id: target.id, qty, supplier_name: vendor, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
+                const docRef = await addDoc(colRef('logs'), { type: 'INWARD', item_id: target.id, qty, supplier_name: vendor, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
+                
+                this.lastLogId = docRef.id;
+                this.lastLogType = 'INWARD';
+
                 this.formInward = { itemId: '', qty: '', supplierName: '' };
             } catch (error) { alert("Database write error: " + error.message); }
         },
+
         async deductOutward() {
             if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
             const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId)); if (!target) return alert('Item not found.');
@@ -408,10 +442,51 @@ window.stockApp = function() {
             if (Number(target.stock || 0) < qty) return alert('Insufficient stock.');
             try {
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock) - qty });
-                await addDoc(colRef('logs'), { type: 'OUTWARD', item_id: target.id, qty, department: this.formOutward.department, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
+                const docRef = await addDoc(colRef('logs'), { type: 'OUTWARD', item_id: target.id, qty, department: this.formOutward.department, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
+                
+                this.lastLogId = docRef.id;
+                this.lastLogType = 'OUTWARD';
+
                 this.formOutward = { itemId: '', department: 'Indian', qty: '' };
             } catch (error) { alert("Error: " + error.message); }
         },
+
+        async undoLastTransaction() {
+            if (!this.lastLogId) return alert("No recent log found to revert in this browser view.");
+            if (!confirm(`Are you sure you want to REVERT/UNDO your last ${this.lastLogType} entry? Live balances will adjust automatically.`)) return;
+
+            try {
+                const logsSnap = await getDocs(colRef('logs'));
+                const targetingLog = logsSnap.docs.find(d => d.id === this.lastLogId);
+                
+                if (!targetingLog) {
+                    alert("Historical log not found in cloud ledger. Resetting action.");
+                    this.lastLogId = null;
+                    return;
+                }
+
+                const logData = targetingLog.data();
+                const targetItem = this.items.find(i => String(i.id) === String(logData.item_id));
+
+                if (!targetItem) return alert("Target item no longer exists. Rollback terminated.");
+
+                let balanceCorrection = 0;
+                if (logData.type === 'INWARD') {
+                    balanceCorrection = Number(targetItem.stock || 0) - parseInt(logData.qty);
+                    if (balanceCorrection < 0) return alert("Rollback denied: Stock cannot go below zero.");
+                } else if (logData.type === 'OUTWARD') {
+                    balanceCorrection = Number(targetItem.stock || 0) + parseInt(logData.qty);
+                }
+
+                await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: balanceCorrection });
+                await deleteDoc(doc(dbFs, 'logs', this.lastLogId));
+
+                alert(`Successfully rolled back! Balance corrected for "${targetItem.name}".`);
+                this.lastLogId = null;
+                this.lastLogType = '';
+            } catch (e) { alert("Rollback fatal crash: " + e.message); }
+        },
+
         async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
         async deleteUser(userId) { if (confirm('Delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
         
@@ -426,13 +501,12 @@ window.stockApp = function() {
             this.accountForm = { currentPassword: '', newPassword: '' };
         },
 
-        async createUser() {
+        createUser() {
             const { username, password, role = 'inward' } = this.newUserForm;
             if (!username || password.length < 6) return;
-            await addDoc(colRef('users'), { username: username.trim(), passwordHash: await sha256(password), role });
+            addDoc(colRef('users'), { username: username.trim(), passwordHash: sha256(password), role });
             this.newUserForm = { username: '', password: '', role: 'inward' };
         },
-        
         async promptResetPassword(user) {
             let newPass = prompt(`Enter new password for ${user.username} (Min 6 chars):`);
             if (!newPass || newPass.trim().length < 6) return alert('Min 6 characters required.');
@@ -464,7 +538,7 @@ window.stockApp = function() {
             const ws = XLSX.utils.aoa_to_sheet(sheetMatrix); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Supplier Inward Breakdown");
             XLSX.writeFile(wb, `Supplier_Inward_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
         },
-        
+
         downloadExcelReport() {
             const getLocalDateString = (offsetDays) => { const d = new Date(); d.setDate(d.getDate() - offsetDays); return d.toISOString().slice(0, 10); };
             const formatHeaderLabel = (dateStr) => { const parts = dateStr.split('-'); if (parts.length !== 3) return dateStr; const dateObj = new Date(parts[0], parts[1] - 1, parts[2]); return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); };
@@ -488,14 +562,7 @@ window.stockApp = function() {
     };
 };
 
-// 🟢 THE BOOTSTRAP FIX: Clean binding to ensure Alpine can find components on race condition loads
 document.addEventListener('DOMContentLoaded', () => {
-    if (window.Alpine) {
-        window.Alpine.data('stockApp', window.stockApp);
-    } else {
-        document.addEventListener('alpine:init', () => {
-            window.Alpine.data('stockApp', window.stockApp);
-        });
-    }
-    console.log("🚀 stockApp successfully bound to global Alpine execution hooks.");
+    if (window.Alpine) { window.Alpine.data('stockApp', window.stockApp); } 
+    else { document.addEventListener('alpine:init', () => { window.Alpine.data('stockApp', window.stockApp); }); }
 });
