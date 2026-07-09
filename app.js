@@ -101,7 +101,6 @@ window.stockApp = function() {
         
         newItemForm: { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' }, 
         
-        // 🟢 STATE HOOK: For creating a dynamic new category entry form
         newCategoryForm: { name: '', emoji: '📦', paletteIndex: 0 },
         paletteOptions: [
             { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af' }, 
@@ -244,7 +243,6 @@ window.stockApp = function() {
             }
         },
 
-        // 📦 UPDATED METHOD: Handles Partial, Full, and Dynamic Stock Ingestion
         async approveIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
             if (!confirm(`Confirm stock ingestion from ${order.supplier_name}? Live balances will update based on the quantities listed below.`)) return;
@@ -255,72 +253,35 @@ window.stockApp = function() {
 
                 for (let record of order.items) {
                     const arrivedQty = parseInt(record.qty) || 0;
-                    
-                    if (arrivedQty < 0) {
-                        return alert("Quantities cannot be negative numbers.");
-                    }
-                    if (arrivedQty === 0) {
-                        hasMissingItems = true;
-                    }
+                    if (arrivedQty < 0) return alert("Quantities cannot be negative numbers.");
+                    if (arrivedQty === 0) hasMissingItems = true;
 
                     const targetItem = this.items.find(i => String(i.id) === String(record.id));
                     if (targetItem && arrivedQty > 0) {
                         hasReceivedItems = true;
-                        // Only add the exact quantity that actually arrived at the facility
-                        await updateDoc(doc(dbFs, 'items', targetItem.id), {
-                            stock: Number(targetItem.stock || 0) + arrivedQty
-                        });
-
-                        await addDoc(colRef('logs'), {
-                            type: 'INWARD',
-                            item_id: targetItem.id,
-                            qty: arrivedQty,
-                            supplier_name: order.supplier_name,
-                            department: null,
-                            created_at: new Date().toISOString(),
-                            created_by_name: this.currentUsername
-                        });
+                        await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: Number(targetItem.stock || 0) + arrivedQty });
+                        await addDoc(colRef('logs'), { type: 'INWARD', item_id: targetItem.id, qty: arrivedQty, supplier_name: order.supplier_name, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
                     }
                 }
 
-                // Determine final order status based on item arrivals
                 let finalStatus = 'RECEIVED';
-                if (hasMissingItems && hasReceivedItems) {
-                    finalStatus = 'PARTIAL'; // Mark as partially fulfilled for administrative history
-                } else if (!hasReceivedItems) {
-                    finalStatus = 'DECLINED'; // If everything was set to 0
-                }
+                if (hasMissingItems && hasReceivedItems) finalStatus = 'PARTIAL';
+                else if (!hasReceivedItems) finalStatus = 'DECLINED';
 
-                await updateDoc(doc(dbFs, 'purchase_orders', order.id), {
-                    status: finalStatus,
-                    items: order.items, // Saves the updated quantity audit trail to history
-                    resolved_at: new Date().toISOString(),
-                    resolved_by: this.currentUsername
-                });
-
+                await updateDoc(doc(dbFs, 'purchase_orders', order.id), { status: finalStatus, items: order.items, resolved_at: new Date().toISOString(), resolved_by: this.currentUsername });
                 alert(`Order marked as [${finalStatus}]. Balances synchronized cleanly.`);
-            } catch (error) {
-                alert("Approval processing error: " + error.message);
-            }
+            } catch (error) { alert("Approval processing error: " + error.message); }
         },
 
-        // ❌ NEW METHOD: Allows Inward users or Admins to drop/void an unfulfilled order completely
         async declineIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
-            if (!confirm(`Are you sure you want to DECLINE and cancel this order from ${order.supplier_name}? No stock balances will be adjusted.`)) return;
-
+            if (!confirm(`Are you sure you want to DECLINE and cancel this order from ${order.supplier_name}?`)) return;
             try {
-                await updateDoc(doc(dbFs, 'purchase_orders', order.id), {
-                    status: 'DECLINED',
-                    resolved_at: new Date().toISOString(),
-                    resolved_by: this.currentUsername
-                });
+                await updateDoc(doc(dbFs, 'purchase_orders', order.id), { status: 'DECLINED', resolved_at: new Date().toISOString(), resolved_by: this.currentUsername });
                 alert("Order successfully canceled and marked as DECLINED.");
-            } catch (error) {
-                alert("Error canceling order: " + error.message);
-            }
+            } catch (error) { alert("Error canceling order: " + error.message); }
         },
-        
+
         async verifyLogin() {
             this.loginError = '';
             const { username, password } = this.loginForm;
@@ -341,14 +302,10 @@ window.stockApp = function() {
             if (!updatedName.trim()) return alert("Item Name cannot be empty.");
 
             let catList = this.suppliers.map((s, idx) => `${idx + 1}. ${s.name}`).join('\n');
-            let vendorChoice = prompt(
-                `[2/3] Choose Supplier Number for "${updatedName.trim()}":\n\n${catList}\n\n` +
-                `Or type "NEW" to provision a fresh vendor registry directly.`
-            );
+            let vendorChoice = prompt(`[2/3] Choose Supplier Number for "${updatedName.trim()}":\n\n${catList}\n\nOr type "NEW" to provision a fresh vendor registry directly.`);
             if (vendorChoice === null) return;
 
             let finalVendor = item.supplier_name || (this.suppliers[0] ? this.suppliers[0].name : 'General Vendor');
-            
             if (vendorChoice.trim().toUpperCase() === "NEW") {
                 let freshName = prompt("Enter Fresh Supplier Label:");
                 if (freshName?.trim()) {
@@ -358,11 +315,7 @@ window.stockApp = function() {
                 }
             } else if (vendorChoice.trim() !== "") {
                 let sIdx = parseInt(vendorChoice) - 1;
-                if (sIdx >= 0 && sIdx < this.suppliers.length) {
-                    finalVendor = this.suppliers[sIdx].name;
-                } else {
-                    alert("Invalid choice. Supplier unmutated.");
-                }
+                if (sIdx >= 0 && sIdx < this.suppliers.length) finalVendor = this.suppliers[sIdx].name;
             }
 
             let promptPrice = prompt(`[3/3] Update Unit Price (MRP) for "${updatedName.trim()}":`, item.mrp || 0);
@@ -390,43 +343,24 @@ window.stockApp = function() {
         },
 
         async submitNewItem() {
-            if (!this.newItemForm.name.trim() || !this.newItemForm.categoryId || !this.newItemForm.supplierName) {
-                return alert("Please map all parameter tags including Supplier assignment.");
-            }
+            if (!this.newItemForm.name.trim() || !this.newItemForm.categoryId || !this.newItemForm.supplierName) return alert("Please map all tags.");
             const maxOrder = this.items.reduce((m, i) => Math.max(m, i.order_index || 0), 0);
             await addDoc(colRef('items'), { name: this.newItemForm.name.trim(), category_id: this.newItemForm.categoryId, supplier_name: this.newItemForm.supplierName, stock: 0, threshold: this.newItemForm.threshold || 0, mrp: Number(this.newItemForm.mrp || 0), order_index: maxOrder + 1 });
             this.newItemForm = { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' };
             this.showNewItemModal = false;
         },
 
-        // 🟢 NEW ENGINE COMPONENT METHOD: Saves custom category blueprints to Cloud Firestore
         async submitNewCategory() {
-            if (!this.newCategoryForm.name.trim() || !this.newCategoryForm.emoji.trim()) {
-                return alert("Category tracking name and layout emoji required.");
-            }
-            
+            if (!this.newCategoryForm.name.trim() || !this.newCategoryForm.emoji.trim()) return alert("Fields required.");
             const standardizedId = this.newCategoryForm.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (!standardizedId) return alert("Invalid alphabetical layout name.");
-
-            const checkDup = this.categories.find(c => c.id === standardizedId);
-            if (checkDup) return alert("A category with this structural ID signature already exists.");
-
+            if (!standardizedId) return alert("Invalid layout name.");
+            if (this.categories.find(c => c.id === standardizedId)) return alert("Category already exists.");
             const chosenPalette = this.paletteOptions[this.newCategoryForm.paletteIndex || 0];
-
             try {
-                await setDoc(doc(dbFs, 'categories', standardizedId), {
-                    name: this.newCategoryForm.name.trim(),
-                    emoji: this.newCategoryForm.emoji.trim(),
-                    bg_color: chosenPalette.bg,
-                    border_color: chosenPalette.border,
-                    text_color: chosenPalette.text
-                });
-
+                await setDoc(doc(dbFs, 'categories', standardizedId), { name: this.newCategoryForm.name.trim(), emoji: this.newCategoryForm.emoji.trim(), bg_color: chosenPalette.bg, border_color: chosenPalette.border, text_color: chosenPalette.text });
                 alert(`📁 Category Matrix "${this.newCategoryForm.name.trim()}" successfully deployed live!`);
                 this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
-            } catch (err) {
-                alert("Database mutation rejection error: " + err.message);
-            }
+            } catch (err) { alert(err.message); }
         },
 
         async handleCsvUpload(event) {
@@ -468,10 +402,7 @@ window.stockApp = function() {
             try {
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock || 0) + qty });
                 const docRef = await addDoc(colRef('logs'), { type: 'INWARD', item_id: target.id, qty, supplier_name: vendor, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
-                
-                this.lastLogId = docRef.id;
-                this.lastLogType = 'INWARD';
-
+                this.lastLogId = docRef.id; this.lastLogType = 'INWARD';
                 this.formInward = { itemId: '', qty: '', supplierName: '' };
             } catch (error) { alert("Database write error: " + error.message); }
         },
@@ -484,48 +415,28 @@ window.stockApp = function() {
             try {
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock) - qty });
                 const docRef = await addDoc(colRef('logs'), { type: 'OUTWARD', item_id: target.id, qty, department: this.formOutward.department, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
-                
-                this.lastLogId = docRef.id;
-                this.lastLogType = 'OUTWARD';
-
+                this.lastLogId = docRef.id; this.lastLogType = 'OUTWARD';
                 this.formOutward = { itemId: '', department: 'Indian', qty: '' };
             } catch (error) { alert("Error: " + error.message); }
         },
 
         async undoLastTransaction() {
-            if (!this.lastLogId) return alert("No recent log found to revert in this browser view.");
-            if (!confirm(`Are you sure you want to REVERT/UNDO your last ${this.lastLogType} entry? Live balances will adjust automatically.`)) return;
-
+            if (!this.lastLogId) return alert("No recent log found.");
+            if (!confirm(`Are you sure you want to REVERT your last ${this.lastLogType} entry?`)) return;
             try {
                 const logsSnap = await getDocs(colRef('logs'));
                 const targetingLog = logsSnap.docs.find(d => d.id === this.lastLogId);
-                
-                if (!targetingLog) {
-                    alert("Historical log not found in cloud ledger. Resetting action.");
-                    this.lastLogId = null;
-                    return;
-                }
-
+                if (!targetingLog) { this.lastLogId = null; return; }
                 const logData = targetingLog.data();
                 const targetItem = this.items.find(i => String(i.id) === String(logData.item_id));
-
-                if (!targetItem) return alert("Target item no longer exists. Rollback terminated.");
-
-                let balanceCorrection = 0;
-                if (logData.type === 'INWARD') {
-                    balanceCorrection = Number(targetItem.stock || 0) - parseInt(logData.qty);
-                    if (balanceCorrection < 0) return alert("Rollback denied: Stock cannot go below zero.");
-                } else if (logData.type === 'OUTWARD') {
-                    balanceCorrection = Number(targetItem.stock || 0) + parseInt(logData.qty);
-                }
-
+                if (!targetItem) return;
+                let balanceCorrection = logData.type === 'INWARD' ? Number(targetItem.stock || 0) - parseInt(logData.qty) : Number(targetItem.stock || 0) + parseInt(logData.qty);
+                if (balanceCorrection < 0) return alert("Rollback denied.");
                 await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: balanceCorrection });
                 await deleteDoc(doc(dbFs, 'logs', this.lastLogId));
-
-                alert(`Successfully rolled back! Balance corrected for "${targetItem.name}".`);
-                this.lastLogId = null;
-                this.lastLogType = '';
-            } catch (e) { alert("Rollback fatal crash: " + e.message); }
+                alert(`Rolled back successfully for "${targetItem.name}".`);
+                this.lastLogId = null; this.lastLogType = '';
+            } catch (e) { alert(e.message); }
         },
 
         async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
@@ -536,9 +447,9 @@ window.stockApp = function() {
             const { currentPassword, newPassword } = this.accountForm;
             if (newPassword.length < 6) { this.accountError = 'Min 6 characters'; return; }
             const user = this.users.find((u) => u.id === this.currentUserId);
-            if ((await sha256(currentPassword)) !== user.passwordHash) { this.accountError = 'Incorrect current password'; return; }
+            if ((await sha256(currentPassword)) !== user.passwordHash) { this.accountError = 'Incorrect password'; return; }
             await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: await sha256(newPassword) });
-            this.accountSuccess = 'Password updated successfully.';
+            this.accountSuccess = 'Password updated.';
             this.accountForm = { currentPassword: '', newPassword: '' };
         },
 
@@ -549,25 +460,24 @@ window.stockApp = function() {
             this.newUserForm = { username: '', password: '', role: 'inward' };
         },
         async promptResetPassword(user) {
-            let newPass = prompt(`Enter new password for ${user.username} (Min 6 chars):`);
-            if (!newPass || newPass.trim().length < 6) return alert('Min 6 characters required.');
+            let newPass = prompt(`Enter new password (Min 6 chars):`);
+            if (!newPass || newPass.trim().length < 6) return;
             try {
-                const hashed = await sha256(newPass.trim());
-                await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: hashed });
-                alert("Password reset completed successfully!");
-            } catch (error) { alert("Reset failed: " + error.message); }
+                await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: await sha256(newPass.trim()) });
+                alert("Password updated!");
+            } catch (error) { alert(error.message); }
         },
 
         downloadInwardSupplierReport() {
             const inwards = this.logs.filter(l => l.type === 'INWARD'); if (!inwards.length) return alert("No inward data.");
             const supplierGroups = {};
             inwards.forEach(log => {
-                const sName = log.supplier_name || 'Historical / Unassigned Vendor';
+                const sName = log.supplier_name || 'Historical Vendor';
                 if (!supplierGroups[sName]) supplierGroups[sName] = []; supplierGroups[sName].push(log);
             });
             const sheetMatrix = [];
             Object.keys(supplierGroups).forEach(supplier => {
-                sheetMatrix.push([`🚚 SUPPLIER LEDGER: ${supplier.toUpperCase()}`]); sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE (MRP)", "TOTAL VALUATION"]);
+                sheetMatrix.push([`Supplier: ${supplier.toUpperCase()}`]); sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE", "TOTAL VALUATION"]);
                 let grandTotal = 0;
                 supplierGroups[supplier].forEach(log => {
                     const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
