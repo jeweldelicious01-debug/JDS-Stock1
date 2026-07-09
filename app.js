@@ -244,22 +244,37 @@ window.stockApp = function() {
             }
         },
 
+        // 📦 UPDATED METHOD: Handles Partial, Full, and Dynamic Stock Ingestion
         async approveIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
-            if (!confirm(`Approve incoming stock items from ${order.supplier_name}?`)) return;
+            if (!confirm(`Confirm stock ingestion from ${order.supplier_name}? Live balances will update based on the quantities listed below.`)) return;
 
             try {
+                let hasMissingItems = false;
+                let hasReceivedItems = false;
+
                 for (let record of order.items) {
+                    const arrivedQty = parseInt(record.qty) || 0;
+                    
+                    if (arrivedQty < 0) {
+                        return alert("Quantities cannot be negative numbers.");
+                    }
+                    if (arrivedQty === 0) {
+                        hasMissingItems = true;
+                    }
+
                     const targetItem = this.items.find(i => String(i.id) === String(record.id));
-                    if (targetItem) {
+                    if (targetItem && arrivedQty > 0) {
+                        hasReceivedItems = true;
+                        // Only add the exact quantity that actually arrived at the facility
                         await updateDoc(doc(dbFs, 'items', targetItem.id), {
-                            stock: Number(targetItem.stock || 0) + parseInt(record.qty)
+                            stock: Number(targetItem.stock || 0) + arrivedQty
                         });
 
                         await addDoc(colRef('logs'), {
                             type: 'INWARD',
                             item_id: targetItem.id,
-                            qty: parseInt(record.qty),
+                            qty: arrivedQty,
                             supplier_name: order.supplier_name,
                             department: null,
                             created_at: new Date().toISOString(),
@@ -268,18 +283,44 @@ window.stockApp = function() {
                     }
                 }
 
+                // Determine final order status based on item arrivals
+                let finalStatus = 'RECEIVED';
+                if (hasMissingItems && hasReceivedItems) {
+                    finalStatus = 'PARTIAL'; // Mark as partially fulfilled for administrative history
+                } else if (!hasReceivedItems) {
+                    finalStatus = 'DECLINED'; // If everything was set to 0
+                }
+
                 await updateDoc(doc(dbFs, 'purchase_orders', order.id), {
-                    status: 'RECEIVED',
+                    status: finalStatus,
+                    items: order.items, // Saves the updated quantity audit trail to history
                     resolved_at: new Date().toISOString(),
                     resolved_by: this.currentUsername
                 });
 
-                alert("Success: Consignment received and live balances populated cleanly!");
+                alert(`Order marked as [${finalStatus}]. Balances synchronized cleanly.`);
             } catch (error) {
-                alert("Approval execution error: " + error.message);
+                alert("Approval processing error: " + error.message);
             }
         },
 
+        // ❌ NEW METHOD: Allows Inward users or Admins to drop/void an unfulfilled order completely
+        async declineIncomingOrder(order) {
+            if (order.status !== 'PENDING') return;
+            if (!confirm(`Are you sure you want to DECLINE and cancel this order from ${order.supplier_name}? No stock balances will be adjusted.`)) return;
+
+            try {
+                await updateDoc(doc(dbFs, 'purchase_orders', order.id), {
+                    status: 'DECLINED',
+                    resolved_at: new Date().toISOString(),
+                    resolved_by: this.currentUsername
+                });
+                alert("Order successfully canceled and marked as DECLINED.");
+            } catch (error) {
+                alert("Error canceling order: " + error.message);
+            }
+        },
+        
         async verifyLogin() {
             this.loginError = '';
             const { username, password } = this.loginForm;
