@@ -290,13 +290,13 @@ window.stockApp = function() {
         logout() { sessionStorage.removeItem(SESSION_KEY); this.isAuthenticated = false; this.currentRole = 'readonly'; this.currentUsername = ''; this.currentUserId = null; },
         async deleteNote(noteId) { await deleteDoc(doc(dbFs, 'notes', noteId)); },
         
-        async changeItemName(item) {
+       async changeItemName(item) {
             // 1. Prompt for Item Name Change
             let updatedName = prompt(`[1/3] Update Name for "${item.name}":`, item.name);
             if (updatedName === null) return; // Operator canceled sequence
             if (!updatedName.trim()) return alert("Item Name cannot be left completely blank.");
 
-            // 2. 🟢 FIXED AXIS: Prompt for Master Supplier Re-Assignment
+            // 2. Prompt for Master Supplier Re-Assignment
             let catList = this.suppliers.map((s, idx) => `${idx + 1}. ${s.name}`).join('\n');
             let vendorChoice = prompt(
                 `[2/3] Choose New Main Supplier Number for "${updatedName.trim()}":\n\n${catList}\n\n` +
@@ -311,7 +311,8 @@ window.stockApp = function() {
                 if (freshName?.trim()) {
                     finalVendor = freshName.trim();
                     const matchEx = this.suppliers.find(s => s.name.toLowerCase() === finalVendor.toLowerCase());
-                    if (!matchEx) await addDoc(collection(dbFs, 'suppliers'), { name: finalVendor, phone: '' });
+                    // 🟢 FIXED: Swapped out raw method for your safe internal shortcut helper colRef()
+                    if (!matchEx) await addDoc(colRef('suppliers'), { name: finalVendor, phone: '' });
                 }
             } else if (vendorChoice.trim() !== "") {
                 let sIdx = parseInt(vendorChoice) - 1;
