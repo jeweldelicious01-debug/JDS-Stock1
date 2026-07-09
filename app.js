@@ -12,6 +12,7 @@ import {
 
 const SESSION_KEY = 'restaurantStockSession_v1';
 const colRef = (name) => collection(dbFs, name);
+const itemSupplier = i.supplier_name || defaultSupplier;
 
 async function sha256(text) {
     const enc = new TextEncoder().encode(text);
