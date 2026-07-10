@@ -217,12 +217,14 @@ window.stockApp = function() {
 
         removeOrderBasketItem(index) { this.orderDesk.basket.splice(index, 1); },
 
+        // 📋 UPDATED PROCUREMENT FORMATTER WITH CLEAN SPACING & NO EMOJIS
         async sendWhatsAppOrder() {
             if (!this.orderDesk.supplierId || !this.orderDesk.basket.length) return alert("Supplier choice or draft basket is empty.");
             const vendor = this.suppliers.find(s => String(s.id) === String(this.orderDesk.supplierId));
             if (!vendor) return;
 
             try {
+                // Background cloud log matrix tracking entry
                 await addDoc(colRef('purchase_orders'), {
                     supplier_name: vendor.name,
                     items: this.orderDesk.basket,
@@ -231,26 +233,30 @@ window.stockApp = function() {
                     created_by: this.currentUsername
                 });
 
-                let textMessage = `📋 *PURCHASE ORDER: ${vendor.name.toUpperCase()}*\n`;
-                textMessage += `Date: ${new Date().toLocaleDateString('en-GB')}\n`;
-                textMessage += `------------------------------------\n`;
+                // 📦 STRUCURED LAYOUT ARCHITECTURE WITH EXACT SPACING
+                let textMessage = `*PURCHASE ORDER: ${vendor.name.toUpperCase()}*\n\n'; // Enter after supplier name
+                textMessage += `Date: ${new Date().toLocaleDateString('en-GB')}\n\n`; // Enter after date label
+                
                 this.orderDesk.basket.forEach((item, index) => {
-                    textMessage += `${index + 1}. *${item.name}* — Qty: ${item.qty}\n`;
+                    // Formats clean text lines, adds quantities, and hits an explicit Enter after every item row
+                    textMessage += `${index + 1}. *${item.name}* — Qty: ${item.qty}\n\n`; 
                 });
-                textMessage += `------------------------------------\n`;
-                textMessage += `Please fulfill this request at your earliest availability. Thank you!`;
 
+                // Strip any trailing double line breaks from the end of the final string text buffer
+                textMessage = textMessage.trimEnd();
+
+                // Launch external web thread axis to target mobile/desktop supplier applications
                 const urlSafeMessage = encodeURIComponent(textMessage);
                 const targetPhone = vendor.phone ? vendor.phone.replace(/\D/g, '') : '';
                 window.open(`https://wa.me/${targetPhone}?text=${urlSafeMessage}`, '_blank');
 
+                // Flush procurement panel states back to system defaults
                 this.orderDesk.basket = [];
                 this.orderDesk.supplierId = '';
             } catch (e) {
                 alert("Error staging order tracking row: " + e.message);
             }
         },
-
         async approveIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
             if (!confirm(`Confirm stock ingestion from ${order.supplier_name}? Live balances will update based on the quantities listed below.`)) return;
