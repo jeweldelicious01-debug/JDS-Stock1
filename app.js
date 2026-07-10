@@ -239,7 +239,7 @@ window.stockApp = function() {
                 
                 this.orderDesk.basket.forEach((item, index) => {
                     // Formats clean text lines, adds quantities, and hits an explicit Enter after every item row
-                    textMessage += `${index + 1}. *${item.name}* — Qty: ${item.qty}\n\n`; 
+                    textMessage += `${index + 1}. ${item.name} — Qty:== ${item.qty}\n\n`; 
                 });
 
                 // Strip any trailing double line breaks from the end of the final string text buffer
