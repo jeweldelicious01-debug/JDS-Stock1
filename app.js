@@ -1,9 +1,3 @@
-/**
- * Restaurant Stock Manager & Event Control Engine - Core Logic Module
- * Framework Bindings: Firebase Firestore SDK v10+, Alpine.js v3 Integration Engine
- * Architectural Profile: Enterprise Real-Time Cloud Synchronization Matrix
- */
-
 import { dbFs } from './firebase-config.js'; 
 import {
     collection,
@@ -16,30 +10,15 @@ import {
     onSnapshot,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
 
-// Key constant utilized to safely partition separate local sessionStorage buckets
 const SESSION_KEY = 'restaurantStockSession_v1';
-
-/**
- * Utility Helper: Shorthand abstraction wrapper around Firestore's collection instantiation module
- * @param {string} name - Name target of the target Firestore database collection segment
- */
 const colRef = (name) => collection(dbFs, name);
 
-/**
- * Utility Cryptography Engine: Generates an asymmetrical SHA-256 string hash mapping signature
- * Used safely on client view environments for localized credential cross-verifications
- * @param {string} text - Plain text variable targeted for binary encryption hashing
- */
 async function sha256(text) {
     const enc = new TextEncoder().encode(text);
     const hashBuf = await crypto.subtle.digest('SHA-256', enc);
     return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * Database Seeding Strategy Rule: Checks Firestore on boot and constructs initial master documents
- * Provisions fallbacks if standard data indices are completely blank or uninitialized
- */
 async function seedIfEmpty() {
     try {
         const usersSnap = await getDocs(colRef('users'));
@@ -78,22 +57,20 @@ async function seedIfEmpty() {
             await addDoc(colRef('suppliers'), { name: 'Balaji Food Products', phone: '918888888888' });
         }
     } catch (e) {
-        console.warn("Seeding initialization bypassed safely: ", e);
+        console.warn("Seeding bypassed: ", e);
     }
 }
 
 window.stockApp = function() {
     return {
-        // --- REACTIVE ARRAY STORAGE REGISTRIES ---
         categories: [],
         items: [],
+        importantNotes: [], 
         logs: [],
         users: [],
         suppliers: [], 
         purchaseOrders: [], 
-        importantNotes: [], 
         
-        // --- STRUCTURAL STATUS STATE TRACKERS ---
         ready: false,
         isAuthenticated: false,
         authChecking: true,
@@ -103,14 +80,12 @@ window.stockApp = function() {
         filterCat: 'all',
         orderViewTab: 'pending', 
         
-        // --- REAL-TIME DATA CAPTURE OBJECT BINDINGS ---
         loginForm: { username: '', password: '' },
         loginError: '',
         formInward: { itemId: '', qty: '', supplierName: '' }, 
         formOutward: { itemId: '', department: 'Indian', qty: '' },
         formNote: { itemName: '', pax: '', dateLabel: '' },
         
-        // --- PURCHASE ORDER BASKET MATRIX ---
         orderDesk: {
             supplierId: '',
             selectedItemId: '',
@@ -118,16 +93,13 @@ window.stockApp = function() {
             basket: [] 
         }, 
         
-        // --- SESSION REVERSAL TRANSACTION TRACKERS (UNDO ENGINE) ---
         lastLogId: null,
-        lastLogType: '', 
+        lastLogType: '',
         
-        // --- REACTIVE INTERFACE MODAL CONTROLLERS ---
         showNewItemModal: false,
         showAccountModal: false,
         showUserAdminModal: false,
         
-        // --- DATA INGESTION BLUEPRINTS ---
         newItemForm: { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' }, 
         newCategoryForm: { name: '', emoji: '📦', paletteIndex: 0 },
         paletteOptions: [
@@ -496,11 +468,8 @@ window.stockApp = function() {
         async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
         async deleteUser(userId) { if (confirm('Delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
         
-        // 🔒 SECURITY HARDENING: Blocks password changes from non-admins at the application runtime layer
         async changeMyPassword() {
-            if (this.currentRole !== 'admin') {
-                return alert("Security Access Rejection: Only explicit platform Administrators can modify authentication security profiles.");
-            }
+            if (this.currentRole !== 'admin') return alert("Access Rejected: Only platform Administrators can modify authentication profiles.");
             this.accountError = ''; this.accountSuccess = '';
             const { currentPassword, newPassword } = this.accountForm;
             if (newPassword.length < 6) { this.accountError = 'Min 6 characters'; return; }
@@ -518,7 +487,6 @@ window.stockApp = function() {
             this.newUserForm = { username: '', password: '', role: 'inward' };
         },
         
-        // 🔒 SECURITY HARDENING: Blocks directory password overrides from non-admins
         async promptResetPassword(user) {
             if (this.currentRole !== 'admin') return alert("Operation Denied.");
             let newPass = prompt(`Enter new password for ${user.username} (Min 6 chars):`);
