@@ -309,12 +309,13 @@ window.stockApp = function() {
             }
         },
 
-        // ⏱️ TIMELINE ENGAGEMENT REFLECTIONS: Wire layout handlers to avoid initialization blank screens
+        // 🟢 RESTORED METHOD 1: Timeline validation logic matching layout loops
         isWithinOneHour(createdAt) {
             if (!createdAt) return false;
             return (new Date() - new Date(createdAt)) < 3600000;
         },
 
+        // 🟢 RESTORED METHOD 2: Timeline reverse data calculation handler matching layout loops
         async triggerUndo(log) {
             if (!confirm("Are you sure you want to revert this specific entry from history?")) return;
             try {
@@ -395,9 +396,9 @@ window.stockApp = function() {
         async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
         async deleteUser(userId) { if (confirm('Delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
         
-        // 🔒 ADMIN AUTHENTICATION CONTROL LOCK
+        // 🔒 ADMIN ENFORCED COMPLIANCE HOOKS
         async changeMyPassword() {
-            if (this.currentRole !== 'admin') return alert("Access Rejected: Only platform Administrators can modify authentication credentials.");
+            if (this.currentRole !== 'admin') return alert("Access Rejected: Only platform Administrators can modify authentication profiles.");
             this.accountError = ''; this.accountSuccess = '';
             const { currentPassword, newPassword } = this.accountForm;
             if (newPassword.length < 6) { this.accountError = 'Min 6 characters'; return; }
@@ -423,19 +424,6 @@ window.stockApp = function() {
                 await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: await sha256(newPass.trim()) });
                 alert("Password updated!");
             } catch (error) { alert(error.message); }
-        },
-
-        async submitNewCategory() {
-            if (!this.newCategoryForm.name.trim() || !this.newCategoryForm.emoji.trim()) return alert("Fields required.");
-            const standardizedId = this.newCategoryForm.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (!standardizedId) return alert("Invalid layout name.");
-            if (this.categories.find(c => c.id === standardizedId)) return alert("Category already exists.");
-            const chosenPalette = this.paletteOptions[this.newCategoryForm.paletteIndex || 0];
-            try {
-                await setDoc(doc(dbFs, 'categories', standardizedId), { name: this.newCategoryForm.name.trim(), emoji: this.newCategoryForm.emoji.trim(), bg_color: chosenPalette.bg, border_color: chosenPalette.border, text_color: chosenPalette.text });
-                alert(`📁 Category Matrix "${this.newCategoryForm.name.trim()}" successfully deployed live!`);
-                this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
-            } catch (err) { alert(err.message); }
         },
 
         async changeItemName(item) {
@@ -492,31 +480,6 @@ window.stockApp = function() {
             this.showNewItemModal = false;
         },
 
-        async handleCsvUpload(event) {
-            const file = event.target.files[0]; if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const text = e.target.result; const lines = text.split('\n');
-                for (let i = 1; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue;
-                    const columns = lines[i].split(',');
-                    if (columns.length >= 4) {
-                        const name = columns[0].trim(); const categoryName = columns[1].trim(); const qty = parseInt(columns[2]) || 0; const threshold = parseInt(columns[3]) || 0; const mrp = columns[4] ? Number(columns[4].trim()) || 0 : 0;
-                        let cat = this.categories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
-                        let categoryId = cat ? cat.id : (await addDoc(colRef('categories'), { name: categoryName, emoji: '🍱', bg_color: '#f3f4f6', border_color: '#9ca3af', text_color: '#374151' })).id;
-                        const existingItem = this.items.find((it) => it.name.toLowerCase() === name.toLowerCase());
-                        if (existingItem) await updateDoc(doc(dbFs, 'items', existingItem.id), { stock: existingItem.stock + qty, threshold, mrp });
-                        else {
-                            const maxOrder = this.items.reduce((m, it) => Math.max(m, it.order_index || 0), 0);
-                            await addDoc(colRef('items'), { name, category_id: categoryId, supplier_name: 'General Vendor', stock: qty, threshold, mrp, order_index: maxOrder + 1 });
-                        }
-                    }
-                }
-                alert("CSV Ingested."); event.target.value = '';
-            };
-            reader.readAsText(file);
-        },
-
         downloadInwardSupplierReport() {
             const inwards = this.logs.filter(l => l.type === 'INWARD'); if (!inwards.length) return alert("No inward data.");
             const supplierGroups = {};
@@ -562,7 +525,7 @@ window.stockApp = function() {
     };
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.Alpine) { window.Alpine.data('stockApp', window.stockApp); } 
-    else { document.addEventListener('alpine:init', () => { window.Alpine.data('stockApp', window.stockApp); }); }
+// Hooks component registration securely inside standard Alpine instance channels
+document.addEventListener('alpine:init', () => {
+    window.Alpine.data('stockApp', window.stockApp);
 });
