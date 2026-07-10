@@ -217,14 +217,12 @@ window.stockApp = function() {
 
         removeOrderBasketItem(index) { this.orderDesk.basket.splice(index, 1); },
 
-        // 📋 UPDATED PROCUREMENT FORMATTER WITH CLEAN SPACING & NO EMOJIS
         async sendWhatsAppOrder() {
             if (!this.orderDesk.supplierId || !this.orderDesk.basket.length) return alert("Supplier choice or draft basket is empty.");
             const vendor = this.suppliers.find(s => String(s.id) === String(this.orderDesk.supplierId));
             if (!vendor) return;
 
             try {
-                // Background cloud log matrix tracking entry
                 await addDoc(colRef('purchase_orders'), {
                     supplier_name: vendor.name,
                     items: this.orderDesk.basket,
@@ -233,30 +231,26 @@ window.stockApp = function() {
                     created_by: this.currentUsername
                 });
 
-                // 📦 STRUCURED LAYOUT ARCHITECTURE WITH EXACT SPACING
-                let textMessage = `*PURCHASE ORDER: ${vendor.name.toUpperCase()}*\n\n'; // Enter after supplier name
-                textMessage += `Date: ${new Date().toLocaleDateString('en-GB')}\n\n`; // Enter after date label
+                let textMessage = `*PURCHASE ORDER: ${vendor.name.toUpperCase()}*\n\n`;
+                textMessage += `Date: ${new Date().toLocaleDateString('en-GB')}\n\n`;
                 
                 this.orderDesk.basket.forEach((item, index) => {
-                    // Formats clean text lines, adds quantities, and hits an explicit Enter after every item row
                     textMessage += `${index + 1}. *${item.name}* — Qty: ${item.qty}\n\n`; 
                 });
 
-                // Strip any trailing double line breaks from the end of the final string text buffer
                 textMessage = textMessage.trimEnd();
 
-                // Launch external web thread axis to target mobile/desktop supplier applications
                 const urlSafeMessage = encodeURIComponent(textMessage);
                 const targetPhone = vendor.phone ? vendor.phone.replace(/\D/g, '') : '';
                 window.open(`https://wa.me/${targetPhone}?text=${urlSafeMessage}`, '_blank');
 
-                // Flush procurement panel states back to system defaults
                 this.orderDesk.basket = [];
                 this.orderDesk.supplierId = '';
             } catch (e) {
                 alert("Error staging order tracking row: " + e.message);
             }
         },
+
         async approveIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
             if (!confirm(`Confirm stock ingestion from ${order.supplier_name}? Live balances will update based on the quantities listed below.`)) return;
@@ -315,6 +309,77 @@ window.stockApp = function() {
             }
         },
 
+        // ⏱️ TIMELINE ENGAGEMENT REFLECTIONS: Wire layout handlers to avoid initialization blank screens
+        isWithinOneHour(createdAt) {
+            if (!createdAt) return false;
+            return (new Date() - new Date(createdAt)) < 3600000;
+        },
+
+        async triggerUndo(log) {
+            if (!confirm("Are you sure you want to revert this specific entry from history?")) return;
+            try {
+                const targetItem = this.items.find(i => String(i.id) === String(log.item_id));
+                if (!targetItem) return alert("Target item no longer exists.");
+                let currentBal = Number(targetItem.stock || 0);
+                let corrected = log.type === 'INWARD' ? currentBal - parseInt(log.qty) : currentBal + parseInt(log.qty);
+                if (corrected < 0) return alert("Reversal denied: Stock cannot go below zero.");
+                await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: corrected });
+                await deleteDoc(doc(dbFs, 'logs', log.id));
+                alert("Transaction rolled back successfully!");
+            } catch(e) { alert("Error: " + e.message); }
+        },
+
+        async addInward() {
+            if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) return alert('Select missing fields.');
+            const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); if (!target) return alert('Selected item could not be found.');
+            const qty = parseInt(this.formInward.qty); if (!qty || qty <= 0) return alert('Enter a positive quantity.');
+            let vendor = this.formInward.supplierName.trim();
+            if (vendor === "_NEW_") {
+                let newVendorName = prompt("Enter new Supplier Name:"); if (!newVendorName || !newVendorName.trim()) return alert("Supplier name required.");
+                vendor = newVendorName.trim();
+                const matchEx = this.suppliers.find(s => s.name.toLowerCase() === vendor.toLowerCase());
+                if (!matchEx) await addDoc(colRef('suppliers'), { name: vendor, phone: '' });
+            }
+            try {
+                await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock || 0) + qty });
+                const docRef = await addDoc(colRef('logs'), { type: 'INWARD', item_id: target.id, qty, supplier_name: vendor, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
+                this.lastLogId = docRef.id; this.lastLogType = 'INWARD';
+                this.formInward = { itemId: '', qty: '', supplierName: '' };
+            } catch (error) { alert("Database write error: " + error.message); }
+        },
+
+        async deductOutward() {
+            if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
+            const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId)); if (!target) return alert('Item not found.');
+            const qty = parseInt(this.formOutward.qty); if (!qty || qty <= 0) return alert('Enter positive quantity.');
+            if (Number(target.stock || 0) < qty) return alert('Insufficient stock.');
+            try {
+                const docRef = await addDoc(colRef('logs'), { type: 'OUTWARD', item_id: target.id, qty, department: this.formOutward.department, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
+                await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock) - qty });
+                this.lastLogId = docRef.id; this.lastLogType = 'OUTWARD';
+                this.formOutward = { itemId: '', department: 'Indian', qty: '' };
+            } catch (error) { alert("Error: " + error.message); }
+        },
+
+        async undoLastTransaction() {
+            if (!this.lastLogId) return alert("No recent log found.");
+            if (!confirm(`Are you sure you want to REVERT your last ${this.lastLogType} entry?`)) return;
+            try {
+                const logsSnap = await getDocs(colRef('logs'));
+                const targetingLog = logsSnap.docs.find(d => d.id === this.lastLogId);
+                if (!targetingLog) { this.lastLogId = null; return; }
+                const logData = targetingLog.data();
+                const targetItem = this.items.find(i => String(i.id) === String(logData.item_id));
+                if (!targetItem) return;
+                let balanceCorrection = logData.type === 'INWARD' ? Number(targetItem.stock || 0) - parseInt(logData.qty) : Number(targetItem.stock || 0) + parseInt(logData.qty);
+                if (balanceCorrection < 0) return alert("Rollback denied.");
+                await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: balanceCorrection });
+                await deleteDoc(doc(dbFs, 'logs', this.lastLogId));
+                alert(`Rolled back successfully for "${targetItem.name}".`);
+                this.lastLogId = null; this.lastLogType = '';
+            } catch (e) { alert(e.message); }
+        },
+
         async verifyLogin() {
             this.loginError = '';
             const { username, password } = this.loginForm;
@@ -327,7 +392,52 @@ window.stockApp = function() {
         },
 
         logout() { sessionStorage.removeItem(SESSION_KEY); this.isAuthenticated = false; this.currentRole = 'readonly'; this.currentUsername = ''; this.currentUserId = null; },
+        async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
+        async deleteUser(userId) { if (confirm('Delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
         
+        // 🔒 ADMIN AUTHENTICATION CONTROL LOCK
+        async changeMyPassword() {
+            if (this.currentRole !== 'admin') return alert("Access Rejected: Only platform Administrators can modify authentication credentials.");
+            this.accountError = ''; this.accountSuccess = '';
+            const { currentPassword, newPassword } = this.accountForm;
+            if (newPassword.length < 6) { this.accountError = 'Min 6 characters'; return; }
+            const user = this.users.find((u) => u.id === this.currentUserId);
+            if ((await sha256(currentPassword)) !== user.passwordHash) { this.accountError = 'Incorrect password'; return; }
+            await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: await sha256(newPassword) });
+            this.accountSuccess = 'Password updated.';
+            this.accountForm = { currentPassword: '', newPassword: '' };
+        },
+
+        createUser() {
+            const { username, password, role = 'inward' } = this.newUserForm;
+            if (!username || password.length < 6) return;
+            addDoc(colRef('users'), { username: username.trim(), passwordHash: sha256(password), role });
+            this.newUserForm = { username: '', password: '', role: 'inward' };
+        },
+        
+        async promptResetPassword(user) {
+            if (this.currentRole !== 'admin') return alert("Operation Denied.");
+            let newPass = prompt(`Enter new password for ${user.username} (Min 6 chars):`);
+            if (!newPass || newPass.trim().length < 6) return alert("Minimum 6 characters needed.");
+            try {
+                await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: await sha256(newPass.trim()) });
+                alert("Password updated!");
+            } catch (error) { alert(error.message); }
+        },
+
+        async submitNewCategory() {
+            if (!this.newCategoryForm.name.trim() || !this.newCategoryForm.emoji.trim()) return alert("Fields required.");
+            const standardizedId = this.newCategoryForm.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (!standardizedId) return alert("Invalid layout name.");
+            if (this.categories.find(c => c.id === standardizedId)) return alert("Category already exists.");
+            const chosenPalette = this.paletteOptions[this.newCategoryForm.paletteIndex || 0];
+            try {
+                await setDoc(doc(dbFs, 'categories', standardizedId), { name: this.newCategoryForm.name.trim(), emoji: this.newCategoryForm.emoji.trim(), bg_color: chosenPalette.bg, border_color: chosenPalette.border, text_color: chosenPalette.text });
+                alert(`📁 Category Matrix "${this.newCategoryForm.name.trim()}" successfully deployed live!`);
+                this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
+            } catch (err) { alert(err.message); }
+        },
+
         async changeItemName(item) {
             let updatedName = prompt(`[1/3] Update Name for "${item.name}":`, item.name);
             if (updatedName === null) return;
@@ -382,19 +492,6 @@ window.stockApp = function() {
             this.showNewItemModal = false;
         },
 
-        async submitNewCategory() {
-            if (!this.newCategoryForm.name.trim() || !this.newCategoryForm.emoji.trim()) return alert("Fields required.");
-            const standardizedId = this.newCategoryForm.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (!standardizedId) return alert("Invalid layout name.");
-            if (this.categories.find(c => c.id === standardizedId)) return alert("Category already exists.");
-            const chosenPalette = this.paletteOptions[this.newCategoryForm.paletteIndex || 0];
-            try {
-                await setDoc(doc(dbFs, 'categories', standardizedId), { name: this.newCategoryForm.name.trim(), emoji: this.newCategoryForm.emoji.trim(), bg_color: chosenPalette.bg, border_color: chosenPalette.border, text_color: chosenPalette.text });
-                alert(`📁 Category Matrix "${this.newCategoryForm.name.trim()}" successfully deployed live!`);
-                this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
-            } catch (err) { alert(err.message); }
-        },
-
         async handleCsvUpload(event) {
             const file = event.target.files[0]; if (!file) return;
             const reader = new FileReader();
@@ -418,89 +515,6 @@ window.stockApp = function() {
                 alert("CSV Ingested."); event.target.value = '';
             };
             reader.readAsText(file);
-        },
-
-        async addInward() {
-            if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) return alert('Select missing fields.');
-            const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); if (!target) return alert('Selected item could not be found.');
-            const qty = parseInt(this.formInward.qty); if (!qty || qty <= 0) return alert('Enter a positive quantity.');
-            let vendor = this.formInward.supplierName.trim();
-            if (vendor === "_NEW_") {
-                let newVendorName = prompt("Enter new Supplier Name:"); if (!newVendorName || !newVendorName.trim()) return alert("Supplier name required.");
-                vendor = newVendorName.trim();
-                const matchEx = this.suppliers.find(s => s.name.toLowerCase() === vendor.toLowerCase());
-                if (!matchEx) await addDoc(colRef('suppliers'), { name: vendor, phone: '' });
-            }
-            try {
-                await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock || 0) + qty });
-                const docRef = await addDoc(colRef('logs'), { type: 'INWARD', item_id: target.id, qty, supplier_name: vendor, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
-                this.lastLogId = docRef.id; this.lastLogType = 'INWARD';
-                this.formInward = { itemId: '', qty: '', supplierName: '' };
-            } catch (error) { alert("Database write error: " + error.message); }
-        },
-
-        async deductOutward() {
-            if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
-            const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId)); if (!target) return alert('Item not found.');
-            const qty = parseInt(this.formOutward.qty); if (!qty || qty <= 0) return alert('Enter positive quantity.');
-            if (Number(target.stock || 0) < qty) return alert('Insufficient stock.');
-            try {
-                await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock) - qty });
-                const docRef = await addDoc(colRef('logs'), { type: 'OUTWARD', item_id: target.id, qty, department: this.formOutward.department, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
-                this.lastLogId = docRef.id; this.lastLogType = 'OUTWARD';
-                this.formOutward = { itemId: '', department: 'Indian', qty: '' };
-            } catch (error) { alert("Error: " + error.message); }
-        },
-
-        async undoLastTransaction() {
-            if (!this.lastLogId) return alert("No recent log found.");
-            if (!confirm(`Are you sure you want to REVERT your last ${this.lastLogType} entry?`)) return;
-            try {
-                const logsSnap = await getDocs(colRef('logs'));
-                const targetingLog = logsSnap.docs.find(d => d.id === this.lastLogId);
-                if (!targetingLog) { this.lastLogId = null; return; }
-                const logData = targetingLog.data();
-                const targetItem = this.items.find(i => String(i.id) === String(logData.item_id));
-                if (!targetItem) return;
-                let balanceCorrection = logData.type === 'INWARD' ? Number(targetItem.stock || 0) - parseInt(logData.qty) : Number(targetItem.stock || 0) + parseInt(logData.qty);
-                if (balanceCorrection < 0) return alert("Rollback denied.");
-                await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: balanceCorrection });
-                await deleteDoc(doc(dbFs, 'logs', this.lastLogId));
-                alert(`Rolled back successfully for "${targetItem.name}".`);
-                this.lastLogId = null; this.lastLogType = '';
-            } catch (e) { alert(e.message); }
-        },
-
-        async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
-        async deleteUser(userId) { if (confirm('Delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
-        
-        async changeMyPassword() {
-            if (this.currentRole !== 'admin') return alert("Access Rejected: Only platform Administrators can modify authentication profiles.");
-            this.accountError = ''; this.accountSuccess = '';
-            const { currentPassword, newPassword } = this.accountForm;
-            if (newPassword.length < 6) { this.accountError = 'Min 6 characters'; return; }
-            const user = this.users.find((u) => u.id === this.currentUserId);
-            if ((await sha256(currentPassword)) !== user.passwordHash) { this.accountError = 'Incorrect password'; return; }
-            await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: await sha256(newPassword) });
-            this.accountSuccess = 'Password updated.';
-            this.accountForm = { currentPassword: '', newPassword: '' };
-        },
-
-        createUser() {
-            const { username, password, role = 'inward' } = this.newUserForm;
-            if (!username || password.length < 6) return;
-            addDoc(colRef('users'), { username: username.trim(), passwordHash: sha256(password), role });
-            this.newUserForm = { username: '', password: '', role: 'inward' };
-        },
-        
-        async promptResetPassword(user) {
-            if (this.currentRole !== 'admin') return alert("Operation Denied.");
-            let newPass = prompt(`Enter new password for ${user.username} (Min 6 chars):`);
-            if (!newPass || newPass.trim().length < 6) return alert("Minimum 6 characters needed.");
-            try {
-                await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: await sha256(newPass.trim()) });
-                alert("Password updated!");
-            } catch (error) { alert(error.message); }
         },
 
         downloadInwardSupplierReport() {
