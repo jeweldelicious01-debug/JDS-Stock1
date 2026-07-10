@@ -65,7 +65,7 @@ window.stockApp = function() {
     return {
         categories: [],
         items: [],
-        importantNotes: [], // Old collection channel mapped cleanly
+        importantNotes: [], 
         logs: [],
         users: [],
         suppliers: [], 
@@ -84,8 +84,6 @@ window.stockApp = function() {
         loginError: '',
         formInward: { itemId: '', qty: '', supplierName: '' }, 
         formOutward: { itemId: '', department: 'Indian', qty: '' },
-        
-        // Old form data pointers re-synchronized into context operations
         formNote: { itemName: '', pax: '', dateLabel: '' },
         
         orderDesk: {
@@ -194,24 +192,7 @@ window.stockApp = function() {
                 return itemSupplier === vendor.name;
             });
         },
-get activeLiveEvents() {
-            // 1. Get current date attributes from the hardware clock
-            const local = new Date();
-            
-            // 2. Format explicitly to YYYY-MM-DD based on local target timezone parameters
-            const year = local.getFullYear();
-            const month = String(local.getMonth() + 1).padStart(2, '0');
-            const day = String(local.getDate()).padStart(2, '0');
-            
-            const localDateString = `${year}-${month}-${day}`; // Outputs exact local date 'YYYY-MM-DD'
-            
-            // 3. Filter collection rows safely using unified local timeline strings
-            return this.events.filter(event => {
-                // Safely handles empty columns or alternative property mappings from legacy structures
-                const targetEventDate = event.date || event.date_label || '';
-                return targetEventDate >= localDateString;
-            }).sort((a, b) => a.date.localeCompare(b.date));
-        },
+
         get processedPurchaseOrders() {
             if (this.orderViewTab === 'pending') {
                 return this.purchaseOrders.filter(o => o.status === 'PENDING');
@@ -309,7 +290,6 @@ get activeLiveEvents() {
             } catch (error) { alert("Error canceling order: " + error.message); }
         },
 
-        // 🔄 RESTORED: Classic Event Banner Note publishing method
         async submitNewNote() {
             if (!this.formNote.itemName.trim() || !this.formNote.pax || !this.formNote.dateLabel.trim()) return alert("Fields required.");
             try {
@@ -323,7 +303,6 @@ get activeLiveEvents() {
             } catch (e) { alert(e.message); }
         },
 
-        // 🔄 RESTORED: Classic Note direct manual deletion method
         async deleteNote(noteId) { 
             if (confirm("Delete this event allocation card notice?")) {
                 await deleteDoc(doc(dbFs, 'notes', noteId)); 
