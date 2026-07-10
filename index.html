@@ -7,12 +7,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script type="module" src="app.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp()" x-init="init()">
 
-    <!-- Authentication Screen Overlay -->
     <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
         <div class="bg-white p-8 rounded-xl max-w-sm w-full shadow-2xl border border-slate-200 text-center">
             <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-4 border border-amber-200">🔑</div>
@@ -33,12 +32,25 @@
         </div>
     </div>
 
-    <!-- Active Management Dashboard Workspace -->
     <main class="max-w-6xl mx-auto p-4 space-y-6" x-show="isAuthenticated" x-cloak>
+        
         <template x-if="ready">
             <div class="space-y-6">
                 
-                <!-- 🔄 RESTORED: Classic Dynamic Event Notice Alerts Panel -->
+                <header class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center gap-4 flex-wrap">
+                    <div class="space-y-1">
+                        <h1 class="text-2xl font-black tracking-tight text-slate-800 flex items-center gap-2">📊 Restaurant Inventory Operations</h1>
+                        <p class="text-xs text-slate-500">Logged in as <span class="font-bold text-slate-800" x-text="currentUsername"></span> <span class="mx-2 text-slate-300">|</span> Security Scope: <span class="bg-slate-100 text-slate-800 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-slate-200" x-text="currentRole"></span></p>
+                    </div>
+                    <div class="flex gap-2 items-center flex-wrap">
+                        <button @click="showAccountModal = true" class="text-xs bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2 rounded-lg font-bold tracking-wide transition shadow-sm">👤 Security Settings</button>
+                        <button x-show="currentRole === 'admin'" @click="showUserAdminModal = true" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg font-bold tracking-wide border border-indigo-200 transition shadow-sm">🧑‍💼 Operator & Category Management</button>
+                        <button x-show="currentRole !== 'readonly'" @click="downloadInwardSupplierReport()" class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg font-bold tracking-wide flex items-center gap-1.5 transition shadow-md">🧾 Supplier Inward Report (.xlsx)</button>
+                        <button @click="downloadExcelReport()" class="text-xs bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg font-bold tracking-wide flex items-center gap-1.5 transition shadow-md">📊 Export 30-Day Excel (.xlsx)</button>
+                        <button @click="logout()" class="text-xs bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold px-3 py-2 rounded-lg transition">🔒 Close Session</button>
+                    </div>
+                </header>
+
                 <section class="bg-amber-50 border border-amber-200 p-4 rounded-xl text-xs text-amber-950 space-y-3 shadow-xs">
                     <div class="flex justify-between items-center border-b border-amber-200 pb-2">
                         <span class="font-bold uppercase tracking-wider text-amber-900 text-xs flex items-center gap-1.5">📢 Scheduled High-Pax Catering Event Matrix</span>
@@ -55,7 +67,7 @@
                         </template>
                     </div>
                     <div x-show="currentRole === 'admin'" class="bg-white border border-amber-200 p-4 rounded-lg space-y-3 mt-2 shadow-xs">
-                        <div class="font-bold text-amber-900 text-[11px] uppercase tracking-wider"></div>
+                        <div class="font-bold text-amber-900 text-[11px] uppercase tracking-wider">➕ Stage Event Allocation Note:</div>
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <input type="text" x-model="formNote.itemName" placeholder="Item Title" class="border border-slate-300 p-2 rounded-md bg-slate-50 text-xs w-full">
                             <input type="number" x-model.number="formNote.pax" placeholder="Headcount (Pax)" class="border border-slate-300 p-2 rounded-md bg-slate-50 text-xs text-center font-mono w-full">
@@ -65,21 +77,6 @@
                     </div>
                 </section>
 
-                <header class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center gap-4 flex-wrap">
-                    <div class="space-y-1">
-                        <h1 class="text-2xl font-black tracking-tight text-slate-800 flex items-center gap-2">📊 Restaurant Inventory Operations</h1>
-                        <p class="text-xs text-slate-500">Logged in as <span class="font-bold text-slate-800" x-text="currentUsername"></span> <span class="mx-2 text-slate-300">|</span> Security Scope: <span class="bg-slate-100 text-slate-800 font-bold px-2 py-0.5 rounded text-[10px] uppercase border border-slate-200" x-text="currentRole"></span></p>
-                    </div>
-                    <div class="flex gap-2 items-center flex-wrap">
-                        <button @click="showAccountModal = true" class="text-xs bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2 rounded-lg font-bold tracking-wide transition shadow-sm">👤 Security Settings</button>
-                        <button x-show="currentRole === 'admin'" @click="showUserAdminModal = true" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg font-bold tracking-wide border border-indigo-200 transition shadow-sm">🧑‍💼 Operator & Category Management</button>
-                        <button x-show="currentRole === 'admin' || currentRole === 'inward'" @click="downloadInwardSupplierReport()" class="text-xs bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-lg font-bold tracking-wide flex items-center gap-1.5 transition shadow-md">🧾 Supplier Inward Report (.xlsx)</button>
-                        <button @click="downloadExcelReport()" class="text-xs bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg font-bold tracking-wide flex items-center gap-1.5 transition shadow-md">📊 Export 30-Day Excel (.xlsx)</button>
-                        <button @click="logout()" class="text-xs bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold px-3 py-2 rounded-lg transition">🔒 Close Session</button>
-                    </div>
-                </header>
-
-                <!-- Supplier Purchase Order Desk -->
                 <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'order'">
                     <div class="text-xs font-black uppercase tracking-wider text-indigo-800 border-b border-slate-100 pb-2">📝 Automated Supplier Purchase Order Desk</div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
@@ -124,7 +121,6 @@
                     </div>
                 </section>
 
-                <!-- Order Verification Desk -->
                 <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
                     <div class="flex justify-between items-center border-b border-slate-100 pb-2 flex-wrap gap-2">
                         <div class="text-xs font-black uppercase tracking-wider text-emerald-800">📦 Purchase Orders Verification Workspace</div>
@@ -175,8 +171,7 @@
                     </div>
                 </section>
 
-                <!-- Manual Operation Desks -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="currentRole === 'admin' || currentRole === 'inward' || currentRole === 'outward'">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="currentRole !== 'readonly'">
                     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
                         <div class="text-xs font-bold uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2">📥 Log New Inward Manual Consignment</div>
                         <div class="grid grid-cols-4 gap-3 text-xs">
@@ -233,16 +228,9 @@
                             <input type="number" x-model.number="formOutward.qty" placeholder="Units" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
                         </div>
                         <button @click="deductOutward()" class="w-full bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold py-2.5 rounded-lg shadow-sm transition uppercase tracking-wider">Execute Deduction & Issue Stock</button>
-                        
-                        <div x-show="lastLogId && lastLogType === 'OUTWARD'" x-transition class="mt-2" x-cloak>
-                            <button @click="undoLastTransaction()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs py-2 rounded-lg transition uppercase tracking-wider shadow-xs flex items-center justify-center gap-1.5">
-                                ↩️ Undo / Redo Last Outward Entry
-                            </button>
-                        </div>
                     </div>
                 </div>
 
-                <!-- Ledger Board Table Grid -->
                 <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
                         <div class="space-y-0.5">
@@ -293,7 +281,7 @@
                                         </td>
                                         <td class="py-5 px-4 text-center font-mono text-slate-400 font-bold text-xs whitespace-nowrap" x-text="item.threshold"></td>
                                         <td class="py-5 px-4 text-right space-x-2 whitespace-nowrap font-bold" x-show="currentRole === 'admin' || currentRole === 'inward'">
-                                            <button @click="changeItemName(item)" class="text-slate-600 hover:text-indigo-600 text-[11px] transition">✏️ Edit Details</button>
+                                            <button @click="changeItemName(item)" class="text-slate-600 hover:text-indigo-600 text-[11px] transition">✏ Edit Details</button>
                                             <span class="text-slate-300 font-normal">|</span>
                                             <button @click="modifyThreshold(item)" class="text-slate-600 hover:text-amber-600 text-[11px] transition">Limit</button>
                                             <span x-show="currentRole === 'admin'" class="text-slate-300 font-normal">|</span>
@@ -306,7 +294,6 @@
                     </div>
                 </section>
                 
-                <!-- Security Passphrase Settings Modal -->
                 <div x-show="showAccountModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <form @submit.prevent="changeMyPassword()" class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
                         <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">👤 Security Key Settings</h3>
@@ -323,7 +310,6 @@
                     </form>
                 </div>
 
-                <!-- Operator Accounts Panel Modal -->
                 <div x-show="showUserAdminModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl space-y-5 border border-slate-200 max-h-[90vh] overflow-y-auto">
                         <div>
@@ -387,17 +373,16 @@
                                         </template>
                                     </div>
                                 </div>
-                                <button @click="submitNewCategory()" type="button" class="w-full bg-indigo-700 hover:bg-indigo-800 text-white font-bold py-2.5 rounded text-xs uppercase tracking-wide col-span-3 shadow-xs">
+                                <button @click="submitNewCategory()" type="button" class="w-full bg-indigo-700 hover:bg-indigo-800 text-white font-black py-2.5 rounded text-xs uppercase tracking-wide col-span-3 shadow-xs">
                                     Deploy Fresh Category Segment Live
                                 </button>
                             </div>
                         </div>
 
-                        <button @click="showUserAdminModal = false" class="w-full bg-slate-100 text-xs font-bold py-2.5 rounded-lg border mt-2">Dismiss Administration Suite</button>
+                        <button @click="showUserAdminModal = false" class="w-full bg-slate-100 text-xs font-bold py-2.5 rounded-lg border mt-2">Dismiss Suite</button>
                     </div>
                 </div>
 
-                <!-- Portfolio Creation Modal -->
                 <div x-show="showNewItemModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
                         <h3 class="text-sm font-black uppercase text-slate-800 tracking-wide border-b pb-1">➕ Append Portfolio Tracking row</h3>
