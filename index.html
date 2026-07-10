@@ -10,7 +10,7 @@
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>[x-cloak] { display: none !important; }</style>
 </head>
-<body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp()" x-init="init()">
+<body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp" x-init="init()">
 
     <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
         <div class="bg-white p-8 rounded-xl max-w-sm w-full shadow-2xl border border-slate-200 text-center">
@@ -164,15 +164,16 @@
             <div class="overflow-x-auto">
                 <table class="w-full text-left text-xs border-collapse">
                     <thead>
-                        <tr class="bg-slate-50 border-b text-slate-500 uppercase tracking-wider text-[11px] font-bold">
-                            <th class="p-3 w-16 text-center" x-show="currentRole === 'admin'">Move</th>
-                            <th class="p-3">Item Name</th>                       
-                            <th class="p-3">Category Tag</th>                    
-                            <th class="p-3 text-center">Live Stock Balance</th>  
-                            <th class="p-3">Status Threshold Vector</th>         
-                            <th class="p-3 text-center">Safety Limit</th>        
-                            <th class="p-3 text-center" x-show="currentRole !== 'readonly'">Unit Price (MRP)</th> 
-                            <th class="p-3 text-right" x-show="currentRole === 'admin' || currentRole === 'inward'">Management Axis</th>
+                        <tr class="bg-slate-100 border-b border-slate-200 text-slate-600 uppercase tracking-wider text-[10px] font-black">
+                            <th class="py-4 px-4 w-16 text-center" x-show="currentRole === 'admin'">Move</th>
+                            <th class="py-4 px-4 min-w-[180px]">Item Name</th>                       
+                            <th class="py-4 px-4 text-center w-28">Live Stock Balance</th>  
+                            <th class="py-4 px-4 w-32">Status Vector</th>         
+                            <th class="py-4 px-4 min-w-[150px]">Assigned Supplier</th>        
+                            <th class="py-4 px-4 text-center w-28" x-show="currentRole !== 'readonly'">Unit Price (MRP)</th> 
+                            <th class="py-4 px-4 w-36">Category Tag</th>
+                            <th class="py-4 px-4 text-center w-24">Safety Limit</th>
+                            <th class="py-4 px-4 text-right min-w-[160px]" x-show="currentRole === 'admin' || currentRole === 'inward'">Management Axis</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
@@ -182,18 +183,21 @@
                                     <button @click="shiftOrder(item.id, 'up')" class="text-slate-400 hover:text-slate-800 font-bold">▲</button>
                                     <button @click="shiftOrder(item.id, 'down')" class="text-slate-400 hover:text-slate-800 font-bold">▼</button>
                                 </td>
-                                <td class="p-4 font-extrabold text-slate-900 text-sm" x-text="item.name"></td>
-                                <td class="p-4">
-                                    <span :style="'background-color: ' + item.bg + '; color: ' + item.text_color + '; border-color: ' + item.border" class="px-2.5 py-1 rounded-md text-[10px] uppercase font-extrabold border shadow-2xs whitespace-nowrap" x-text="item.emoji + ' ' + item.category_name"></span>
-                                </td>
-                                <td class="p-4 text-center font-mono text-sm font-black" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="item.stock"></td>
-                                <td class="p-4">
+                                <td class="py-5 px-4 font-extrabold text-slate-900 text-sm tracking-tight whitespace-nowrap" x-text="item.name"></td>
+                                <td class="py-5 px-4 text-center font-mono text-sm font-black tracking-wide whitespace-nowrap" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="item.stock"></td>
+                                <td class="py-5 px-4 whitespace-nowrap">
                                     <template x-if="item.stock === 0"><span class="bg-rose-100 text-rose-800 border border-rose-200 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">Out of stock</span></template>
                                     <template x-if="item.stock > 0 && item.stock <= item.threshold"><span class="bg-amber-100 text-amber-800 border border-amber-200 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">Low stock</span></template>
                                     <template x-if="item.stock > item.threshold"><span class="bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">Healthy</span></template>
                                 </td>
-                                <td class="p-4 text-center font-mono text-slate-400 font-medium" x-text="item.threshold"></td>
-                                <td class="p-4 text-center font-mono font-bold text-slate-700" x-show="currentRole !== 'readonly'" x-text="'₹' + (item.mrp || 0)"></td>
+                                <td class="py-5 px-4 font-bold text-slate-600 text-xs whitespace-nowrap">
+                                    <span class="bg-slate-50 px-2.5 py-1 rounded border border-slate-200" x-text="item.supplier_name || 'General Vendor'"></span>
+                                weights</td>
+                                <td class="py-5 px-4 text-center font-mono font-bold text-slate-700 text-sm whitespace-nowrap" x-show="currentRole !== 'readonly'" x-text="'₹' + (item.mrp || 0)"></td>
+                                <td class="py-5 px-4 whitespace-nowrap">
+                                    <span :style="'background-color: ' + item.bg + '; color: ' + item.text_color + '; border-color: ' + item.border" class="px-3 py-1 rounded-md text-[10px] uppercase font-black border tracking-wide shadow-3xs" x-text="item.emoji + ' ' + item.category_name"></span>
+                                </td>
+                                <td class="py-5 px-4 text-center font-mono text-slate-400 font-bold text-xs whitespace-nowrap" x-text="item.threshold"></td>
                                 <td class="p-4 text-right space-x-2.5 whitespace-nowrap" x-show="currentRole === 'admin' || currentRole === 'inward'">
                                     <button @click="changeItemName(item)" class="text-slate-600 font-bold text-[11px]">✏️ Edit Details</button>
                                     <span class="text-slate-200">|</span>
