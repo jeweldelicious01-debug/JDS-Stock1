@@ -12,7 +12,6 @@
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp" x-init="init()">
 
-    <!-- Authentication Screen Overlay -->
     <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
         <div class="bg-white p-8 rounded-xl max-w-sm w-full shadow-2xl border border-slate-200 text-center">
             <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-4 border border-amber-200">🔑</div>
@@ -33,7 +32,6 @@
         </div>
     </div>
 
-    <!-- Active Management Dashboard Workspace -->
     <main class="max-w-6xl mx-auto p-4 space-y-6" x-show="isAuthenticated" x-cloak>
         <template x-if="ready">
             <div class="space-y-6">
@@ -51,69 +49,70 @@
                         <button @click="logout()" class="text-xs bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold px-3 py-2 rounded-lg transition">🔒 Close Session</button>
                     </div>
                 </header>
+
                 <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" 
-         x-show="currentRole === 'admin' || currentRole === 'inward' || currentRole === 'order'" 
-         x-cloak>
-    
-    <div class="flex justify-between items-center border-b border-slate-100 pb-2">
-        <div class="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
-            📦 Incoming Procurement Reconciliation Desk
-        </div>
-        <div class="flex bg-slate-100 p-0.5 rounded-lg border text-[11px] font-bold">
-            <button type="button" @click="orderViewTab = 'pending'" :class="orderViewTab === 'pending' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500'" class="px-3 py-1 rounded-md transition">Pending Deliveries</button>
-            <button type="button" @click="orderViewTab = 'historical'" :class="orderViewTab === 'historical' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500'" class="px-3 py-1 rounded-md transition">Archived / Resolved</button>
-        </div>
-    </div>
-    
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <template x-for="order in processedPurchaseOrders" :key="order.id">
-            <div class="border rounded-xl p-4 bg-slate-50/50 flex flex-col justify-between space-y-3">
-                <div class="space-y-1">
-                    <div class="flex justify-between items-start">
-                        <span class="font-extrabold text-sm text-slate-800" x-text="order.supplier_name"></span>
-                        <span :class="{
-                            'bg-amber-100 text-amber-800 border-amber-200': order.status === 'PENDING',
-                            'bg-emerald-100 text-emerald-800 border-emerald-200': order.status === 'RECEIVED',
-                            'bg-sky-100 text-sky-800 border-sky-200': order.status === 'PARTIAL',
-                            'bg-rose-100 text-rose-800 border-rose-200': order.status === 'DECLINED'
-                        }" class="text-[9px] uppercase font-black px-2 py-0.5 rounded border tracking-wider" x-text="order.status"></span>
-                    </div>
-                    <p class="text-[10px] text-slate-400 font-mono">
-                        Issued: <span x-text="new Date(order.created_at).toLocaleString('en-GB')"></span> by <span class="text-slate-700 font-bold" x-text="order.created_by"></span>
-                    </p>
-                </div>
-
-                <div class="bg-white border rounded-lg p-2 divide-y divide-slate-100 text-xs font-mono">
-                    <template x-for="it in order.items" :key="it.id">
-                        <div class="py-1.5 flex justify-between items-center gap-2">
-                            <span class="font-sans text-slate-700" x-text="it.name"></span>
-                            <div class="flex items-center gap-1.5">
-                                <span class="text-slate-400 text-[10px]" x-text="order.status === 'PENDING' ? 'Recv Qty:' : 'Ingested:'"></span>
-                                <input type="number" 
-                                       min="0" 
-                                       x-model.number="it.qty" 
-                                       :disabled="order.status !== 'PENDING'" 
-                                       class="w-14 border text-center rounded p-0.5 bg-slate-50 font-bold text-slate-900 focus:ring-1 focus:ring-emerald-500 disabled:opacity-75">
-                            </div>
+                         x-show="currentRole === 'admin' || currentRole === 'inward' || currentRole === 'order'" 
+                         x-cloak>
+                    
+                    <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+                        <div class="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
+                            📦 Incoming Procurement Reconciliation Desk
                         </div>
-                    </template>
-                </div>
+                        <div class="flex bg-slate-100 p-0.5 rounded-lg border text-[11px] font-bold">
+                            <button type="button" @click="orderViewTab = 'pending'" :class="orderViewTab === 'pending' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500'" class="px-3 py-1 rounded-md transition">Pending Deliveries</button>
+                            <button type="button" @click="orderViewTab = 'historical'" :class="orderViewTab === 'historical' ? 'bg-white shadow-xs text-slate-900' : 'text-slate-500'" class="px-3 py-1 rounded-md transition">Archived / Resolved</button>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <template x-for="order in processedPurchaseOrders" :key="order.id">
+                            <div class="border rounded-xl p-4 bg-slate-50/50 flex flex-col justify-between space-y-3">
+                                <div class="space-y-1">
+                                    <div class="flex justify-between items-start">
+                                        <span class="font-extrabold text-sm text-slate-800" x-text="order.supplier_name"></span>
+                                        <span :class="{
+                                            'bg-amber-100 text-amber-800 border-amber-200': order.status === 'PENDING',
+                                            'bg-emerald-100 text-emerald-800 border-emerald-200': order.status === 'RECEIVED',
+                                            'bg-sky-100 text-sky-800 border-sky-200': order.status === 'PARTIAL',
+                                            'bg-rose-100 text-rose-800 border-rose-200': order.status === 'DECLINED'
+                                        }" class="text-[9px] uppercase font-black px-2 py-0.5 rounded border tracking-wider" x-text="order.status"></span>
+                                    </div>
+                                    <p class="text-[10px] text-slate-400 font-mono">
+                                        Issued: <span x-text="new Date(order.created_at).toLocaleString('en-GB')"></span> by <span class="text-slate-700 font-bold" x-text="order.created_by"></span>
+                                    </p>
+                                </div>
 
-                <div class="flex gap-2 pt-1" x-show="order.status === 'PENDING' && (currentRole === 'admin' || currentRole === 'inward')">
-                    <button type="button" @click="declineIncomingOrder(order)" class="flex-1 bg-white hover:bg-rose-50 border border-slate-200 text-rose-600 font-bold py-1.5 rounded-lg text-xs transition uppercase tracking-wide">Decline</button>
-                    <button type="button" @click="approveIncomingOrder(order)" class="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-1.5 rounded-lg text-xs shadow-sm transition uppercase tracking-wide">Approve Inward</button>
-                </div>
-            </div>
-        </template>
-        
-        <template x-if="processedPurchaseOrders.length === 0">
-            <div class="text-xs text-slate-400 italic py-4 text-center md:col-span-2 bg-slate-50 border border-dashed rounded-xl">
-                No active order manifests recorded under this tracking view.
-            </div>
-        </template>
-    </div>
-</section>
-                <!-- Dynamic Event Notice Alerts Panel -->
+                                <div class="bg-white border rounded-lg p-2 divide-y divide-slate-100 text-xs font-mono">
+                                    <template x-for="it in order.items" :key="it.id">
+                                        <div class="py-1.5 flex justify-between items-center gap-2">
+                                            <span class="font-sans text-slate-700" x-text="it.name"></span>
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="text-slate-400 text-[10px]" x-text="order.status === 'PENDING' ? 'Recv Qty:' : 'Ingested:'"></span>
+                                                <input type="number" 
+                                                       min="0" 
+                                                       x-model.number="it.qty" 
+                                                       :disabled="order.status !== 'PENDING'" 
+                                                       class="w-14 border text-center rounded p-0.5 bg-slate-50 font-bold text-slate-900 focus:ring-1 focus:ring-emerald-500 disabled:opacity-75">
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+
+                                <div class="flex gap-2 pt-1" x-show="order.status === 'PENDING' && (currentRole === 'admin' || currentRole === 'inward')">
+                                    <button type="button" @click="declineIncomingOrder(order)" class="flex-1 bg-white hover:bg-rose-50 border border-slate-200 text-rose-600 font-bold py-1.5 rounded-lg text-xs transition uppercase tracking-wide">Decline</button>
+                                    <button type="button" @click="approveIncomingOrder(order)" class="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-1.5 rounded-lg text-xs shadow-sm transition uppercase tracking-wide">Approve Inward</button>
+                                </div>
+                            </div>
+                        </template>
+                        
+                        <template x-if="processedPurchaseOrders.length === 0">
+                            <div class="text-xs text-slate-400 italic py-4 text-center md:col-span-2 bg-slate-50 border border-dashed rounded-xl">
+                                No active order manifests recorded under this tracking view.
+                            </div>
+                        </template>
+                    </div>
+                </section>
+
                 <section class="bg-amber-50 border border-amber-200 p-4 rounded-xl text-xs text-amber-950 space-y-3 shadow-xs">
                     <div class="flex justify-between items-center border-b border-amber-200 pb-2">
                         <span class="font-bold uppercase tracking-wider text-amber-900 text-xs flex items-center gap-1.5">📢 Scheduled High-Pax Catering Event Matrix</span>
@@ -140,7 +139,6 @@
                     </div>
                 </section>
 
-                <!-- Automated Supplier Purchase Order Desk -->
                 <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'order'">
                     <div class="text-xs font-black uppercase tracking-wider text-indigo-800 border-b border-slate-100 pb-2">📝 Automated Supplier Purchase Order Desk</div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
@@ -185,9 +183,7 @@
                     </div>
                 </section>
 
-                <!-- Command Control Center Operations Desks -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="currentRole !== 'readonly' && currentRole !== 'order'">
-                    <!-- Inward Box -->
                     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
                         <div class="text-xs font-bold uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2">📥 Log New Inward Manual Consignment</div>
                         <div class="grid grid-cols-4 gap-3 text-xs">
@@ -227,7 +223,6 @@
                         </div>
                     </div>
 
-                    <!-- Outward Dispatch Desk -->
                     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'outward'">
                         <div class="text-xs font-bold uppercase tracking-wider text-rose-800 border-b border-slate-100 pb-2">📤 Issue Line Outward Allocation</div>
                         <div class="grid grid-cols-3 gap-3 text-xs">
@@ -248,7 +243,6 @@
                     </div>
                 </div>
 
-                <!-- Recent Logs Buffer Timeline -->
                 <div x-show="logs.length > 0 && currentRole !== 'readonly' && currentRole !== 'order'" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
                     <div class="text-[11px] font-bold uppercase text-slate-500 tracking-wider">⏱️ Real-time Transaction Ledger Streams (LIFO Buffer Timeline):</div>
                     <div class="flex flex-wrap gap-2">
@@ -257,7 +251,7 @@
                                 <span :class="log.type === 'INWARD' ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-rose-700 bg-rose-50 border border-rose-200'" class="font-bold px-1.5 py-0.5 rounded text-[10px]">
                                     <span x-text="log.type === 'INWARD' ? '📥 IN +' : '📤 OUT -'"></span><span x-text="log.qty"></span>
                                 </span>
-                                <span class="font-bold font-sans text-slate-800" x-text="item_name"></span>
+                                <span class="font-bold font-sans text-slate-800" x-text="log.item_name"></span>
                                 <span x-show="log.supplier_name" class="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded font-bold" x-text="'Vendor: ' + log.supplier_name"></span>
                                 <span x-show="log.department" class="text-[10px] bg-slate-200 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold" x-text="log.department"></span>
                                 <button x-show="isWithin30Minutes(log.created_at)" @click="triggerUndo(log)" class="text-[10px] bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 px-2 py-0.5 rounded-md font-extrabold font-sans transition">↩ Revert</button>
@@ -266,7 +260,6 @@
                     </div>
                 </div>
 
-                <!-- Live Infrastructure Ledger Board -->
                 <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
                         <div class="space-y-0.5">
@@ -331,7 +324,6 @@
                     </div>
                 </section>
                 
-                <!-- Operators and Settings Management Modal -->
                 <div x-show="showUserAdminModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl space-y-5 border border-slate-200 max-h-[90vh] overflow-y-auto">
                         <div>
@@ -344,7 +336,6 @@
                                             <div class="text-[10px] font-mono text-slate-400 uppercase" x-text="'Scope: ' + u.role"></div>
                                         </div>
                                         <div class="flex items-center gap-1.5">
-                                            <!-- 🟢 FIX: Added missing order value configuration support properties mapping inside database override streams -->
                                             <select @change="changeUserRole(u.id, $event.target.value)" class="border rounded p-1 bg-slate-50 text-[11px] font-bold">
                                                 <option value="admin" :selected="u.role === 'admin'">admin</option>
                                                 <option value="inward" :selected="u.role === 'inward'">inward</option>
@@ -361,7 +352,6 @@
                             <div class="mt-3 grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2 rounded-lg border">
                                 <input type="text" x-model="newUserForm.username" placeholder="New Operator Username" class="border p-2 rounded bg-white">
                                 <input type="password" x-model="newUserForm.password" placeholder="Passphrase (6+ chars)" class="border p-2 rounded bg-white">
-                                <!-- 🟢 FIX: Added explicit 'order' option map parameter so admin can deploy new desks -->
                                 <select x-model="newUserForm.role" class="border p-2 rounded bg-white font-bold col-span-2">
                                     <option value="inward">inward</option>
                                     <option value="outward">outward</option>
@@ -407,7 +397,6 @@
                     </div>
                 </div>
 
-                <!-- Portfolio Creation Modal -->
                 <div x-show="showNewItemModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
                         <h3 class="text-sm font-black uppercase text-slate-800 tracking-wide border-b pb-1">➕ Append Portfolio Tracking row</h3>
@@ -436,7 +425,7 @@
                             </div>
                             <div class="grid grid-cols-2 gap-2">
                                 <div><label class="block font-bold text-slate-600 mb-1">Safety Limit</label><input type="number" x-model.number="newItemForm.threshold" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="10"></div>
-                                <div x-show="currentRole !== 'readonly'"><label class="block font-bold text-slate-600 mb-1">Unit Price (MRP)</label><input type="number" x-model.number="newItemForm.mrp" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="₹0"></div>
+                                <div x-show="currentRole !== 'readonly'"><label class="block font-bold text-slate-600 mb-1">Unit Price (MRP)</label><input type="number" x-model.number="newItemForm.mrp" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="0"></div>
                             </div>
                         </div>
                         <div class="flex gap-2 pt-2">
@@ -445,16 +434,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="flex items-center gap-1.5">
-    <span class="text-slate-400 text-[11px]" x-text="order.status === 'PENDING' ? 'Recv Qty:' : 'Ingested:'"></span>
-    <input type="number" 
-           min="0" 
-           x-model.number="it.qty" 
-           :disabled="order.status !== 'PENDING'" 
-           class="w-14 border text-center rounded p-0.5 bg-slate-50 font-bold text-slate-900 focus:ring-1 focus:ring-emerald-500 disabled:opacity-75">
-</div>
 
-                <!-- Settings Card config element -->
                 <div x-show="showAccountModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <form @submit.prevent="changeMyPassword()" class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
                         <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">👤 Security Key Settings</h3>
