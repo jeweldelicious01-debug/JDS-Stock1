@@ -67,6 +67,7 @@ window.stockApp = function() {
         items: [],
         importantNotes: [], 
         logs: [],
+        allRawLogs: [],
         users: [],
         suppliers: [], 
         purchaseOrders: [], 
@@ -149,20 +150,23 @@ window.stockApp = function() {
             
             onSnapshot(colRef('notes'), (snap) => { this.importantNotes = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
             onSnapshot(colRef('logs'), (snap) => { 
-    const rawLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    // 1. Maintain an unfiltered master buffer array for reports to access all history
+    this.allRawLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     
-    // Get today's local date string formatted as YYYY-MM-DD
+    // 2. Format today's local calendar constraint string (YYYY-MM-DD)
     const todayStr = new Date().toISOString().slice(0, 10);
     
-    this.logs = rawLogs
-        .filter((l) => l.created_at && l.created_at.slice(0, 10) === todayStr) // ⏱️ Only show current day transactions
+    // 3. Keep the UI Timeline running strictly on today's logs (max 50)
+    this.logs = [...this.allRawLogs]
+        .filter((l) => l.created_at && l.created_at.slice(0, 10) === todayStr)
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         .slice(0, 50)
         .map((l) => {
             const matchedItem = this.items.find((i) => String(i.id) === String(l.item_id));
             return { ...l, item_name: matchedItem ? matchedItem.name : 'Unknown' };
         });
-});            onSnapshot(colRef('users'), (snap) => {
+});
+        });            onSnapshot(colRef('users'), (snap) => {
                 this.users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                 if (this.currentUserId) {
                     const me = this.users.find((u) => u.id === this.currentUserId);
