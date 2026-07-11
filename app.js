@@ -166,7 +166,7 @@ window.stockApp = function() {
             return { ...l, item_name: matchedItem ? matchedItem.name : 'Unknown' };
         });
 });
-        });            onSnapshot(colRef('users'), (snap) => {
+                    onSnapshot(colRef('users'), (snap) => {
                 this.users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                 if (this.currentUserId) {
                     const me = this.users.find((u) => u.id === this.currentUserId);
