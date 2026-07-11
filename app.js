@@ -118,6 +118,23 @@ window.stockApp = function() {
         newUserError: '',
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
+        async submitNewCategory() {
+    if (!this.newCategoryForm.name.trim()) return alert("Category title required.");
+    const palette = this.paletteOptions[this.newCategoryForm.paletteIndex];
+    const newId = this.newCategoryForm.name.trim().toLowerCase().replace(/\s+/g, '-');
+    try {
+        await setDoc(doc(dbFs, 'categories', newId), {
+            name: this.newCategoryForm.name.trim(),
+            emoji: this.newCategoryForm.emoji,
+            bg_color: palette.bg,
+            border_color: palette.border,
+            text_color: palette.text
+        });
+        this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
+        alert("New category axis provisioned cleanly.");
+    } catch(e) { alert(e.message); }
+},
+
         async init() {
             await seedIfEmpty();
             
@@ -132,13 +149,20 @@ window.stockApp = function() {
             
             onSnapshot(colRef('notes'), (snap) => { this.importantNotes = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
             onSnapshot(colRef('logs'), (snap) => { 
-                const rawLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-                this.logs = rawLogs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 50).map((l) => {
-                    const matchedItem = this.items.find((i) => String(i.id) === String(l.item_id));
-                    return { ...l, item_name: matchedItem ? matchedItem.name : 'Unknown' };
-                });
-            });
-            onSnapshot(colRef('users'), (snap) => {
+    const rawLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    
+    // Get today's local date string formatted as YYYY-MM-DD
+    const todayStr = new Date().toISOString().slice(0, 10);
+    
+    this.logs = rawLogs
+        .filter((l) => l.created_at && l.created_at.slice(0, 10) === todayStr) // ⏱️ Only show current day transactions
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        .slice(0, 50)
+        .map((l) => {
+            const matchedItem = this.items.find((i) => String(i.id) === String(l.item_id));
+            return { ...l, item_name: matchedItem ? matchedItem.name : 'Unknown' };
+        });
+});            onSnapshot(colRef('users'), (snap) => {
                 this.users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                 if (this.currentUserId) {
                     const me = this.users.find((u) => u.id === this.currentUserId);
