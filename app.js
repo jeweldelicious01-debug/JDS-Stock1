@@ -120,21 +120,21 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async submitNewCategory() {
-    if (!this.newCategoryForm.name.trim()) return alert("Category title required.");
-    const palette = this.paletteOptions[this.newCategoryForm.paletteIndex];
-    const newId = this.newCategoryForm.name.trim().toLowerCase().replace(/\s+/g, '-');
-    try {
-        await setDoc(doc(dbFs, 'categories', newId), {
-            name: this.newCategoryForm.name.trim(),
-            emoji: this.newCategoryForm.emoji,
-            bg_color: palette.bg,
-            border_color: palette.border,
-            text_color: palette.text
-        });
-        this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
-        alert("New category axis provisioned cleanly.");
-    } catch(e) { alert(e.message); }
-},
+            if (!this.newCategoryForm.name.trim()) return alert("Category title required.");
+            const palette = this.paletteOptions[this.newCategoryForm.paletteIndex];
+            const newId = this.newCategoryForm.name.trim().toLowerCase().replace(/\s+/g, '-');
+            try {
+                await setDoc(doc(dbFs, 'categories', newId), {
+                    name: this.newCategoryForm.name.trim(),
+                    emoji: this.newCategoryForm.emoji,
+                    bg_color: palette.bg,
+                    border_color: palette.border,
+                    text_color: palette.text
+                });
+                this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
+                alert("New category axis provisioned cleanly.");
+            } catch(e) { alert(e.message); }
+        },
 
         async init() {
             await seedIfEmpty();
@@ -150,23 +150,20 @@ window.stockApp = function() {
             
             onSnapshot(colRef('notes'), (snap) => { this.importantNotes = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
             onSnapshot(colRef('logs'), (snap) => { 
-    // 1. Maintain an unfiltered master buffer array for reports to access all history
-    this.allRawLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    
-    // 2. Format today's local calendar constraint string (YYYY-MM-DD)
-    const todayStr = new Date().toISOString().slice(0, 10);
-    
-    // 3. Keep the UI Timeline running strictly on today's logs (max 50)
-    this.logs = [...this.allRawLogs]
-        .filter((l) => l.created_at && l.created_at.slice(0, 10) === todayStr)
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-        .slice(0, 50)
-        .map((l) => {
-            const matchedItem = this.items.find((i) => String(i.id) === String(l.item_id));
-            return { ...l, item_name: matchedItem ? matchedItem.name : 'Unknown' };
-        });
-});
-                    onSnapshot(colRef('users'), (snap) => {
+                this.allRawLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+                const todayStr = new Date().toISOString().slice(0, 10);
+                
+                this.logs = [...this.allRawLogs]
+                    .filter((l) => l.created_at && l.created_at.slice(0, 10) === todayStr)
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                    .slice(0, 50)
+                    .map((l) => {
+                        const matchedItem = this.items.find((i) => String(i.id) === String(l.item_id));
+                        return { ...l, item_name: matchedItem ? matchedItem.name : 'Unknown' };
+                    });
+            });
+
+            onSnapshot(colRef('users'), (snap) => {
                 this.users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                 if (this.currentUserId) {
                     const me = this.users.find((u) => u.id === this.currentUserId);
@@ -222,16 +219,16 @@ window.stockApp = function() {
         },
 
         get processedPurchaseOrders() {
-    const currentStatusTab = String(this.orderViewTab).toLowerCase();
-    return this.purchaseOrders.filter(o => {
-        const orderStatus = String(o.status).toLowerCase();
-        if (currentStatusTab === 'pending') {
-            return orderStatus === 'pending';
-        } else {
-            return orderStatus !== 'pending';
-        }
-    });
-},
+            const currentStatusTab = String(this.orderViewTab).toLowerCase();
+            return this.purchaseOrders.filter(o => {
+                const orderStatus = String(o.status).toLowerCase();
+                if (currentStatusTab === 'pending') {
+                    return orderStatus === 'pending';
+                } else {
+                    return orderStatus !== 'pending';
+                }
+            });
+        },
 
         addItemToOrder() {
             if (!this.orderDesk.selectedItemId || !this.orderDesk.selectedQty) return alert("Select an item and input quantity.");
@@ -263,7 +260,6 @@ window.stockApp = function() {
                     created_by: this.currentUsername
                 });
 
-                // 📦 STRUCURED SPACING MATRICES WITH ZERO EMOJIS
                 let textMessage = `*PURCHASE ORDER: ${vendor.name.toUpperCase()}*\n\n`;
                 textMessage += `Date: ${new Date().toLocaleDateString('en-GB')}\n\n`;
                 
@@ -295,7 +291,6 @@ window.stockApp = function() {
                 for (let record of order.items) {
                     const arrivedQty = parseInt(record.qty) || 0;
                     
-                    // 🔴 STRICT ENFORCEMENT GATE: Instantly block -1, -2, etc. Allow 0 for missing items.
                     if (arrivedQty < 0) {
                         alert(`Operation Denied: Negative value (${arrivedQty}) detected for item "${record.name}". Please input 0 if the item was not received.`);
                         return; 
@@ -350,10 +345,9 @@ window.stockApp = function() {
             }
         },
 
-        // ⏱️ TIMELINE SAFETY CONTROL LAYER: Users can only roll back records within 30 minutes
         isWithin30Minutes(createdAt) {
             if (!createdAt) return false;
-            return (new Date() - new Date(createdAt)) < 1800000; // 30 minutes maximum limit gate
+            return (new Date() - new Date(createdAt)) < 1800000; 
         },
 
         async triggerUndo(log) {
@@ -430,7 +424,6 @@ window.stockApp = function() {
             const { username, password } = this.loginForm;
             if (!username || !password) { this.loginError = 'Fields required'; return; }
             const user = this.users.find((u) => u.username.toLowerCase() === username.trim().toLowerCase());
-            // 🟢 SECURITY LEVEL MATCH ENFORCEMENT: Guarantees user objects authorize case-insensitive values cleanly
             if (!user || (await sha256(password)) !== user.passwordHash) { this.loginError = 'Invalid credentials'; return; }
             this.currentUserId = user.id; this.currentUsername = user.username; this.currentRole = user.role; this.isAuthenticated = true;
             this.loginForm.password = '';
@@ -453,11 +446,17 @@ window.stockApp = function() {
             this.accountForm = { currentPassword: '', newPassword: '' };
         },
 
-        createUser() {
+        async createUser() {
             const { username, password, role = 'inward' } = this.newUserForm;
-            if (!username || password.length < 6) return;
-            addDoc(colRef('users'), { username: username.trim(), passwordHash: sha256(password), role });
-            this.newUserForm = { username: '', password: '', role: 'inward' };
+            if (!username || password.length < 6) return alert("Username required and password must be 6+ chars.");
+            try {
+                const passwordHash = await sha256(password);
+                await addDoc(colRef('users'), { username: username.trim(), passwordHash, role });
+                this.newUserForm = { username: '', password: '', role: 'inward' };
+                alert("Operator successfully configured.");
+            } catch (e) {
+                alert("Error configuring operator: " + e.message);
+            }
         },
         
         async promptResetPassword(user) {
@@ -525,79 +524,63 @@ window.stockApp = function() {
         },
 
         downloadInwardSupplierReport() {
-    // 1. Filter logs to only include INWARD entries
-    const inwards = this.logs.filter(l => l.type === 'INWARD' && l.created_at);
-    if (!inwards.length) return alert("No inward data available to generate a monthly report.");
+            const inwards = this.allRawLogs.filter(l => l.type === 'INWARD' && l.created_at);
+            if (!inwards.length) return alert("No inward data available to generate a monthly report.");
 
-    // 2. Initialize a fresh Excel Workbook object
-    const wb = XLSX.utils.book_new();
-
-    // 3. Group inward transaction entries by their unique calendar date string (YYYY-MM-DD)
-    const dateGroups = {};
-    inwards.forEach(log => {
-        const dateKey = log.created_at.slice(0, 10); // Extract 'YYYY-MM-DD'
-        if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
-        dateGroups[dateKey].push(log);
-    });
-
-    // 4. Sort the dates chronologically (oldest to newest or vice-versa)
-    const sortedDates = Object.keys(dateGroups).sort((a, b) => new Date(a) - new Date(b));
-
-    // 5. Iterate through each day to build individual worksheet tables
-    sortedDates.forEach(dateStr => {
-        const logsForDay = dateGroups[dateStr];
-        
-        // Format the date to create clean tab titles (e.g., "2026-07-01" -> "1Jul")
-        const dateObj = new Date(dateStr);
-        const dayNum = dateObj.getDate();
-        const monthShort = dateObj.toLocaleDateString('en-GB', { month: 'short' });
-        const sheetTabName = `${dayNum}${monthShort}`; // Formats precisely as "1Jul", "2Jul", etc.
-
-        // Group the day's logs by supplier for clean aesthetic structuring
-        const supplierGroups = {};
-        logsForDay.forEach(log => {
-            const sName = log.supplier_name || 'Historical Vendor';
-            if (!supplierGroups[sName]) supplierGroups[sName] = [];
-            supplierGroups[sName].push(log);
-        });
-
-        const sheetMatrix = [];
-
-        // Build out data grid matching your previous layout parameters
-        Object.keys(supplierGroups).forEach(supplier => {
-            sheetMatrix.push([`Supplier: ${supplier.toUpperCase()}`]);
-            sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE", "TOTAL VALUATION"]);
-            
-            let grandTotal = 0;
-            supplierGroups[supplier].forEach(log => {
-                const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                const name = log.item_name || linkedItem.name;
-                const qty = parseInt(log.qty) || 0;
-                const price = parseFloat(linkedItem.mrp) || 0;
-                const totalCost = qty * price;
-                grandTotal += totalCost;
-                
-                sheetMatrix.push([name, qty, `₹${price}`, `₹${totalCost}`]);
+            const wb = XLSX.utils.book_new();
+            const dateGroups = {};
+            inwards.forEach(log => {
+                const dateKey = log.created_at.slice(0, 10); 
+                if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
+                dateGroups[dateKey].push(log);
             });
-            
-            sheetMatrix.push(["", "", "GRAND TOTAL:", `₹${grandTotal}`]);
-            sheetMatrix.push([]); // Add spacing matrix rows between vendors
-        });
 
-        // Convert our structured array row matrix into an Excel worksheet tab
-        const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
-        
-        // Apply responsive visual column sizing tweaks to the generated worksheet tab
-        ws['!cols'] = [{ wch: 26 }, { wch: 20 }, { wch: 14 }, { wch: 18 }];
+            const sortedDates = Object.keys(dateGroups).sort((a, b) => new Date(a) - new Date(b));
 
-        // Append the sheet into our global workbook object matrix mapping
-        XLSX.utils.book_append_sheet(wb, ws, sheetTabName);
-    });
+            sortedDates.forEach(dateStr => {
+                const logsForDay = dateGroups[dateStr];
+                const dateObj = new Date(dateStr);
+                const dayNum = dateObj.getDate();
+                const monthShort = dateObj.toLocaleDateString('en-GB', { month: 'short' });
+                const sheetTabName = `${dayNum}${monthShort}`; 
 
-    // 6. Trigger the web browser layout download prompt asset
-    const currentMonthYear = new Date().toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }).replace(' ', '_');
-    XLSX.writeFile(wb, `Monthly_Inward_Breakdown_Report_${currentMonthYear}.xlsx`);
-}
+                const supplierGroups = {};
+                logsForDay.forEach(log => {
+                    const sName = log.supplier_name || 'Historical Vendor';
+                    if (!supplierGroups[sName]) supplierGroups[sName] = [];
+                    supplierGroups[sName].push(log);
+                });
+
+                const sheetMatrix = [];
+
+                Object.keys(supplierGroups).forEach(supplier => {
+                    sheetMatrix.push([`Supplier: ${supplier.toUpperCase()}`]);
+                    sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE", "TOTAL VALUATION"]);
+                    
+                    let grandTotal = 0;
+                    supplierGroups[supplier].forEach(log => {
+                        const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
+                        const name = log.item_name || linkedItem.name;
+                        const qty = parseInt(log.qty) || 0;
+                        const price = parseFloat(linkedItem.mrp) || 0;
+                        const totalCost = qty * price;
+                        grandTotal += totalCost;
+                        
+                        sheetMatrix.push([name, qty, `₹${price}`, `₹${totalCost}`]);
+                    });
+                    
+                    sheetMatrix.push(["", "", "GRAND TOTAL:", `₹${grandTotal}`]);
+                    sheetMatrix.push([]); 
+                });
+
+                const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
+                ws['!cols'] = [{ wch: 26 }, { wch: 20 }, { wch: 14 }, { wch: 18 }];
+                XLSX.utils.book_append_sheet(wb, ws, sheetTabName);
+            });
+
+            const currentMonthYear = new Date().toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }).replace(' ', '_');
+            XLSX.writeFile(wb, `Monthly_Inward_Breakdown_Report_${currentMonthYear}.xlsx`);
+        },
 
         downloadExcelReport() {
             const getLocalDateString = (offsetDays) => { const d = new Date(); d.setDate(d.getDate() - offsetDays); return d.toISOString().slice(0, 10); };
@@ -608,9 +591,9 @@ window.stockApp = function() {
             this.processedItems.forEach(item => {
                 const row = [item.name, item.stock];
                 targetDays.forEach(targetDate => {
-                    let dayInwards = this.logs.filter(l => l.created_at && String(l.item_id) === String(item.id) && l.type === 'INWARD' && l.created_at.slice(0, 10) === targetDate);
+                    let dayInwards = this.allRawLogs.filter(l => l.created_at && String(l.item_id) === String(item.id) && l.type === 'INWARD' && l.created_at.slice(0, 10) === targetDate);
                     row.push(dayInwards.length ? `+${dayInwards.reduce((sum, l) => sum + (parseInt(l.qty) || 0), 0)}` : "0");
-                    let dayOutwards = this.logs.filter(l => l.created_at && String(l.item_id) === String(item.id) && l.type === 'OUTWARD' && l.created_at.slice(0, 10) === targetDate);
+                    let dayOutwards = this.allRawLogs.filter(l => l.created_at && String(l.item_id) === String(item.id) && l.type === 'OUTWARD' && l.created_at.slice(0, 10) === targetDate);
                     if (dayOutwards.length) { row.push(dayOutwards.map(l => `-${l.qty} (${l.department || 'General'})`).join("\n")); } else { row.push("0"); }
                 });
                 matrixData.push(row);
