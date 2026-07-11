@@ -231,6 +231,7 @@ window.stockApp = function() {
                     created_by: this.currentUsername
                 });
 
+                // 📦 STRUCURED SPACING MATRICES WITH ZERO EMOJIS
                 let textMessage = `*PURCHASE ORDER: ${vendor.name.toUpperCase()}*\n\n`;
                 textMessage += `Date: ${new Date().toLocaleDateString('en-GB')}\n\n`;
                 
@@ -261,8 +262,16 @@ window.stockApp = function() {
 
                 for (let record of order.items) {
                     const arrivedQty = parseInt(record.qty) || 0;
-                    if (arrivedQty < 0) return alert("Quantities cannot be negative numbers.");
-                    if (arrivedQty === 0) hasMissingItems = true;
+                    
+                    // 🔴 STRICT ENFORCEMENT GATE: Instantly block -1, -2, etc. Allow 0 for missing items.
+                    if (arrivedQty < 0) {
+                        alert(`Operation Denied: Negative value (${arrivedQty}) detected for item "${record.name}". Please input 0 if the item was not received.`);
+                        return; 
+                    }
+                    
+                    if (arrivedQty === 0) {
+                        hasMissingItems = true;
+                    }
 
                     const targetItem = this.items.find(i => String(i.id) === String(record.id));
                     if (targetItem && arrivedQty > 0) {
@@ -309,16 +318,15 @@ window.stockApp = function() {
             }
         },
 
-        // 🟢 FIXED GATEWAY: Restricts active stream rolls strictly onto an ironclad 30-minute window interval
+        // ⏱️ TIMELINE SAFETY CONTROL LAYER: Users can only roll back records within 30 minutes
         isWithin30Minutes(createdAt) {
             if (!createdAt) return false;
-            return (new Date() - new Date(createdAt)) < 1800000; // 30 minutes in milliseconds
+            return (new Date() - new Date(createdAt)) < 1800000; // 30 minutes maximum limit gate
         },
 
         async triggerUndo(log) {
-            // 🟢 SECURITY ENFORCEMENT: Client-side clock double validation gate
             if (!this.isWithin30Minutes(log.created_at)) {
-                return alert("Reversal Rejected: This transaction has exceeded the 30-minute operational edit window.");
+                return alert("Reversal Rejected: This history log record has exceeded the 30-minute operational undo window.");
             }
             if (!confirm("Are you sure you want to revert this specific entry from history?")) return;
             try {
@@ -390,6 +398,7 @@ window.stockApp = function() {
             const { username, password } = this.loginForm;
             if (!username || !password) { this.loginError = 'Fields required'; return; }
             const user = this.users.find((u) => u.username.toLowerCase() === username.trim().toLowerCase());
+            // 🟢 SECURITY LEVEL MATCH ENFORCEMENT: Guarantees user objects authorize case-insensitive values cleanly
             if (!user || (await sha256(password)) !== user.passwordHash) { this.loginError = 'Invalid credentials'; return; }
             this.currentUserId = user.id; this.currentUsername = user.username; this.currentRole = user.role; this.isAuthenticated = true;
             this.loginForm.password = '';
@@ -427,19 +436,6 @@ window.stockApp = function() {
                 await updateDoc(doc(dbFs, 'users', user.id), { passwordHash: await sha256(newPass.trim()) });
                 alert("Password updated!");
             } catch (error) { alert(error.message); }
-        },
-
-        async submitNewCategory() {
-            if (!this.newCategoryForm.name.trim() || !this.newCategoryForm.emoji.trim()) return alert("Fields required.");
-            const standardizedId = this.newCategoryForm.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (!standardizedId) return alert("Invalid layout name.");
-            if (this.categories.find(c => c.id === standardizedId)) return alert("Category already exists.");
-            const chosenPalette = this.paletteOptions[this.newCategoryForm.paletteIndex || 0];
-            try {
-                await setDoc(doc(dbFs, 'categories', standardizedId), { name: this.newCategoryForm.name.trim(), emoji: this.newCategoryForm.emoji.trim(), bg_color: chosenPalette.bg, border_color: chosenPalette.border, text_color: chosenPalette.text });
-                alert(`📁 Category Matrix "${this.newCategoryForm.name.trim()}" successfully deployed live!`);
-                this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
-            } catch (err) { alert(err.message); }
         },
 
         async changeItemName(item) {
@@ -496,31 +492,6 @@ window.stockApp = function() {
             this.showNewItemModal = false;
         },
 
-        async handleCsvUpload(event) {
-            const file = event.target.files[0]; if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                const text = e.target.result; const lines = text.split('\n');
-                for (let i = 1; i < lines.length; i++) {
-                    if (!lines[i].trim()) continue;
-                    const columns = lines[i].split(',');
-                    if (columns.length >= 4) {
-                        const name = columns[0].trim(); const categoryName = columns[1].trim(); const qty = parseInt(columns[2]) || 0; const threshold = parseInt(columns[3]) || 0; const mrp = columns[4] ? Number(columns[4].trim()) || 0 : 0;
-                        let cat = this.categories.find((c) => c.name.toLowerCase() === categoryName.toLowerCase());
-                        let categoryId = cat ? cat.id : (await addDoc(colRef('categories'), { name: categoryName, emoji: '🍱', bg_color: '#f3f4f6', border_color: '#9ca3af', text_color: '#374151' })).id;
-                        const existingItem = this.items.find((it) => it.name.toLowerCase() === name.toLowerCase());
-                        if (existingItem) await updateDoc(doc(dbFs, 'items', existingItem.id), { stock: existingItem.stock + qty, threshold, mrp });
-                        else {
-                            const maxOrder = this.items.reduce((m, it) => Math.max(m, it.order_index || 0), 0);
-                            await addDoc(colRef('items'), { name, category_id: categoryId, supplier_name: 'General Vendor', stock: qty, threshold, mrp, order_index: maxOrder + 1 });
-                        }
-                    }
-                }
-                alert("CSV Ingested."); event.target.value = '';
-            };
-            reader.readAsText(file);
-        },
-
         downloadInwardSupplierReport() {
             const inwards = this.logs.filter(l => l.type === 'INWARD'); if (!inwards.length) return alert("No inward data.");
             const supplierGroups = {};
@@ -566,7 +537,6 @@ window.stockApp = function() {
     };
 };
 
-// 🟢 FIX: Bind directly onto standard Alpine lifecycle initializers to avoid async timing crashes
 document.addEventListener('alpine:init', () => {
     window.Alpine.data('stockApp', window.stockApp);
 });
