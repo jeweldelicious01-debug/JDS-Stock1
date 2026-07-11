@@ -218,12 +218,16 @@ window.stockApp = function() {
         },
 
         get processedPurchaseOrders() {
-            if (this.orderViewTab === 'pending') {
-                return this.purchaseOrders.filter(o => o.status === 'PENDING');
-            } else {
-                return this.purchaseOrders.filter(o => o.status !== 'PENDING');
-            }
-        },
+    const currentStatusTab = String(this.orderViewTab).toLowerCase();
+    return this.purchaseOrders.filter(o => {
+        const orderStatus = String(o.status).toLowerCase();
+        if (currentStatusTab === 'pending') {
+            return orderStatus === 'pending';
+        } else {
+            return orderStatus !== 'pending';
+        }
+    });
+},
 
         addItemToOrder() {
             if (!this.orderDesk.selectedItemId || !this.orderDesk.selectedQty) return alert("Select an item and input quantity.");
