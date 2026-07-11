@@ -521,26 +521,79 @@ window.stockApp = function() {
         },
 
         downloadInwardSupplierReport() {
-            const inwards = this.logs.filter(l => l.type === 'INWARD'); if (!inwards.length) return alert("No inward data.");
-            const supplierGroups = {};
-            inwards.forEach(log => {
-                const sName = log.supplier_name || 'Historical Vendor';
-                if (!supplierGroups[sName]) supplierGroups[sName] = []; supplierGroups[sName].push(log);
+    // 1. Filter logs to only include INWARD entries
+    const inwards = this.logs.filter(l => l.type === 'INWARD' && l.created_at);
+    if (!inwards.length) return alert("No inward data available to generate a monthly report.");
+
+    // 2. Initialize a fresh Excel Workbook object
+    const wb = XLSX.utils.book_new();
+
+    // 3. Group inward transaction entries by their unique calendar date string (YYYY-MM-DD)
+    const dateGroups = {};
+    inwards.forEach(log => {
+        const dateKey = log.created_at.slice(0, 10); // Extract 'YYYY-MM-DD'
+        if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
+        dateGroups[dateKey].push(log);
+    });
+
+    // 4. Sort the dates chronologically (oldest to newest or vice-versa)
+    const sortedDates = Object.keys(dateGroups).sort((a, b) => new Date(a) - new Date(b));
+
+    // 5. Iterate through each day to build individual worksheet tables
+    sortedDates.forEach(dateStr => {
+        const logsForDay = dateGroups[dateStr];
+        
+        // Format the date to create clean tab titles (e.g., "2026-07-01" -> "1Jul")
+        const dateObj = new Date(dateStr);
+        const dayNum = dateObj.getDate();
+        const monthShort = dateObj.toLocaleDateString('en-GB', { month: 'short' });
+        const sheetTabName = `${dayNum}${monthShort}`; // Formats precisely as "1Jul", "2Jul", etc.
+
+        // Group the day's logs by supplier for clean aesthetic structuring
+        const supplierGroups = {};
+        logsForDay.forEach(log => {
+            const sName = log.supplier_name || 'Historical Vendor';
+            if (!supplierGroups[sName]) supplierGroups[sName] = [];
+            supplierGroups[sName].push(log);
+        });
+
+        const sheetMatrix = [];
+
+        // Build out data grid matching your previous layout parameters
+        Object.keys(supplierGroups).forEach(supplier => {
+            sheetMatrix.push([`Supplier: ${supplier.toUpperCase()}`]);
+            sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE", "TOTAL VALUATION"]);
+            
+            let grandTotal = 0;
+            supplierGroups[supplier].forEach(log => {
+                const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
+                const name = log.item_name || linkedItem.name;
+                const qty = parseInt(log.qty) || 0;
+                const price = parseFloat(linkedItem.mrp) || 0;
+                const totalCost = qty * price;
+                grandTotal += totalCost;
+                
+                sheetMatrix.push([name, qty, `₹${price}`, `₹${totalCost}`]);
             });
-            const sheetMatrix = [];
-            Object.keys(supplierGroups).forEach(supplier => {
-                sheetMatrix.push([`Supplier: ${supplier.toUpperCase()}`]); sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE", "TOTAL VALUATION"]);
-                let grandTotal = 0;
-                supplierGroups[supplier].forEach(log => {
-                    const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                    const name = log.item_name || linkedItem.name; const qty = parseInt(log.qty) || 0; const price = parseFloat(linkedItem.mrp) || 0; const totalCost = qty * price; grandTotal += totalCost;
-                    sheetMatrix.push([name, qty, `₹${price}`, `₹${totalCost}`]);
-                });
-                sheetMatrix.push(["", "", "GRAND TOTAL:", `₹${grandTotal}`]); sheetMatrix.push([]); 
-            });
-            const ws = XLSX.utils.aoa_to_sheet(sheetMatrix); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Supplier Inward Breakdown");
-            XLSX.writeFile(wb, `Supplier_Inward_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
-        },
+            
+            sheetMatrix.push(["", "", "GRAND TOTAL:", `₹${grandTotal}`]);
+            sheetMatrix.push([]); // Add spacing matrix rows between vendors
+        });
+
+        // Convert our structured array row matrix into an Excel worksheet tab
+        const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
+        
+        // Apply responsive visual column sizing tweaks to the generated worksheet tab
+        ws['!cols'] = [{ wch: 26 }, { wch: 20 }, { wch: 14 }, { wch: 18 }];
+
+        // Append the sheet into our global workbook object matrix mapping
+        XLSX.utils.book_append_sheet(wb, ws, sheetTabName);
+    });
+
+    // 6. Trigger the web browser layout download prompt asset
+    const currentMonthYear = new Date().toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }).replace(' ', '_');
+    XLSX.writeFile(wb, `Monthly_Inward_Breakdown_Report_${currentMonthYear}.xlsx`);
+}
 
         downloadExcelReport() {
             const getLocalDateString = (offsetDays) => { const d = new Date(); d.setDate(d.getDate() - offsetDays); return d.toISOString().slice(0, 10); };
