@@ -120,21 +120,26 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async submitNewCategory() {
-            if (!this.newCategoryForm.name.trim()) return alert("Category title required.");
-            const palette = this.paletteOptions[this.newCategoryForm.paletteIndex];
-            const newId = this.newCategoryForm.name.trim().toLowerCase().replace(/\s+/g, '-');
-            try {
-                await setDoc(doc(dbFs, 'categories', newId), {
-                    name: this.newCategoryForm.name.trim(),
-                    emoji: this.newCategoryForm.emoji,
-                    bg_color: palette.bg,
-                    border_color: palette.border,
-                    text_color: palette.text
-                });
-                this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
-                alert("New category axis provisioned cleanly.");
-            } catch(e) { alert(e.message); }
-        },
+    if (!this.newCategoryForm.name.trim()) return alert("Category title required.");
+    const palette = this.paletteOptions[this.newCategoryForm.paletteIndex];
+    
+    // Force clean format: Trim space and make the title casing uniform
+    const rawName = this.newCategoryForm.name.trim();
+    const formattedName = rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
+    const newId = formattedName.toLowerCase().replace(/\s+/g, '-');
+    
+    try {
+        await setDoc(doc(dbFs, 'categories', newId), {
+            name: formattedName, // Saved uniformly
+            emoji: this.newCategoryForm.emoji,
+            bg_color: palette.bg,
+            border_color: palette.border,
+            text_color: palette.text
+        });
+        this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
+        alert("New category axis provisioned cleanly.");
+    } catch(e) { alert(e.message); }
+},
 
         async init() {
             await seedIfEmpty();
