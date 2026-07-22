@@ -295,40 +295,44 @@ window.stockApp = function() {
             }
         },
 
-        async submitDirectTextCatering(dateString) {
-            if (!this.cateringForm.partyName || !this.cateringForm.rawTextMenu) {
-                alert("Please fill out the party title and paste text menu data.");
-                return;
+       async submitDirectTextCatering(dateString) {
+    if (!this.cateringForm.partyName || !this.cateringForm.rawTextMenu) {
+        alert("Please fill out the party title and paste text menu data.");
+        return;
+    }
+
+    const payload = {
+        date: dateString,
+        partyName: this.cateringForm.partyName.trim(),
+        paxCount: Number(this.cateringForm.paxCount) || 0,
+        menuText: this.cateringForm.rawTextMenu,
+        updated_at: Date.now()
+    };
+
+    try {
+        if (this.editingEventId) {
+            await setDoc(doc(dbFs, "catering_events", this.editingEventId), payload, { merge: true });
+            const idx = this.cateringEvents.findIndex(e => e.id === this.editingEventId);
+            if (idx !== -1) {
+                this.cateringEvents[idx] = { id: this.editingEventId, ...payload };
             }
+            this.editingEventId = null;
+            alert("Function record context updated successfully!");
+        } else {
+            payload.created_at = Date.now();
+            const docRef = await addDoc(colRef('catering_events'), payload);
+            
+            // Assign document ID explicitly so Alpine can distinguish multiple events on the same date
+            payload.id = docRef.id;
+            this.cateringEvents = [...this.cateringEvents, payload];
+            
+            alert("Fresh function logged successfully!");
+        }
 
-            const payload = {
-                date: dateString,
-                partyName: this.cateringForm.partyName.trim(),
-                paxCount: Number(this.cateringForm.paxCount) || 0,
-                menuText: this.cateringForm.rawTextMenu,
-                updated_at: Date.now()
-            };
-
-            try {
-                if (this.editingEventId) {
-                    await setDoc(doc(dbFs, "catering_events", this.editingEventId), payload, { merge: true });
-                    const idx = this.cateringEvents.findIndex(e => e.id === this.editingEventId);
-                    if (idx !== -1) {
-                        this.cateringEvents[idx] = { id: this.editingEventId, ...payload };
-                    }
-                    this.editingEventId = null;
-                    alert("Function record context updated successfully!");
-                } else {
-                    payload.created_at = Date.now();
-                    const docRef = await addDoc(colRef('catering_events'), payload);
-                    this.cateringEvents.push({ id: docRef.id, ...payload });
-                    alert("Fresh function logged successfully!");
-                }
-
-                this.clearCateringForm();
-            } catch (err) {
-                alert("Mutation failure: " + err.message);
-            }
+        this.clearCateringForm();
+    } catch (err) {
+        alert("Mutation failure: " + err.message);
+    }
         },
 
         addItemToOrder() {
