@@ -12,6 +12,7 @@
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp" x-init="init()">
 
+    <!-- Login Authentication Overlay Matrix -->
     <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
         <div class="bg-white p-8 rounded-xl max-w-sm w-full shadow-2xl border border-slate-200 text-center">
             <div class="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto mb-4 border border-amber-200">💎</div>
@@ -32,10 +33,12 @@
         </div>
     </div>
 
+    <!-- Main Infrastructure Interface Scope -->
     <main class="max-w-6xl mx-auto p-4 space-y-6" x-show="isAuthenticated" x-cloak>
         <template x-if="ready">
             <div class="space-y-6">
                 
+                <!-- Main Controls Navigation Header -->
                 <header class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center gap-4 flex-wrap">
                     <div class="space-y-1">
                         <h1 class="text-2xl font-black tracking-tight text-slate-800 flex items-center gap-2">📊 Restaurant Inventory Operations</h1>
@@ -50,6 +53,7 @@
                     </div>
                 </header>
 
+                <!-- Procurement Reconciliation Desk Section -->
                 <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" 
                          x-show="currentRole === 'admin' || currentRole === 'inward' || currentRole === 'order'" 
                          x-cloak>
@@ -113,102 +117,101 @@
                 </section>
 
                 <!-- DYNAMIC 7-DAY CATERING MATRIX ENGINE -->
-<section class="bg-white border border-slate-200 p-5 rounded-xl text-xs space-y-4 shadow-sm" x-data="{ selectedDate: null, creationView: false }">
-    <div class="flex justify-between items-center border-b border-slate-200 pb-2">
-        <span class="font-black uppercase tracking-wider text-slate-800 text-xs flex items-center gap-1.5">
-            📅 Scheduled High-Pax Catering Event Matrix (Next 7 Days)
-        </span>
-    </div>
+                <section class="bg-white border border-slate-200 p-5 rounded-xl text-xs space-y-4 shadow-sm" x-data="{ selectedDate: null, creationView: false }">
+                    <div class="flex justify-between items-center border-b border-slate-200 pb-2">
+                        <span class="font-black uppercase tracking-wider text-slate-800 text-xs flex items-center gap-1.5">
+                            📅 Scheduled High-Pax Catering Event Matrix (Next 7 Days)
+                        </span>
+                    </div>
 
-    <!-- 7-Day Matrix Row View Grid Layout -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
-        <template x-for="day in Array.from({length: 7}, (_, i) => { 
-            let d = new Date(); d.setDate(d.getDate() + i); 
-            return { string: d.toISOString().split('T')[0], label: d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) };
-        })" :key="day.string">
-            <div @click="selectedDate = day.string; creationView = false; clearCateringForm()" 
-                 :class="selectedDate === day.string ? 'ring-2 ring-indigo-600 bg-indigo-50/50 border-indigo-300' : 'bg-white hover:bg-slate-50 border-slate-200'"
-                 class="p-3 border rounded-xl text-center cursor-pointer transition flex flex-col justify-between min-h-24 shadow-2xs relative overflow-hidden">
-                
-                <div class="text-[10px] text-slate-400 font-mono font-bold" x-text="day.label"></div>
-                
-                <!-- Dynamic Event Name Insertion Layout Layer -->
-                <div class="mt-2 space-y-1">
-                    <template x-for="ev in getEventsForDate(day.string)" :key="ev.id">
-                        <span class="bg-indigo-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded block uppercase tracking-wide truncate max-w-full" x-text="ev.partyName"></span>
-                    </template>
-                    <template x-if="getEventCountForDate(day.string) === 0">
-                        <span class="text-[10px] text-slate-400 italic block mt-2">Available</span>
-                    </template>
-                </div>
-            </div>
-        </template>
-    </div>
-
-    <!-- Selected Target View Matrix Management Block -->
-    <div x-show="selectedDate" x-transition class="bg-slate-50 border border-slate-200 p-4 rounded-xl mt-2 space-y-3">
-        <div class="flex justify-between items-center border-b pb-2 flex-wrap gap-2">
-            <span class="text-xs font-extrabold text-slate-700">
-                Selected Log Window: <span class="font-mono text-indigo-700 font-black" x-text="selectedDate"></span>
-            </span>
-            <!-- FIXED: TYPE="BUTTON" AND @CLICK.PREVENT ADDED HERE -->
-            <button type="button"
-                    x-show="currentRole === 'admin' && !creationView" 
-                    @click.prevent="clearCateringForm(); creationView = true" 
-                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg tracking-wide shadow-xs text-[11px] transition">
-                ➕ Create Event Portfolio Axis
-            </button>
-        </div>
-
-        <!-- Active Staged Document Context Interface Layer -->
-        <div x-show="!creationView" class="space-y-2">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <template x-for="ev in getEventsForDate(selectedDate)" :key="ev.id">
-                    <div class="bg-white border p-3 rounded-lg shadow-2xs flex flex-col justify-between gap-3">
-                        <div class="flex justify-between items-start gap-4">
-                            <div>
-                                <div class="font-black text-slate-800 text-sm" x-text="ev.partyName"></div>
-                                <div class="text-[10px] text-slate-500 font-bold mt-0.5" x-text="'Attendance: ' + ev.paxCount + ' Pax'"></div>
+                    <!-- 7-Day Matrix Row View Grid Layout -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
+                        <template x-for="day in Array.from({length: 7}, (_, i) => { 
+                            let d = new Date(); d.setDate(d.getDate() + i); 
+                            return { string: d.toISOString().split('T')[0], label: d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) };
+                        })" :key="day.string">
+                            <div @click="selectedDate = day.string; creationView = false; clearCateringForm()" 
+                                 :class="selectedDate === day.string ? 'ring-2 ring-indigo-600 bg-indigo-50/50 border-indigo-300' : 'bg-white hover:bg-slate-50 border-slate-200'"
+                                 class="p-3 border rounded-xl text-center cursor-pointer transition flex flex-col justify-between min-h-24 shadow-2xs relative overflow-hidden">
+                                
+                                <div class="text-[10px] text-slate-400 font-mono font-bold" x-text="day.label"></div>
+                                
+                                <div class="mt-2 space-y-1">
+                                    <template x-for="ev in getEventsForDate(day.string)" :key="ev.id">
+                                        <span class="bg-indigo-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded block uppercase tracking-wide truncate max-w-full" x-text="ev.partyName"></span>
+                                    </template>
+                                    <template x-if="getEventCountForDate(day.string) === 0">
+                                        <span class="text-[10px] text-slate-400 italic block mt-2">Available</span>
+                                    </template>
+                                </div>
                             </div>
-                            <button type="button" @click="viewCateringTextMenu(ev)" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2.5 py-1 rounded border text-[10px] transition shrink-0">👁️ View Menu</button>
+                        </template>
+                    </div>
+
+                    <!-- Selected Target View Matrix Management Block -->
+                    <div x-show="selectedDate" x-transition class="bg-slate-50 border border-slate-200 p-4 rounded-xl mt-2 space-y-3">
+                        <div class="flex justify-between items-center border-b pb-2 flex-wrap gap-2">
+                            <span class="text-xs font-extrabold text-slate-700">
+                                Selected Log Window: <span class="font-mono text-indigo-700 font-black" x-text="selectedDate"></span>
+                            </span>
+                            <button type="button"
+                                    x-show="currentRole === 'admin' && !creationView" 
+                                    @click.prevent="clearCateringForm(); creationView = true" 
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg tracking-wide shadow-xs text-[11px] transition">
+                                ➕ Create Event Portfolio Axis
+                            </button>
                         </div>
-                        <div x-show="currentRole === 'admin'" class="flex items-center justify-end gap-2 border-t pt-2 border-slate-100 text-[11px]">
-                            <button type="button" @click="editCateringEvent(ev); creationView = true" class="text-indigo-600 font-bold hover:underline">✏️ Edit Details</button>
-                            <span class="text-slate-300">|</span>
-                            <button type="button" @click="deleteCateringEvent(ev.id)" class="text-rose-600 font-bold hover:underline">🗑️ Delete Event</button>
+
+                        <!-- Active Staged Document Context Interface Layer -->
+                        <div x-show="!creationView" class="space-y-2">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <template x-for="ev in getEventsForDate(selectedDate)" :key="ev.id">
+                                    <div class="bg-white border p-3 rounded-lg shadow-2xs flex flex-col justify-between gap-3">
+                                        <div class="flex justify-between items-start gap-4">
+                                            <div>
+                                                <div class="font-black text-slate-800 text-sm" x-text="ev.partyName"></div>
+                                                <div class="text-[10px] text-slate-500 font-bold mt-0.5" x-text="'Attendance: ' + ev.paxCount + ' Pax'"></div>
+                                            </div>
+                                            <button type="button" @click="viewCateringTextMenu(ev)" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-2.5 py-1 rounded border text-[10px] transition shrink-0">👁️ View Menu</button>
+                                        </div>
+                                        <div x-show="currentRole === 'admin'" class="flex items-center justify-end gap-2 border-t pt-2 border-slate-100 text-[11px]">
+                                            <button type="button" @click="editCateringEvent(ev); creationView = true" class="text-indigo-600 font-bold hover:underline">✏️ Edit Details</button>
+                                            <span class="text-slate-300">|</span>
+                                            <button type="button" @click="deleteCateringEvent(ev.id)" class="text-rose-600 font-bold hover:underline">🗑️ Delete Event</button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                            <template x-if="getEventsForDate(selectedDate).length === 0">
+                                <p class="text-slate-400 italic text-center py-2">No corporate functions mapped to this window timestamp line.</p>
+                            </template>
+                        </div>
+
+                        <!-- Admin Clean Text Area Clipboard Paste Module -->
+                        <div x-show="creationView" x-transition class="bg-white border rounded-xl p-4 space-y-3 shadow-3xs">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Name of Party</label>
+                                    <input type="text" x-model="cateringForm.partyName" placeholder="e.g. Wedding Reception Gala" class="border border-slate-300 p-2 rounded-lg bg-slate-50 text-xs w-full">
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Target Pax Attendance</label>
+                                    <input type="number" x-model.number="cateringForm.paxCount" placeholder="e.g. 250" class="border border-slate-300 p-2 rounded-lg bg-slate-50 text-xs w-full">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Direct Menu Clipboard Dump (Paste content directly from Word/Docs)</label>
+                                <textarea x-model="cateringForm.rawTextMenu" rows="5" placeholder="Paste structural text menu documentation sets directly here..." class="border border-slate-300 p-2 rounded-lg bg-slate-50 text-xs w-full font-mono"></textarea>
+                            </div>
+                            <div class="flex gap-2 justify-end pt-1">
+                                <button type="button" @click.prevent="creationView = false; editingEventId = null;" class="bg-slate-100 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs border">Cancel</button>
+                                <button type="button" @click.prevent="submitDirectTextCatering(selectedDate); creationView = false" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-xs shadow-sm transition uppercase tracking-wider" x-text="editingEventId ? 'Apply Context Update' : 'Commit Portfolio to Cloud'"></button>
+                            </div>
                         </div>
                     </div>
-                </template>
-            </div>
-            <template x-if="getEventsForDate(selectedDate).length === 0">
-                <p class="text-slate-400 italic text-center py-2">No corporate functions mapped to this window timestamp line.</p>
-            </template>
-        </div>
+                </section>
 
-        <!-- Admin Clean Text Area Clipboard Paste Module -->
-        <div x-show="creationView" x-transition class="bg-white border rounded-xl p-4 space-y-3 shadow-3xs">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Name of Party</label>
-                    <input type="text" x-model="cateringForm.partyName" placeholder="e.g. Wedding Reception Gala" class="border border-slate-300 p-2 rounded-lg bg-slate-50 text-xs w-full">
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Target Pax Attendance</label>
-                    <input type="number" x-model.number="cateringForm.paxCount" placeholder="e.g. 250" class="border border-slate-300 p-2 rounded-lg bg-slate-50 text-xs w-full">
-                </div>
-            </div>
-            <div>
-                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Direct Menu Clipboard Dump (Paste content directly from Word/Docs)</label>
-                <textarea x-model="cateringForm.rawTextMenu" rows="5" placeholder="Paste structural text menu documentation sets directly here..." class="border border-slate-300 p-2 rounded-lg bg-slate-50 text-xs w-full font-mono"></textarea>
-            </div>
-            <div class="flex gap-2 justify-end pt-1">
-                <button type="button" @click.prevent="creationView = false; editingEventId = null;" class="bg-slate-100 text-slate-700 font-bold px-4 py-2 rounded-lg text-xs border">Cancel</button>
-                <button type="button" @click.prevent="submitDirectTextCatering(selectedDate); creationView = false" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-xs shadow-sm transition uppercase tracking-wider" x-text="editingEventId ? 'Apply Context Update' : 'Commit Portfolio to Cloud'"></button>
-            </div>
-        </div>
-    </div>
-</section>
-
+                <!-- Supplier Purchase Order Desk -->
                 <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'order'">
                     <div class="text-xs font-black uppercase tracking-wider text-indigo-800 border-b border-slate-100 pb-2">📝 Automated Supplier Purchase Order Desk</div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
@@ -253,6 +256,7 @@
                     </div>
                 </section>
 
+                <!-- Transaction Logging Columns -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6" x-show="currentRole !== 'readonly' && currentRole !== 'order'">
                     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'inward'">
                         <div class="text-xs font-bold uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2">📥 Log New Inward Manual Consignment</div>
@@ -313,6 +317,7 @@
                     </div>
                 </div>
 
+                <!-- Real-time LIFO Stream -->
                 <div x-show="logs.length > 0 && currentRole !== 'readonly' && currentRole !== 'order'" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
                     <div class="text-[11px] font-bold uppercase text-slate-500 tracking-wider">⏱️ Real-time Transaction Ledger Streams (LIFO Buffer Timeline):</div>
                     <div class="flex flex-wrap gap-2">
@@ -330,6 +335,7 @@
                     </div>
                 </div>
 
+                <!-- Main Inventory Table Ledger -->
                 <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
                         <div class="space-y-0.5">
@@ -394,6 +400,7 @@
                     </div>
                 </section>
                 
+                <!-- Operator Admin Suite Modal -->
                 <div x-show="showUserAdminModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-lg w-full shadow-2xl space-y-5 border border-slate-200 max-h-[90vh] overflow-y-auto">
                         <div>
@@ -467,6 +474,7 @@
                     </div>
                 </div>
 
+                <!-- Add New Item Modal -->
                 <div x-show="showNewItemModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
                         <h3 class="text-sm font-black uppercase text-slate-800 tracking-wide border-b pb-1">➕ Append Portfolio Tracking row</h3>
@@ -505,6 +513,7 @@
                     </div>
                 </div>
 
+                <!-- Account Security Settings Modal -->
                 <div x-show="showAccountModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <form @submit.prevent="changeMyPassword()" class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
                         <h3 class="text-sm font-bold uppercase text-slate-800 border-b pb-1">👤 Security Key Settings</h3>
@@ -521,7 +530,7 @@
                     </form>
                 </div>
 
-                <!-- CATERING MENU DISPLAY MODAL -->
+                <!-- Catering Text Menu Display Popup Modal -->
                 <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-show="cateringModal.show" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
                         <h3 class="text-sm font-black uppercase text-slate-800 tracking-wide border-b pb-1" x-text="'Menu Details for ' + cateringModal.label"></h3>
