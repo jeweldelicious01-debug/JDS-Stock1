@@ -243,7 +243,8 @@ window.stockApp = function() {
 
         // --- CATERING EVENT SYSTEM ARCHITECTURE ENGINE ---
         getEventsForDate(dateStr) {
-            return this.cateringEvents.filter(ev => ev.date === dateStr);
+            if (!dateStr || !this.cateringEvents) return [];
+            return this.cateringEvents.filter(ev => String(ev.date) === String(dateStr));
         },
 
         getEventCountForDate(dateStr) {
@@ -274,6 +275,7 @@ window.stockApp = function() {
             if (!confirm("Are you sure you want to completely delete this catering event?")) return;
             try {
                 await deleteDoc(doc(dbFs, "catering_events", eventId));
+                this.cateringEvents = this.cateringEvents.filter(e => e.id !== eventId);
                 alert("Function successfully deleted from cloud records.");
             } catch (err) {
                 alert("Operation failed: " + err.message);
@@ -297,13 +299,21 @@ window.stockApp = function() {
             try {
                 if (this.editingEventId) {
                     await setDoc(doc(dbFs, "catering_events", this.editingEventId), payload, { merge: true });
+                    const idx = this.cateringEvents.findIndex(e => e.id === this.editingEventId);
+                    if (idx !== -1) {
+                        this.cateringEvents[idx] = { id: this.editingEventId, ...payload };
+                    }
                     this.editingEventId = null;
                     alert("Function record context updated successfully!");
                 } else {
                     payload.created_at = Date.now();
-                    await addDoc(colRef('catering_events'), payload);
+                    const docRef = await addDoc(colRef('catering_events'), payload);
+                    
+                    // Local array push guarantees immediate rendering before Firestore listener fires
+                    this.cateringEvents.push({ id: docRef.id, ...payload });
                     alert("Fresh function logged successfully!");
                 }
+
                 this.clearCateringForm();
             } catch (err) {
                 alert("Mutation failure: " + err.message);
