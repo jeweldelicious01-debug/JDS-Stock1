@@ -79,6 +79,7 @@ window.stockApp = function() {
         currentUsername: '',
         currentUserId: null,
         filterCat: 'all',
+        filterSupplier: 'all', // Added Supplier Filter State
         orderViewTab: 'pending', 
         
         loginForm: { username: '', password: '' },
@@ -196,12 +197,24 @@ window.stockApp = function() {
             this.authChecking = false;
         },
 
+        // Updated processedItems Getter supporting both Category and Supplier filtering
         get processedItems() {
             let dataset = this.items.map((i) => {
                 const cat = this.categories.find((c) => c.id === i.category_id) || {};
                 return { ...i, category_name: cat.name || 'Unassigned', emoji: cat.emoji || '📦', bg: cat.bg_color || '#f3f4f6', border: cat.border_color || '#9ca3af', text_color: cat.text_color || '#374151' };
             });
-            if (this.filterCat !== 'all') dataset = dataset.filter((i) => i.category_name === this.filterCat);
+
+            // Filter by Category
+            if (this.filterCat !== 'all') {
+                dataset = dataset.filter((i) => i.category_name === this.filterCat);
+            }
+
+            // Filter by Supplier
+            if (this.filterSupplier !== 'all') {
+                const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
+                dataset = dataset.filter((i) => (i.supplier_name || defaultSupplier) === this.filterSupplier);
+            }
+
             return dataset.sort((a, b) => {
                 let aAlert = a.stock <= a.threshold ? 1 : 0; let bAlert = b.stock <= b.threshold ? 1 : 0;
                 if (aAlert !== bAlert) return bAlert - aAlert;
@@ -308,8 +321,6 @@ window.stockApp = function() {
                 } else {
                     payload.created_at = Date.now();
                     const docRef = await addDoc(colRef('catering_events'), payload);
-                    
-                    // Local array push guarantees immediate rendering before Firestore listener fires
                     this.cateringEvents.push({ id: docRef.id, ...payload });
                     alert("Fresh function logged successfully!");
                 }
