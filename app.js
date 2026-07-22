@@ -65,7 +65,7 @@ window.stockApp = function() {
     return {
         categories: [],
         items: [],
-        importantNotes: [], 
+        cateringEvents: [], 
         logs: [],
         allRawLogs: [],
         users: [],
@@ -85,7 +85,11 @@ window.stockApp = function() {
         loginError: '',
         formInward: { itemId: '', qty: '', supplierName: '' }, 
         formOutward: { itemId: '', department: 'Indian', qty: '' },
-        formNote: { itemName: '', pax: '', dateLabel: '' },
+
+        // Catering Matrix Buffers
+        cateringForm: { partyName: '', paxCount: '', rawTextMenu: '' },
+        cateringModal: { show: false, label: '', text: '' },
+        editingEventId: null,
         
         orderDesk: {
             supplierId: '',
@@ -120,26 +124,25 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async submitNewCategory() {
-    if (!this.newCategoryForm.name.trim()) return alert("Category title required.");
-    const palette = this.paletteOptions[this.newCategoryForm.paletteIndex];
-    
-    // Force clean format: Trim space and make the title casing uniform
-    const rawName = this.newCategoryForm.name.trim();
-    const formattedName = rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
-    const newId = formattedName.toLowerCase().replace(/\s+/g, '-');
-    
-    try {
-        await setDoc(doc(dbFs, 'categories', newId), {
-            name: formattedName, // Saved uniformly
-            emoji: this.newCategoryForm.emoji,
-            bg_color: palette.bg,
-            border_color: palette.border,
-            text_color: palette.text
-        });
-        this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
-        alert("New category axis provisioned cleanly.");
-    } catch(e) { alert(e.message); }
-},
+            if (!this.newCategoryForm.name.trim()) return alert("Category title required.");
+            const palette = this.paletteOptions[this.newCategoryForm.paletteIndex];
+            
+            const rawName = this.newCategoryForm.name.trim();
+            const formattedName = rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
+            const newId = formattedName.toLowerCase().replace(/\s+/g, '-');
+            
+            try {
+                await setDoc(doc(dbFs, 'categories', newId), {
+                    name: formattedName,
+                    emoji: this.newCategoryForm.emoji,
+                    bg_color: palette.bg,
+                    border_color: palette.border,
+                    text_color: palette.text
+                });
+                this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
+                alert("New category axis provisioned cleanly.");
+            } catch(e) { alert(e.message); }
+        },
 
         async init() {
             await seedIfEmpty();
@@ -153,7 +156,10 @@ window.stockApp = function() {
                     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             });
             
-            onSnapshot(colRef('notes'), (snap) => { this.importantNotes = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
+            onSnapshot(colRef('catering_events'), (snap) => { 
+                this.cateringEvents = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
+            });
+
             onSnapshot(colRef('logs'), (snap) => { 
                 this.allRawLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
                 const todayStr = new Date().toISOString().slice(0, 10);
@@ -233,6 +239,75 @@ window.stockApp = function() {
                     return orderStatus !== 'pending';
                 }
             });
+        },
+
+        // --- CATERING EVENT SYSTEM ARCHITECTURE ENGINE ---
+        getEventsForDate(dateStr) {
+            return this.cateringEvents.filter(ev => ev.date === dateStr);
+        },
+
+        getEventCountForDate(dateStr) {
+            return this.getEventsForDate(dateStr).length;
+        },
+
+        viewCateringTextMenu(eventObj) {
+            this.cateringModal.label = `${eventObj.partyName} (${eventObj.paxCount} Pax)`;
+            this.cateringModal.text = eventObj.menuText;
+            this.cateringModal.show = true;
+        },
+
+        clearCateringForm() {
+            this.cateringForm.partyName = '';
+            this.cateringForm.paxCount = '';
+            this.cateringForm.rawTextMenu = '';
+            this.editingEventId = null;
+        },
+
+        editCateringEvent(eventObj) {
+            this.cateringForm.partyName = eventObj.partyName;
+            this.cateringForm.paxCount = eventObj.paxCount;
+            this.cateringForm.rawTextMenu = eventObj.menuText;
+            this.editingEventId = eventObj.id;
+        },
+
+        async deleteCateringEvent(eventId) {
+            if (!confirm("Are you sure you want to completely delete this catering event?")) return;
+            try {
+                await deleteDoc(doc(dbFs, "catering_events", eventId));
+                alert("Function successfully deleted from cloud records.");
+            } catch (err) {
+                alert("Operation failed: " + err.message);
+            }
+        },
+
+        async submitDirectTextCatering(dateString) {
+            if (!this.cateringForm.partyName || !this.cateringForm.rawTextMenu) {
+                alert("Please fill out the party title and paste text menu data.");
+                return;
+            }
+
+            const payload = {
+                date: dateString,
+                partyName: this.cateringForm.partyName.trim(),
+                paxCount: Number(this.cateringForm.paxCount) || 0,
+                menuText: this.cateringForm.rawTextMenu,
+                updated_at: Date.now()
+            };
+
+            try {
+                if (this.editingEventId) {
+                    await setDoc(doc(dbFs, "catering_events", this.editingEventId), payload, { merge: true });
+                    this.editingEventId = null;
+                    alert("Function record context updated successfully!");
+                } else {
+                    payload.created_at = Date.now();
+                    await addDoc(colRef('catering_events'), payload);
+                    alert("Fresh function logged successfully!");
+                }
+                this.clearCateringForm();
+            } catch (err) {
+                alert("Mutation failure: " + err.message);
+            }
         },
 
         addItemToOrder() {
@@ -329,25 +404,6 @@ window.stockApp = function() {
                 await updateDoc(doc(dbFs, 'purchase_orders', order.id), { status: 'DECLINED', resolved_at: new Date().toISOString(), resolved_by: this.currentUsername });
                 alert("Order successfully canceled and marked as DECLINED.");
             } catch (error) { alert("Error canceling order: " + error.message); }
-        },
-
-        async submitNewNote() {
-            if (!this.formNote.itemName.trim() || !this.formNote.pax || !this.formNote.dateLabel.trim()) return alert("Fields required.");
-            try {
-                await addDoc(colRef('notes'), {
-                    item_name: this.formNote.itemName.trim(),
-                    pax: parseInt(this.formNote.pax) || 0,
-                    date_label: this.formNote.dateLabel.trim(),
-                    created_at: new Date().toISOString()
-                });
-                this.formNote = { itemName: '', pax: '', dateLabel: '' };
-            } catch (e) { alert(e.message); }
-        },
-
-        async deleteNote(noteId) { 
-            if (confirm("Delete this event allocation card notice?")) {
-                await deleteDoc(doc(dbFs, 'notes', noteId)); 
-            }
         },
 
         isWithin30Minutes(createdAt) {
