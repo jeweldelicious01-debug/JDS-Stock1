@@ -336,55 +336,97 @@ window.stockApp = function() {
         },
 
         addItemToOrder() {
-            if (!this.orderDesk.selectedItemId || !this.orderDesk.selectedQty) return alert("Select an item and input quantity.");
-            const targetItem = this.items.find(i => String(i.id) === String(this.orderDesk.selectedItemId));
-            if (!targetItem) return;
+    if (!this.orderDesk.selectedItemId || !this.orderDesk.selectedQty || this.orderDesk.selectedQty <= 0) {
+        alert("Please select a product and enter a valid quantity.");
+        return;
+    }
 
-            this.orderDesk.basket.push({
-                id: targetItem.id,
-                name: targetItem.name,
-                qty: parseInt(this.orderDesk.selectedQty) || 1
-            });
-            this.orderDesk.selectedItemId = '';
-            this.orderDesk.selectedQty = '';
-        },
+    const itemObj = this.items.find(i => i.id === this.orderDesk.selectedItemId);
+    if (!itemObj) return;
 
-        removeOrderBasketItem(index) { this.orderDesk.basket.splice(index, 1); },
+    // Push item selection into local basket
+    this.orderDesk.basket.push({
+        id: itemObj.id,
+        name: itemObj.name,
+        qty: Number(this.orderDesk.selectedQty)
+    });
 
-        async sendWhatsAppOrder() {
-            if (!this.orderDesk.supplierId || !this.orderDesk.basket.length) return alert("Supplier choice or draft basket is empty.");
-            const vendor = this.suppliers.find(s => String(s.id) === String(this.orderDesk.supplierId));
-            if (!vendor) return;
+    // Reset single selection fields
+    this.orderDesk.selectedItemId = '';
+    this.orderDesk.selectedQty = '';
+},
 
-            try {
-                await addDoc(colRef('purchase_orders'), {
-                    supplier_name: vendor.name,
-                    items: this.orderDesk.basket,
-                    status: 'PENDING',
-                    created_at: new Date().toISOString(),
-                    created_by: this.currentUsername
-                });
+removeOrderBasketItem(index) {
+    this.orderDesk.basket.splice(index, 1);
+},
 
-                let textMessage = `*PURCHASE ORDER: ${vendor.name.toUpperCase()}*\n\n`;
-                textMessage += `Date: ${new Date().toLocaleDateString('en-GB')}\n\n`;
-                
-                this.orderDesk.basket.forEach((item, index) => {
-                    textMessage += `${index + 1}. *${item.name}* — Qty: ${item.qty}\n\n`; 
-                });
+        async // --- SMART UNIT-CONVERTING WHATSAPP ORDER GENERATOR ---
+sendWhatsAppOrder() {
+    if (!this.orderDesk.supplierId || this.orderDesk.basket.length === 0) {
+        alert("Please select a supplier and add items to your purchase basket.");
+        return;
+    }
 
-                textMessage = textMessage.trimEnd();
+    const supplierObj = this.suppliers.find(s => s.id === this.orderDesk.supplierId);
+    const supplierName = supplierObj ? supplierObj.name : "Supplier";
 
-                const urlSafeMessage = encodeURIComponent(textMessage);
-                const targetPhone = vendor.phone ? vendor.phone.replace(/\D/g, '') : '';
-                window.open(`https://wa.me/${targetPhone}?text=${urlSafeMessage}`, '_blank');
+    let messageLines = [
+        `*PURCHASE ORDER MANIFEST*`,
+        `*To:* ${supplierName}`,
+        `*Date:* ${new Date().toLocaleDateString('en-GB')}`,
+        `--------------------------------`,
+        `*Requested Items:*`
+    ];
 
-                this.orderDesk.basket = [];
-                this.orderDesk.supplierId = '';
-            } catch (e) {
-                alert("Error staging order tracking row: " + e.message);
+    // Helper function to format items with gram/ml conversions dynamically
+    this.orderDesk.basket.forEach((item, index) => {
+        let name = item.name;
+        let qty = item.qty;
+
+        // Regex patterns to match weight/volume numbers inside item names (e.g., "Sugar 250 gms", "Tea 500g", "Oil 500ml")
+        const gramMatch = name.match(/(\d+)\s*(gms?|gram|grams?|g)\b/i);
+        const mlMatch = name.match(/(\d+)\s*(ml|milliliters?)\b/i);
+
+        let formattedString = `${index + 1}. ${name} - Qty: ${qty}`;
+
+        if (gramMatch) {
+            const unitWeightGrams = parseInt(gramMatch[1], 10);
+            const totalGrams = unitWeightGrams * qty;
+            
+            // Clean up the base item name (removes the "250 gms" part)
+            const baseName = name.replace(gramMatch[0], '').trim();
+
+            if (totalGrams >= 1000) {
+                const totalKg = totalGrams / 1000;
+                // Render nicely as "Sugar 1 kg" or "Sugar 2.5 kg"
+                formattedString = `${index + 1}. *${baseName} ${totalKg} kg*`;
+            } else {
+                formattedString = `${index + 1}. *${baseName} ${totalGrams} gms*`;
             }
-        },
+        } else if (mlMatch) {
+            const unitVolumeMl = parseInt(mlMatch[1], 10);
+            const totalMl = unitVolumeMl * qty;
+            const baseName = name.replace(mlMatch[0], '').trim();
 
+            if (totalMl >= 1000) {
+                const totalL = totalMl / 1000;
+                formattedString = `${index + 1}. *${baseName} ${totalL} Liters*`;
+            } else {
+                formattedString = `${index + 1}. *${baseName} ${totalMl} ml*`;
+            }
+        }
+
+        messageLines.push(formattedString);
+    });
+
+    messageLines.push(`--------------------------------`);
+    messageLines.push(`Please confirm receipt and dispatch schedule.`);
+
+    const fullMessage = encodeURIComponent(messageLines.join('\n'));
+    
+    // Redirects directly to WhatsApp web/app intent link
+    window.open(`https://wa.me/?text=${fullMessage}`, '_blank');
+},
         async approveIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
             if (!confirm(`Confirm stock ingestion from ${order.supplier_name}? Live balances will update based on the quantities listed below.`)) return;
