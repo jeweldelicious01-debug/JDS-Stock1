@@ -432,64 +432,66 @@ window.stockApp = function() {
         },
 
         sendWhatsAppOrder() {
-            if (!this.orderDesk.supplierId || this.orderDesk.basket.length === 0) {
-                alert("Please select a supplier and add items to your purchase basket.");
-                return;
+    if (!this.orderDesk.supplierId || this.orderDesk.basket.length === 0) {
+        alert("Please select a supplier and add items to your purchase basket.");
+        return;
+    }
+
+    const supplierObj = this.suppliers.find(s => s.id === this.orderDesk.supplierId);
+    const supplierName = supplierObj ? supplierObj.name : "Supplier";
+
+    // Calculate Next Day's Date
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const nextDayFormatted = tomorrow.toLocaleDateString('en-GB'); // Formats as DD/MM/YYYY
+
+    // Header Format: "PURCHASE ORDER: <Supplier Name>" & Date
+    let messageLines = [
+        `*PURCHASE ORDER: ${supplierName.toUpperCase()}*`,
+        `*Date:* ${nextDayFormatted}`,
+        `--------------------------------`
+    ];
+
+    // Format item entries with unit weight conversions (gms -> kg / ml -> Liters)
+    this.orderDesk.basket.forEach((item, index) => {
+        let name = item.name;
+        let qty = item.qty;
+
+        const gramMatch = name.match(/(\d+)\s*(gms?|gram|grams?|g)\b/i);
+        const mlMatch = name.match(/(\d+)\s*(ml|milliliters?)\b/i);
+
+        let formattedString = `${index + 1}. ${name} - Qty: ${qty}`;
+
+        if (gramMatch) {
+            const unitWeightGrams = parseInt(gramMatch[1], 10);
+            const totalGrams = unitWeightGrams * qty;
+            const baseName = name.replace(gramMatch[0], '').trim();
+
+            if (totalGrams >= 1000) {
+                const totalKg = totalGrams / 1000;
+                formattedString = `${index + 1}. *${baseName} ${totalKg} kg*`;
+            } else {
+                formattedString = `${index + 1}. *${baseName} ${totalGrams} gms*`;
             }
+        } else if (mlMatch) {
+            const unitVolumeMl = parseInt(mlMatch[1], 10);
+            const totalMl = unitVolumeMl * qty;
+            const baseName = name.replace(mlMatch[0], '').trim();
 
-            const supplierObj = this.suppliers.find(s => s.id === this.orderDesk.supplierId);
-            const supplierName = supplierObj ? supplierObj.name : "Supplier";
+            if (totalMl >= 1000) {
+                const totalL = totalMl / 1000;
+                formattedString = `${index + 1}. *${baseName} ${totalL} Liters*`;
+            } else {
+                formattedString = `${index + 1}. *${baseName} ${totalMl} ml*`;
+            }
+        }
 
-            let messageLines = [
-                `*PURCHASE ORDER MANIFEST*`,
-                `*To:* ${supplierName}`,
-                `*Date:* ${new Date().toLocaleDateString('en-GB')}`,
-                `--------------------------------`,
-                `*Requested Items:*`
-            ];
+        messageLines.push(formattedString);
+    });
 
-            this.orderDesk.basket.forEach((item, index) => {
-                let name = item.name;
-                let qty = item.qty;
-
-                const gramMatch = name.match(/(\d+)\s*(gms?|gram|grams?|g)\b/i);
-                const mlMatch = name.match(/(\d+)\s*(ml|milliliters?)\b/i);
-
-                let formattedString = `${index + 1}. ${name} - Qty: ${qty}`;
-
-                if (gramMatch) {
-                    const unitWeightGrams = parseInt(gramMatch[1], 10);
-                    const totalGrams = unitWeightGrams * qty;
-                    const baseName = name.replace(gramMatch[0], '').trim();
-
-                    if (totalGrams >= 1000) {
-                        const totalKg = totalGrams / 1000;
-                        formattedString = `${index + 1}. *${baseName} ${totalKg} kg*`;
-                    } else {
-                        formattedString = `${index + 1}. *${baseName} ${totalGrams} gms*`;
-                    }
-                } else if (mlMatch) {
-                    const unitVolumeMl = parseInt(mlMatch[1], 10);
-                    const totalMl = unitVolumeMl * qty;
-                    const baseName = name.replace(mlMatch[0], '').trim();
-
-                    if (totalMl >= 1000) {
-                        const totalL = totalMl / 1000;
-                        formattedString = `${index + 1}. *${baseName} ${totalL} Liters*`;
-                    } else {
-                        formattedString = `${index + 1}. *${baseName} ${totalMl} ml*`;
-                    }
-                }
-
-                messageLines.push(formattedString);
-            });
-
-            messageLines.push(`--------------------------------`);
-            messageLines.push(`Please confirm receipt and dispatch schedule.`);
-
-            const fullMessage = encodeURIComponent(messageLines.join('\n'));
-            window.open(`https://wa.me/?text=${fullMessage}`, '_blank');
-        },
+    const fullMessage = encodeURIComponent(messageLines.join('\n'));
+    window.open(`https://wa.me/?text=${fullMessage}`, '_blank');
+},
 
         async approveIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
