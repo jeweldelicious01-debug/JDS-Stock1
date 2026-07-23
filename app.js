@@ -79,7 +79,7 @@ window.stockApp = function() {
         currentUsername: '',
         currentUserId: null,
         filterCat: 'all',
-        filterSupplier: 'all', // Added Supplier Filter State
+        filterSupplier: 'all',
         orderViewTab: 'pending', 
         
         loginForm: { username: '', password: '' },
@@ -123,27 +123,6 @@ window.stockApp = function() {
         newUserForm: { username: '', password: '', role: 'inward' },
         newUserError: '',
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
-
-        async submitNewCategory() {
-            if (!this.newCategoryForm.name.trim()) return alert("Category title required.");
-            const palette = this.paletteOptions[this.newCategoryForm.paletteIndex];
-            
-            const rawName = this.newCategoryForm.name.trim();
-            const formattedName = rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
-            const newId = formattedName.toLowerCase().replace(/\s+/g, '-');
-            
-            try {
-                await setDoc(doc(dbFs, 'categories', newId), {
-                    name: formattedName,
-                    emoji: this.newCategoryForm.emoji,
-                    bg_color: palette.bg,
-                    border_color: palette.border,
-                    text_color: palette.text
-                });
-                this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
-                alert("New category axis provisioned cleanly.");
-            } catch(e) { alert(e.message); }
-        },
 
         async init() {
             await seedIfEmpty();
@@ -197,19 +176,116 @@ window.stockApp = function() {
             this.authChecking = false;
         },
 
-        // Updated processedItems Getter supporting both Category and Supplier filtering
+        // EXCEL BULK INGEST (ADMIN / INWARD ONLY)
+        async uploadExcelReport(event) {
+            if (this.currentRole !== 'admin' && this.currentRole !== 'inward') {
+                alert("Security Exception: Your operating role scope does not authorize bulk database ingest mutations.");
+                event.target.value = "";
+                return;
+            }
+
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const jsonRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+                    if (jsonRows.length === 0) return alert("The uploaded sheet contains no data.");
+
+                    let addedItemsCount = 0;
+
+                    for (let row of jsonRows) {
+                        const rawItemName = row["Item Name"]?.toString().trim();
+                        const rawBalance = Number(row["Live Balance"]) || 0;
+                        const rawLimit = Number(row["Safety Limit"]) || 0;
+                        const rawMrp = Number(row["Unit Price (MRP)"]?.toString().replace(/[^0-9.]/g, '')) || 0;
+                        const rawCategory = row["Category Axis"]?.toString().trim();
+                        const rawSupplier = row["Primary Supplier"]?.toString().trim();
+
+                        if (!rawItemName) continue;
+
+                        let categoryId = 'kirana';
+                        if (rawCategory) {
+                            const existingCat = this.categories.find(c => c.name.toLowerCase() === rawCategory.toLowerCase());
+                            if (!existingCat) {
+                                const newCatId = rawCategory.toLowerCase().replace(/\s+/g, '-');
+                                await setDoc(doc(dbFs, 'categories', newCatId), {
+                                    name: rawCategory,
+                                    emoji: "📦",
+                                    bg_color: "#f8fafc",
+                                    border_color: "#64748b",
+                                    text_color: "#334151"
+                                });
+                                categoryId = newCatId;
+                            } else {
+                                categoryId = existingCat.id;
+                            }
+                        }
+
+                        if (rawSupplier && !this.suppliers.some(s => s.name.toLowerCase() === rawSupplier.toLowerCase())) {
+                            await addDoc(colRef('suppliers'), { name: rawSupplier, phone: '' });
+                        }
+
+                        const itemExists = this.items.some(i => i.name.toLowerCase() === rawItemName.toLowerCase());
+                        if (!itemExists) {
+                            await addDoc(colRef('items'), {
+                                name: rawItemName,
+                                stock: rawBalance,
+                                threshold: rawLimit,
+                                mrp: rawMrp,
+                                category_id: categoryId,
+                                supplier_name: rawSupplier || (this.suppliers[0] ? this.suppliers[0].name : 'General Vendor'),
+                                order_index: this.items.length + 1
+                            });
+                            addedItemsCount++;
+                        }
+                    }
+
+                    alert(`Ingestion completed cleanly! Added ${addedItemsCount} brand new items.`);
+                    event.target.value = "";
+                } catch (err) {
+                    alert("Failed to parse spreadsheet: " + err.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        },
+
+        async submitNewCategory() {
+            if (!this.newCategoryForm.name.trim()) return alert("Category title required.");
+            const palette = this.paletteOptions[this.newCategoryForm.paletteIndex];
+            
+            const rawName = this.newCategoryForm.name.trim();
+            const formattedName = rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
+            const newId = formattedName.toLowerCase().replace(/\s+/g, '-');
+            
+            try {
+                await setDoc(doc(dbFs, 'categories', newId), {
+                    name: formattedName,
+                    emoji: this.newCategoryForm.emoji,
+                    bg_color: palette.bg,
+                    border_color: palette.border,
+                    text_color: palette.text
+                });
+                this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
+                alert("New category axis provisioned cleanly.");
+            } catch(e) { alert(e.message); }
+        },
+
         get processedItems() {
             let dataset = this.items.map((i) => {
                 const cat = this.categories.find((c) => c.id === i.category_id) || {};
                 return { ...i, category_name: cat.name || 'Unassigned', emoji: cat.emoji || '📦', bg: cat.bg_color || '#f3f4f6', border: cat.border_color || '#9ca3af', text_color: cat.text_color || '#374151' };
             });
 
-            // Filter by Category
             if (this.filterCat !== 'all') {
                 dataset = dataset.filter((i) => i.category_name === this.filterCat);
             }
 
-            // Filter by Supplier
             if (this.filterSupplier !== 'all') {
                 const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
                 dataset = dataset.filter((i) => (i.supplier_name || defaultSupplier) === this.filterSupplier);
@@ -254,7 +330,7 @@ window.stockApp = function() {
             });
         },
 
-        // --- CATERING EVENT SYSTEM ARCHITECTURE ENGINE ---
+        // CATERING MATRIX ENGINE
         getEventsForDate(dateStr) {
             if (!dateStr || !this.cateringEvents) return [];
             return this.cateringEvents.filter(ev => String(ev.date) === String(dateStr));
@@ -295,138 +371,126 @@ window.stockApp = function() {
             }
         },
 
-       async submitDirectTextCatering(dateString) {
-    if (!this.cateringForm.partyName || !this.cateringForm.rawTextMenu) {
-        alert("Please fill out the party title and paste text menu data.");
-        return;
-    }
-
-    const payload = {
-        date: dateString,
-        partyName: this.cateringForm.partyName.trim(),
-        paxCount: Number(this.cateringForm.paxCount) || 0,
-        menuText: this.cateringForm.rawTextMenu,
-        updated_at: Date.now()
-    };
-
-    try {
-        if (this.editingEventId) {
-            await setDoc(doc(dbFs, "catering_events", this.editingEventId), payload, { merge: true });
-            const idx = this.cateringEvents.findIndex(e => e.id === this.editingEventId);
-            if (idx !== -1) {
-                this.cateringEvents[idx] = { id: this.editingEventId, ...payload };
+        async submitDirectTextCatering(dateString) {
+            if (!this.cateringForm.partyName || !this.cateringForm.rawTextMenu) {
+                alert("Please fill out the party title and paste text menu data.");
+                return;
             }
-            this.editingEventId = null;
-            alert("Function record context updated successfully!");
-        } else {
-            payload.created_at = Date.now();
-            const docRef = await addDoc(colRef('catering_events'), payload);
-            
-            // Assign document ID explicitly so Alpine can distinguish multiple events on the same date
-            payload.id = docRef.id;
-            this.cateringEvents = [...this.cateringEvents, payload];
-            
-            alert("Fresh function logged successfully!");
-        }
 
-        this.clearCateringForm();
-    } catch (err) {
-        alert("Mutation failure: " + err.message);
-    }
+            const payload = {
+                date: dateString,
+                partyName: this.cateringForm.partyName.trim(),
+                paxCount: Number(this.cateringForm.paxCount) || 0,
+                menuText: this.cateringForm.rawTextMenu,
+                updated_at: Date.now()
+            };
+
+            try {
+                if (this.editingEventId) {
+                    await setDoc(doc(dbFs, "catering_events", this.editingEventId), payload, { merge: true });
+                    const idx = this.cateringEvents.findIndex(e => e.id === this.editingEventId);
+                    if (idx !== -1) {
+                        this.cateringEvents[idx] = { id: this.editingEventId, ...payload };
+                    }
+                    this.editingEventId = null;
+                    alert("Function record context updated successfully!");
+                } else {
+                    payload.created_at = Date.now();
+                    const docRef = await addDoc(colRef('catering_events'), payload);
+                    payload.id = docRef.id;
+                    this.cateringEvents = [...this.cateringEvents, payload];
+                    alert("Fresh function logged successfully!");
+                }
+
+                this.clearCateringForm();
+            } catch (err) {
+                alert("Mutation failure: " + err.message);
+            }
         },
 
         addItemToOrder() {
-    if (!this.orderDesk.selectedItemId || !this.orderDesk.selectedQty || this.orderDesk.selectedQty <= 0) {
-        alert("Please select a product and enter a valid quantity.");
-        return;
-    }
-
-    const itemObj = this.items.find(i => i.id === this.orderDesk.selectedItemId);
-    if (!itemObj) return;
-
-    // Push item selection into local basket
-    this.orderDesk.basket.push({
-        id: itemObj.id,
-        name: itemObj.name,
-        qty: Number(this.orderDesk.selectedQty)
-    });
-
-    // Reset single selection fields
-    this.orderDesk.selectedItemId = '';
-    this.orderDesk.selectedQty = '';
-},
-
-removeOrderBasketItem(index) {
-    this.orderDesk.basket.splice(index, 1);
-},
-
-        async // --- SMART UNIT-CONVERTING WHATSAPP ORDER GENERATOR ---
-sendWhatsAppOrder() {
-    if (!this.orderDesk.supplierId || this.orderDesk.basket.length === 0) {
-        alert("Please select a supplier and add items to your purchase basket.");
-        return;
-    }
-
-    const supplierObj = this.suppliers.find(s => s.id === this.orderDesk.supplierId);
-    const supplierName = supplierObj ? supplierObj.name : "Supplier";
-
-    let messageLines = [
-        `*PURCHASE ORDER MANIFEST*`,
-        `*To:* ${supplierName}`,
-        `*Date:* ${new Date().toLocaleDateString('en-GB')}`,
-        `--------------------------------`,
-        `*Requested Items:*`
-    ];
-
-    // Helper function to format items with gram/ml conversions dynamically
-    this.orderDesk.basket.forEach((item, index) => {
-        let name = item.name;
-        let qty = item.qty;
-
-        // Regex patterns to match weight/volume numbers inside item names (e.g., "Sugar 250 gms", "Tea 500g", "Oil 500ml")
-        const gramMatch = name.match(/(\d+)\s*(gms?|gram|grams?|g)\b/i);
-        const mlMatch = name.match(/(\d+)\s*(ml|milliliters?)\b/i);
-
-        let formattedString = `${index + 1}. ${name} - Qty: ${qty}`;
-
-        if (gramMatch) {
-            const unitWeightGrams = parseInt(gramMatch[1], 10);
-            const totalGrams = unitWeightGrams * qty;
-            
-            // Clean up the base item name (removes the "250 gms" part)
-            const baseName = name.replace(gramMatch[0], '').trim();
-
-            if (totalGrams >= 1000) {
-                const totalKg = totalGrams / 1000;
-                // Render nicely as "Sugar 1 kg" or "Sugar 2.5 kg"
-                formattedString = `${index + 1}. *${baseName} ${totalKg} kg*`;
-            } else {
-                formattedString = `${index + 1}. *${baseName} ${totalGrams} gms*`;
+            if (!this.orderDesk.selectedItemId || !this.orderDesk.selectedQty || this.orderDesk.selectedQty <= 0) {
+                alert("Please select a product and enter a valid quantity.");
+                return;
             }
-        } else if (mlMatch) {
-            const unitVolumeMl = parseInt(mlMatch[1], 10);
-            const totalMl = unitVolumeMl * qty;
-            const baseName = name.replace(mlMatch[0], '').trim();
 
-            if (totalMl >= 1000) {
-                const totalL = totalMl / 1000;
-                formattedString = `${index + 1}. *${baseName} ${totalL} Liters*`;
-            } else {
-                formattedString = `${index + 1}. *${baseName} ${totalMl} ml*`;
+            const itemObj = this.items.find(i => i.id === this.orderDesk.selectedItemId);
+            if (!itemObj) return;
+
+            this.orderDesk.basket.push({
+                id: itemObj.id,
+                name: itemObj.name,
+                qty: Number(this.orderDesk.selectedQty)
+            });
+
+            this.orderDesk.selectedItemId = '';
+            this.orderDesk.selectedQty = '';
+        },
+
+        removeOrderBasketItem(index) {
+            this.orderDesk.basket.splice(index, 1);
+        },
+
+        sendWhatsAppOrder() {
+            if (!this.orderDesk.supplierId || this.orderDesk.basket.length === 0) {
+                alert("Please select a supplier and add items to your purchase basket.");
+                return;
             }
-        }
 
-        messageLines.push(formattedString);
-    });
+            const supplierObj = this.suppliers.find(s => s.id === this.orderDesk.supplierId);
+            const supplierName = supplierObj ? supplierObj.name : "Supplier";
 
-    messageLines.push(`--------------------------------`);
-    messageLines.push(`Please confirm receipt and dispatch schedule.`);
+            let messageLines = [
+                `*PURCHASE ORDER MANIFEST*`,
+                `*To:* ${supplierName}`,
+                `*Date:* ${new Date().toLocaleDateString('en-GB')}`,
+                `--------------------------------`,
+                `*Requested Items:*`
+            ];
 
-    const fullMessage = encodeURIComponent(messageLines.join('\n'));
-    
-    // Redirects directly to WhatsApp web/app intent link
-    window.open(`https://wa.me/?text=${fullMessage}`, '_blank');
-},
+            this.orderDesk.basket.forEach((item, index) => {
+                let name = item.name;
+                let qty = item.qty;
+
+                const gramMatch = name.match(/(\d+)\s*(gms?|gram|grams?|g)\b/i);
+                const mlMatch = name.match(/(\d+)\s*(ml|milliliters?)\b/i);
+
+                let formattedString = `${index + 1}. ${name} - Qty: ${qty}`;
+
+                if (gramMatch) {
+                    const unitWeightGrams = parseInt(gramMatch[1], 10);
+                    const totalGrams = unitWeightGrams * qty;
+                    const baseName = name.replace(gramMatch[0], '').trim();
+
+                    if (totalGrams >= 1000) {
+                        const totalKg = totalGrams / 1000;
+                        formattedString = `${index + 1}. *${baseName} ${totalKg} kg*`;
+                    } else {
+                        formattedString = `${index + 1}. *${baseName} ${totalGrams} gms*`;
+                    }
+                } else if (mlMatch) {
+                    const unitVolumeMl = parseInt(mlMatch[1], 10);
+                    const totalMl = unitVolumeMl * qty;
+                    const baseName = name.replace(mlMatch[0], '').trim();
+
+                    if (totalMl >= 1000) {
+                        const totalL = totalMl / 1000;
+                        formattedString = `${index + 1}. *${baseName} ${totalL} Liters*`;
+                    } else {
+                        formattedString = `${index + 1}. *${baseName} ${totalMl} ml*`;
+                    }
+                }
+
+                messageLines.push(formattedString);
+            });
+
+            messageLines.push(`--------------------------------`);
+            messageLines.push(`Please confirm receipt and dispatch schedule.`);
+
+            const fullMessage = encodeURIComponent(messageLines.join('\n'));
+            window.open(`https://wa.me/?text=${fullMessage}`, '_blank');
+        },
+
         async approveIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
             if (!confirm(`Confirm stock ingestion from ${order.supplier_name}? Live balances will update based on the quantities listed below.`)) return;
@@ -439,7 +503,7 @@ sendWhatsAppOrder() {
                     const arrivedQty = parseInt(record.qty) || 0;
                     
                     if (arrivedQty < 0) {
-                        alert(`Operation Denied: Negative value (${arrivedQty}) detected for item "${record.name}". Please input 0 if the item was not received.`);
+                        alert(`Operation Denied: Negative value (${arrivedQty}) detected for item "${record.name}".`);
                         return; 
                     }
                     
@@ -480,9 +544,9 @@ sendWhatsAppOrder() {
 
         async triggerUndo(log) {
             if (!this.isWithin30Minutes(log.created_at)) {
-                return alert("Reversal Rejected: This history log record has exceeded the 30-minute operational undo window.");
+                return alert("Reversal Rejected: Exceeded 30-minute undo window.");
             }
-            if (!confirm("Are you sure you want to revert this specific entry from history?")) return;
+            if (!confirm("Are you sure you want to revert this specific entry?")) return;
             try {
                 const targetItem = this.items.find(i => String(i.id) === String(log.item_id));
                 if (!targetItem) return alert("Target item no longer exists.");
@@ -558,12 +622,20 @@ sendWhatsAppOrder() {
             sessionStorage.setItem(SESSION_KEY, JSON.stringify({ userId: user.id }));
         },
 
-        logout() { sessionStorage.removeItem(SESSION_KEY); this.isAuthenticated = false; this.currentRole = 'readonly'; this.currentUsername = ''; this.currentUserId = null; },
+        logout() { 
+            sessionStorage.removeItem(SESSION_KEY); 
+            this.isAuthenticated = false; 
+            this.currentRole = 'readonly'; 
+            this.currentUsername = ''; 
+            this.currentUserId = null; 
+            window.location.reload();
+        },
+
         async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
         async deleteUser(userId) { if (confirm('Delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
         
         async changeMyPassword() {
-            if (this.currentRole !== 'admin') return alert("Access Rejected: Only platform Administrators can modify authentication profiles.");
+            if (this.currentRole !== 'admin') return alert("Access Rejected: Only platform Administrators can modify profiles.");
             this.accountError = ''; this.accountSuccess = '';
             const { currentPassword, newPassword } = this.accountForm;
             if (newPassword.length < 6) { this.accountError = 'Min 6 characters'; return; }
