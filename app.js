@@ -445,24 +445,26 @@ window.stockApp = function() {
     tomorrow.setDate(tomorrow.getDate() + 1);
     const nextDayFormatted = tomorrow.toLocaleDateString('en-GB'); // Formats as DD/MM/YYYY
 
-    // Header Format: "PURCHASE ORDER: <Supplier Name>" & Date
+    // Simplified Header Format
     let messageLines = [
         `*PURCHASE ORDER: ${supplierName.toUpperCase()}*`,
         `*Date:* ${nextDayFormatted}`,
         `--------------------------------`
     ];
 
-    // Format item entries with unit weight conversions (gms -> kg / ml -> Liters)
     this.orderDesk.basket.forEach((item, index) => {
         let name = item.name;
         let qty = item.qty;
 
+        // Regex pattern checks
         const gramMatch = name.match(/(\d+)\s*(gms?|gram|grams?|g)\b/i);
         const mlMatch = name.match(/(\d+)\s*(ml|milliliters?)\b/i);
+        const pktMatch = name.match(/\b(pkts?|packets?)\b/i);
 
-        let formattedString = `${index + 1}. ${name} - Qty: ${qty}`;
+        let formattedString = `${index + 1}. *${name} - Qty: ${qty}*`;
 
         if (gramMatch) {
+            // Case 1: Grams conversion (Shows item name and converted weight only)
             const unitWeightGrams = parseInt(gramMatch[1], 10);
             const totalGrams = unitWeightGrams * qty;
             const baseName = name.replace(gramMatch[0], '').trim();
@@ -474,6 +476,7 @@ window.stockApp = function() {
                 formattedString = `${index + 1}. *${baseName} ${totalGrams} gms*`;
             }
         } else if (mlMatch) {
+            // Case 2: ML/Liters conversion
             const unitVolumeMl = parseInt(mlMatch[1], 10);
             const totalMl = unitVolumeMl * qty;
             const baseName = name.replace(mlMatch[0], '').trim();
@@ -484,6 +487,14 @@ window.stockApp = function() {
             } else {
                 formattedString = `${index + 1}. *${baseName} ${totalMl} ml*`;
             }
+        } else if (pktMatch) {
+            // Case 3: Packet items (e.g. "Fruit Juice PKT" + 4 -> "Fruit Juice 4 PKT")
+            const baseName = name.replace(pktMatch[0], '').trim();
+            const unitLabel = pktMatch[0].toUpperCase();
+            formattedString = `${index + 1}. *${baseName} ${qty} ${unitLabel}*`;
+        } else {
+            // Default Case: Standard item
+            formattedString = `${index + 1}. *${name} - Qty: ${qty}*`;
         }
 
         messageLines.push(formattedString);
@@ -492,7 +503,6 @@ window.stockApp = function() {
     const fullMessage = encodeURIComponent(messageLines.join('\n'));
     window.open(`https://wa.me/?text=${fullMessage}`, '_blank');
 },
-
         async approveIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
             if (!confirm(`Confirm stock ingestion from ${order.supplier_name}? Live balances will update based on the quantities listed below.`)) return;
