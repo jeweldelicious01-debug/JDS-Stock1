@@ -84,8 +84,8 @@ window.stockApp = function() {
         
         loginForm: { username: '', password: '' },
         loginError: '',
-        formInward: { itemId: '', qty: '', supplierName: '' }, 
-        formOutward: { itemId: '', department: 'Indian', qty: '' },
+        formInward: { itemId: '', qty: '', supplierName: '', customDate: '' }, 
+        formOutward: { itemId: '', department: 'Indian', qty: '', customDate: '' },
 
         // Catering Matrix Buffers
         cateringForm: { partyName: '', paxCount: '', rawTextMenu: '' },
@@ -432,77 +432,71 @@ window.stockApp = function() {
         },
 
         sendWhatsAppOrder() {
-    if (!this.orderDesk.supplierId || this.orderDesk.basket.length === 0) {
-        alert("Please select a supplier and add items to your purchase basket.");
-        return;
-    }
-
-    const supplierObj = this.suppliers.find(s => s.id === this.orderDesk.supplierId);
-    const supplierName = supplierObj ? supplierObj.name : "Supplier";
-
-    // Calculate Next Day's Date
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const nextDayFormatted = tomorrow.toLocaleDateString('en-GB'); // Formats as DD/MM/YYYY
-
-    // Simplified Header Format
-    let messageLines = [
-        `*PURCHASE ORDER: ${supplierName.toUpperCase()}*`,
-        `*Date:* ${nextDayFormatted}`,
-        `--------------------------------`
-    ];
-
-    this.orderDesk.basket.forEach((item, index) => {
-        let name = item.name;
-        let qty = item.qty;
-
-        // Regex pattern checks
-        const gramMatch = name.match(/(\d+)\s*(gms?|gram|grams?|g)\b/i);
-        const mlMatch = name.match(/(\d+)\s*(ml|milliliters?)\b/i);
-        const pktMatch = name.match(/\b(pkts?|packets?)\b/i);
-
-        let formattedString = `${index + 1}. *${name} - Qty: ${qty}*`;
-
-        if (gramMatch) {
-            // Case 1: Grams conversion (Shows item name and converted weight only)
-            const unitWeightGrams = parseInt(gramMatch[1], 10);
-            const totalGrams = unitWeightGrams * qty;
-            const baseName = name.replace(gramMatch[0], '').trim();
-
-            if (totalGrams >= 1000) {
-                const totalKg = totalGrams / 1000;
-                formattedString = `${index + 1}. *${baseName} ${totalKg} kg*`;
-            } else {
-                formattedString = `${index + 1}. *${baseName} ${totalGrams} gms*`;
+            if (!this.orderDesk.supplierId || this.orderDesk.basket.length === 0) {
+                alert("Please select a supplier and add items to your purchase basket.");
+                return;
             }
-        } else if (mlMatch) {
-            // Case 2: ML/Liters conversion
-            const unitVolumeMl = parseInt(mlMatch[1], 10);
-            const totalMl = unitVolumeMl * qty;
-            const baseName = name.replace(mlMatch[0], '').trim();
 
-            if (totalMl >= 1000) {
-                const totalL = totalMl / 1000;
-                formattedString = `${index + 1}. *${baseName} ${totalL} Liters*`;
-            } else {
-                formattedString = `${index + 1}. *${baseName} ${totalMl} ml*`;
-            }
-        } else if (pktMatch) {
-            // Case 3: Packet items (e.g. "Fruit Juice PKT" + 4 -> "Fruit Juice 4 PKT")
-            const baseName = name.replace(pktMatch[0], '').trim();
-            const unitLabel = pktMatch[0].toUpperCase();
-            formattedString = `${index + 1}. *${baseName} ${qty} ${unitLabel}*`;
-        } else {
-            // Default Case: Standard item
-            formattedString = `${index + 1}. *${name} - Qty: ${qty}*`;
-        }
+            const supplierObj = this.suppliers.find(s => s.id === this.orderDesk.supplierId);
+            const supplierName = supplierObj ? supplierObj.name : "Supplier";
 
-        messageLines.push(formattedString);
-    });
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const nextDayFormatted = tomorrow.toLocaleDateString('en-GB');
 
-    const fullMessage = encodeURIComponent(messageLines.join('\n'));
-    window.open(`https://wa.me/?text=${fullMessage}`, '_blank');
-},
+            let messageLines = [
+                `*PURCHASE ORDER: ${supplierName.toUpperCase()}*`,
+                `*Date:* ${nextDayFormatted}`,
+                `--------------------------------`
+            ];
+
+            this.orderDesk.basket.forEach((item, index) => {
+                let name = item.name;
+                let qty = item.qty;
+
+                const gramMatch = name.match(/(\d+)\s*(gms?|gram|grams?|g)\b/i);
+                const mlMatch = name.match(/(\d+)\s*(ml|milliliters?)\b/i);
+                const pktMatch = name.match(/\b(pkts?|packets?)\b/i);
+
+                let formattedString = `${index + 1}. *${name} - Qty: ${qty}*`;
+
+                if (gramMatch) {
+                    const unitWeightGrams = parseInt(gramMatch[1], 10);
+                    const totalGrams = unitWeightGrams * qty;
+                    const baseName = name.replace(gramMatch[0], '').trim();
+
+                    if (totalGrams >= 1000) {
+                        const totalKg = totalGrams / 1000;
+                        formattedString = `${index + 1}. *${baseName} ${totalKg} kg*`;
+                    } else {
+                        formattedString = `${index + 1}. *${baseName} ${totalGrams} gms*`;
+                    }
+                } else if (mlMatch) {
+                    const unitVolumeMl = parseInt(mlMatch[1], 10);
+                    const totalMl = unitVolumeMl * qty;
+                    const baseName = name.replace(mlMatch[0], '').trim();
+
+                    if (totalMl >= 1000) {
+                        const totalL = totalMl / 1000;
+                        formattedString = `${index + 1}. *${baseName} ${totalL} Liters*`;
+                    } else {
+                        formattedString = `${index + 1}. *${baseName} ${totalMl} ml*`;
+                    }
+                } else if (pktMatch) {
+                    const baseName = name.replace(pktMatch[0], '').trim();
+                    const unitLabel = pktMatch[0].toUpperCase();
+                    formattedString = `${index + 1}. *${baseName} ${qty} ${unitLabel}*`;
+                } else {
+                    formattedString = `${index + 1}. *${name} - Qty: ${qty}*`;
+                }
+
+                messageLines.push(formattedString);
+            });
+
+            const fullMessage = encodeURIComponent(messageLines.join('\n'));
+            window.open(`https://wa.me/?text=${fullMessage}`, '_blank');
+        },
+
         async approveIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
             if (!confirm(`Confirm stock ingestion from ${order.supplier_name}? Live balances will update based on the quantities listed below.`)) return;
@@ -573,34 +567,79 @@ window.stockApp = function() {
 
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) return alert('Select missing fields.');
-            const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); if (!target) return alert('Selected item could not be found.');
-            const qty = parseInt(this.formInward.qty); if (!qty || qty <= 0) return alert('Enter a positive quantity.');
+            const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); 
+            if (!target) return alert('Selected item could not be found.');
+            
+            const qty = parseInt(this.formInward.qty); 
+            if (!qty || qty <= 0) return alert('Enter a positive quantity.');
+            
             let vendor = this.formInward.supplierName.trim();
             if (vendor === "_NEW_") {
-                let newVendorName = prompt("Enter new Supplier Name:"); if (!newVendorName || !newVendorName.trim()) return alert("Supplier name required.");
+                let newVendorName = prompt("Enter new Supplier Name:"); 
+                if (!newVendorName || !newVendorName.trim()) return alert("Supplier name required.");
                 vendor = newVendorName.trim();
                 const matchEx = this.suppliers.find(s => s.name.toLowerCase() === vendor.toLowerCase());
                 if (!matchEx) await addDoc(colRef('suppliers'), { name: vendor, phone: '' });
             }
+
+            let entryTimestamp = new Date().toISOString();
+            if (this.currentRole === 'admin' && this.formInward.customDate) {
+                entryTimestamp = new Date(this.formInward.customDate).toISOString();
+            }
+
             try {
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock || 0) + qty });
-                const docRef = await addDoc(colRef('logs'), { type: 'INWARD', item_id: target.id, qty, supplier_name: vendor, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
-                this.lastLogId = docRef.id; this.lastLogType = 'INWARD';
-                this.formInward = { itemId: '', qty: '', supplierName: '' };
-            } catch (error) { alert("Database write error: " + error.message); }
+                const docRef = await addDoc(colRef('logs'), { 
+                    type: 'INWARD', 
+                    item_id: target.id, 
+                    qty, 
+                    supplier_name: vendor, 
+                    department: null, 
+                    created_at: entryTimestamp, 
+                    created_by_name: this.currentUsername 
+                });
+                
+                this.lastLogId = docRef.id; 
+                this.lastLogType = 'INWARD';
+                this.formInward = { itemId: '', qty: '', supplierName: '', customDate: '' };
+                alert("Inward entry recorded successfully!");
+            } catch (error) { 
+                alert("Database write error: " + error.message); 
+            }
         },
 
         async deductOutward() {
             if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
-            const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId)); if (!target) return alert('Item not found.');
-            const qty = parseInt(this.formOutward.qty); if (!qty || qty <= 0) return alert('Enter positive quantity.');
+            const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId)); 
+            if (!target) return alert('Item not found.');
+            
+            const qty = parseInt(this.formOutward.qty); 
+            if (!qty || qty <= 0) return alert('Enter positive quantity.');
             if (Number(target.stock || 0) < qty) return alert('Insufficient stock.');
+
+            let entryTimestamp = new Date().toISOString();
+            if (this.currentRole === 'admin' && this.formOutward.customDate) {
+                entryTimestamp = new Date(this.formOutward.customDate).toISOString();
+            }
+
             try {
-                const docRef = await addDoc(colRef('logs'), { type: 'OUTWARD', item_id: target.id, qty, department: this.formOutward.department, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
+                const docRef = await addDoc(colRef('logs'), { 
+                    type: 'OUTWARD', 
+                    item_id: target.id, 
+                    qty, 
+                    department: this.formOutward.department, 
+                    created_at: entryTimestamp, 
+                    created_by_name: this.currentUsername 
+                });
+                
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock) - qty });
-                this.lastLogId = docRef.id; this.lastLogType = 'OUTWARD';
-                this.formOutward = { itemId: '', department: 'Indian', qty: '' };
-            } catch (error) { alert("Error: " + error.message); }
+                this.lastLogId = docRef.id; 
+                this.lastLogType = 'OUTWARD';
+                this.formOutward = { itemId: '', department: 'Indian', qty: '', customDate: '' };
+                alert("Outward deduction logged successfully!");
+            } catch (error) { 
+                alert("Error: " + error.message); 
+            }
         },
 
         async undoLastTransaction() {
@@ -724,7 +763,7 @@ window.stockApp = function() {
             const idx = sorted.findIndex((i) => i.id === id); if (idx === -1) return;
             const swapIdx = idx + (direction === 'up' ? -1 : 1); if (swapIdx < 0 || swapIdx >= sorted.length) return;
             await updateDoc(doc(dbFs, 'items', sorted[idx].id), { order_index: sorted[swapIdx].order_index || 0 });
-            await updateDoc(doc(dbFs, 'items', sorted[swapIdx].id), { order_index: sorted[idx].order_index || 0 });
+            await updateDoc(doc(dbFs, 'items', sorted[swapIdx].id), { order_index: sorted[swapIdx].order_index || 0 });
         },
 
         async submitNewItem() {
