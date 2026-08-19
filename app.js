@@ -1,4 +1,4 @@
-import { dbFs } from './firebase-config.js'; 
+import { dbFs } from './firebase-config.js';
 import {
     collection,
     doc,
@@ -19,14 +19,45 @@ async function sha256(text) {
     return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Unit parser supporting gram, kg, gm, ml, liter conversions
+// Service Worker Registration for Mobile Push Notifications
+let swRegistration = null;
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+        swRegistration = reg;
+    }).catch((err) => console.warn('SW registration bypassed:', err));
+}
+
+// Universal Mobile & Desktop Browser Notification Trigger
+function sendBrowserNotification(title, body) {
+    if (!("Notification" in window)) return;
+    
+    if (Notification.permission === "granted") {
+        if (swRegistration && swRegistration.active) {
+            swRegistration.showNotification(title, {
+                body: body,
+                icon: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png",
+                vibrate: [200, 100, 200]
+            });
+        } else {
+            new Notification(title, { body: body, icon: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png" });
+        }
+    } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then(permission => {
+            if (permission === "granted") {
+                sendBrowserNotification(title, body);
+            }
+        });
+    }
+}
+
+// Input Quantity Parser supporting grams, kg, gm, ml, liter conversions
 function parseQuantityInput(inputStr, itemName = "") {
     if (typeof inputStr === 'number') return inputStr;
     if (!inputStr || !String(inputStr).trim()) return NaN;
 
     const str = String(inputStr).trim().toLowerCase();
     
-    // Check if input is in grams / gms
+    // Ingest Grams / GMS
     const gramMatch = str.match(/^([\d.]+)\s*(g|gm|gms|gram|grams)$/);
     if (gramMatch) {
         const grams = parseFloat(gramMatch[1]);
@@ -36,7 +67,7 @@ function parseQuantityInput(inputStr, itemName = "") {
         return grams;
     }
 
-    // Check if input is in kg
+    // Ingest Kilograms / KG
     const kgMatch = str.match(/^([\d.]+)\s*(kg|kgs|kilo|kilograms)$/);
     if (kgMatch) {
         const kgs = parseFloat(kgMatch[1]);
@@ -46,7 +77,7 @@ function parseQuantityInput(inputStr, itemName = "") {
         return kgs;
     }
 
-    // Check if input is in milliliters (ml -> L)
+    // Ingest Milliliters / ML
     const mlMatch = str.match(/^([\d.]+)\s*(ml|milliliters?)$/);
     if (mlMatch) {
         const ml = parseFloat(mlMatch[1]);
@@ -56,7 +87,7 @@ function parseQuantityInput(inputStr, itemName = "") {
         return ml;
     }
 
-    // Standard numeric value
+    // Standard Decimal Floating Value
     return parseFloat(str.replace(/[^0-9.]/g, ''));
 }
 
@@ -166,6 +197,10 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async init() {
+            if ("Notification" in window && Notification.permission !== "granted") {
+                Notification.requestPermission();
+            }
+
             await seedIfEmpty();
             
             onSnapshot(colRef('categories'), (snap) => { this.categories = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
@@ -204,6 +239,40 @@ window.stockApp = function() {
                 }
                 if (!this.ready) { this.ready = true; this.restoreSession(); }
             });
+
+            // Run automated daily checks at 11:00 AM and 10:30 PM
+            this.initDailyStockCheckSchedule();
+        },
+
+        initDailyStockCheckSchedule() {
+            let lastTrigger = "";
+            setInterval(() => {
+                const now = new Date();
+                const hours = now.getHours();
+                const minutes = now.getMinutes();
+                const todayStr = now.toISOString().slice(0, 10);
+
+                // Check 11:00 AM
+                if (hours === 11 && minutes === 0 && lastTrigger !== `${todayStr}_1100`) {
+                    lastTrigger = `${todayStr}_1100`;
+                    this.notifyLowStockItems("11:00 AM Low Stock Audit Alert");
+                }
+
+                // Check 10:30 PM (22:30)
+                if (hours === 22 && minutes === 30 && lastTrigger !== `${todayStr}_2230`) {
+                    lastTrigger = `${todayStr}_2230`;
+                    this.notifyLowStockItems("10:30 PM Nightly Low Stock Alert");
+                }
+            }, 30000);
+        },
+
+        notifyLowStockItems(triggerTitle = "Low Stock Alert") {
+            const lowItems = this.items.filter(i => (Number(i.stock) || 0) <= (Number(i.threshold) || 0));
+            if (lowItems.length > 0) {
+                const itemSummary = lowItems.slice(0, 4).map(i => `${i.name}: ${i.stock}`).join(', ');
+                const extra = lowItems.length > 4 ? ` and ${lowItems.length - 4} more` : '';
+                sendBrowserNotification(`⚠️ ${triggerTitle}`, `${lowItems.length} items reached safety limit: ${itemSummary}${extra}`);
+            }
         },
 
         restoreSession() {
@@ -433,12 +502,22 @@ window.stockApp = function() {
                     }
                     this.editingEventId = null;
                     alert("Function record context updated successfully!");
+                    
+                    sendBrowserNotification(
+                        "📝 Catering Function Updated",
+                        `${payload.partyName} (${payload.paxCount} Pax) for ${dateString} updated.`
+                    );
                 } else {
                     payload.created_at = Date.now();
                     const docRef = await addDoc(colRef('catering_events'), payload);
                     payload.id = docRef.id;
                     this.cateringEvents = [...this.cateringEvents, payload];
                     alert("Fresh function logged successfully!");
+
+                    sendBrowserNotification(
+                        "🎉 High-Pax Catering Event Matrix Allocated!",
+                        `${payload.partyName} (${payload.paxCount} Pax) committed for ${dateString}.`
+                    );
                 }
 
                 this.clearCateringForm();
