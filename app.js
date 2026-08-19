@@ -19,71 +19,60 @@ async function sha256(text) {
     return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Service Worker Registration for Mobile Support
+// Safe Service Worker Register
 let swRegistration = null;
-if ('serviceWorker' in navigator) {
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js').then((reg) => {
         swRegistration = reg;
-    }).catch((err) => console.warn('SW registration bypassed:', err));
+    }).catch((err) => console.warn('Service Worker registration skipped:', err));
 }
 
-// Browser Notification Dispatcher (Mobile Service Worker + Desktop)
+// Resilient Notification Dispatcher (Never hangs)
 async function sendBrowserNotification(title, body) {
-    if (!("Notification" in window)) return;
+    if (typeof window === 'undefined' || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
 
     try {
-        if ('serviceWorker' in navigator) {
-            const reg = await navigator.serviceWorker.ready;
-            await reg.showNotification(title, {
+        if (swRegistration && swRegistration.active) {
+            swRegistration.showNotification(title, {
                 body: body,
                 icon: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png",
                 badge: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png",
-                vibrate: [200, 100, 200],
-                tag: 'stock-alert-' + Date.now()
+                vibrate: [200, 100, 200]
             });
         } else {
             new Notification(title, { body: body, icon: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png" });
         }
     } catch (err) {
-        console.error("Notification dispatch failed:", err);
+        console.warn("Notification trigger fallback:", err);
     }
 }
 
-// Quantity Parser: Auto-converts g to kg, ml to L, and parses raw numbers
+// Quantity Parser: Handles numbers, grams (g/gm), kilograms (kg), and milliliters (ml)
 function parseQuantityInput(inputStr, itemName = "") {
     if (typeof inputStr === 'number') return inputStr;
     if (!inputStr || !String(inputStr).trim()) return NaN;
 
     const str = String(inputStr).trim().toLowerCase();
     
-    // Grams / GMS
     const gramMatch = str.match(/^([\d.]+)\s*(g|gm|gms|gram|grams)$/);
     if (gramMatch) {
         const grams = parseFloat(gramMatch[1]);
-        if (/\b(kg|kilo|kilogram|kgs)\b/i.test(itemName)) {
-            return grams / 1000;
-        }
+        if (/\b(kg|kilo|kilogram|kgs)\b/i.test(itemName)) return grams / 1000;
         return grams;
     }
 
-    // Kilograms / KG
     const kgMatch = str.match(/^([\d.]+)\s*(kg|kgs|kilo|kilograms)$/);
     if (kgMatch) {
         const kgs = parseFloat(kgMatch[1]);
-        if (/\b(g|gm|gms|gram|grams)\b/i.test(itemName) && !/\b(kg|kgs)\b/i.test(itemName)) {
-            return kgs * 1000;
-        }
+        if (/\b(g|gm|gms|gram|grams)\b/i.test(itemName) && !/\b(kg|kgs)\b/i.test(itemName)) return kgs * 1000;
         return kgs;
     }
 
-    // Milliliters / ML
     const mlMatch = str.match(/^([\d.]+)\s*(ml|milliliters?)$/);
     if (mlMatch) {
         const ml = parseFloat(mlMatch[1]);
-        if (/\b(l|ltr|liter|liters|litre)\b/i.test(itemName)) {
-            return ml / 1000;
-        }
+        if (/\b(l|ltr|liter|liters|litre)\b/i.test(itemName)) return ml / 1000;
         return ml;
     }
 
@@ -158,7 +147,6 @@ window.stockApp = function() {
         formInward: { itemId: '', qty: '', supplierName: '', customDate: '' }, 
         formOutward: { itemId: '', department: 'Indian', qty: '', customDate: '' },
 
-        // Catering Matrix Buffers
         cateringForm: { partyName: '', paxCount: '', rawTextMenu: '' },
         cateringModal: { show: false, label: '', text: '' },
         editingEventId: null,
@@ -196,7 +184,19 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async init() {
-            await seedIfEmpty();
+            // Safety timeout: unlock authentication UI if network takes longer than 2.5s
+            setTimeout(() => {
+                if (this.authChecking) {
+                    this.authChecking = false;
+                    this.ready = true;
+                }
+            }, 2500);
+
+            try {
+                await seedIfEmpty();
+            } catch (err) {
+                console.warn("Seeding error:", err);
+            }
             
             onSnapshot(colRef('categories'), (snap) => { this.categories = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
             onSnapshot(colRef('items'), (snap) => { this.items = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
@@ -207,7 +207,7 @@ window.stockApp = function() {
                     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             });
             
-            // REAL-TIME CATERING EVENT LISTENER (Triggers alerts on every new event logged)
+            // Real-time Event Listener for High-Pax Allocation
             let isInitialEventLoad = true;
             onSnapshot(colRef('catering_events'), (snap) => { 
                 const events = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
@@ -247,10 +247,10 @@ window.stockApp = function() {
                     if (!me) this.logout();
                     else { this.currentRole = me.role; this.currentUsername = me.username; }
                 }
-                if (!this.ready) { this.ready = true; this.restoreSession(); }
+                this.ready = true;
+                this.restoreSession();
             });
 
-            // Start daily 11:00 AM and 10:30 PM low stock alerts
             this.initDailyStockCheckSchedule();
         },
 
@@ -262,13 +262,11 @@ window.stockApp = function() {
                 const minutes = now.getMinutes();
                 const todayStr = now.toISOString().slice(0, 10);
 
-                // 11:00 AM Alert
                 if (hours === 11 && minutes === 0 && lastTrigger !== `${todayStr}_1100`) {
                     lastTrigger = `${todayStr}_1100`;
                     this.notifyLowStockItems("11:00 AM Low Stock Audit Alert");
                 }
 
-                // 10:30 PM Alert (22:30)
                 if (hours === 22 && minutes === 30 && lastTrigger !== `${todayStr}_2230`) {
                     lastTrigger = `${todayStr}_2230`;
                     this.notifyLowStockItems("10:30 PM Nightly Stock Alert");
@@ -283,9 +281,9 @@ window.stockApp = function() {
             }
             const permission = await Notification.requestPermission();
             if (permission === "granted") {
-                await sendBrowserNotification("Notifications Activated! 🔔", "You will receive real-time catering allocations and low stock reports.");
+                await sendBrowserNotification("Notifications Activated! 🔔", "You will receive real-time catering allocations and low stock alerts.");
             } else {
-                alert("Permission was denied. Please allow notifications in your browser or device settings.");
+                alert("Permission was denied. Please allow notifications in your site settings.");
             }
         },
 
@@ -299,113 +297,41 @@ window.stockApp = function() {
         },
 
         restoreSession() {
-            const session = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
-            if (session) {
-                const user = this.users.find((u) => u.id === session.userId);
-                if (user) {
-                    this.currentUserId = user.id; this.currentUsername = user.username; this.currentRole = user.role; this.isAuthenticated = true;
+            try {
+                const session = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
+                if (session) {
+                    const user = this.users.find((u) => u.id === session.userId);
+                    if (user) {
+                        this.currentUserId = user.id;
+                        this.currentUsername = user.username;
+                        this.currentRole = user.role;
+                        this.isAuthenticated = true;
+                    }
                 }
+            } catch (e) {
+                console.warn(e);
             }
             this.authChecking = false;
         },
 
-        async uploadExcelReport(event) {
-            if (this.currentRole !== 'admin' && this.currentRole !== 'inward') {
-                alert("Security Exception: Your operating role scope does not authorize bulk database ingest mutations.");
-                event.target.value = "";
-                return;
-            }
-
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                try {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    const jsonRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-                    if (jsonRows.length === 0) return alert("The uploaded sheet contains no data.");
-
-                    let addedItemsCount = 0;
-
-                    for (let row of jsonRows) {
-                        const rawItemName = row["Item Name"]?.toString().trim();
-                        const rawBalance = Number(row["Live Balance"]) || 0;
-                        const rawLimit = Number(row["Safety Limit"]) || 0;
-                        const rawMrp = Number(row["Unit Price (MRP)"]?.toString().replace(/[^0-9.]/g, '')) || 0;
-                        const rawCategory = row["Category Axis"]?.toString().trim();
-                        const rawSupplier = row["Primary Supplier"]?.toString().trim();
-
-                        if (!rawItemName) continue;
-
-                        let categoryId = 'kirana';
-                        if (rawCategory) {
-                            const existingCat = this.categories.find(c => c.name.toLowerCase() === rawCategory.toLowerCase());
-                            if (!existingCat) {
-                                const newCatId = rawCategory.toLowerCase().replace(/\s+/g, '-');
-                                await setDoc(doc(dbFs, 'categories', newCatId), {
-                                    name: rawCategory,
-                                    emoji: "📦",
-                                    bg_color: "#f8fafc",
-                                    border_color: "#64748b",
-                                    text_color: "#334151"
-                                });
-                                categoryId = newCatId;
-                            } else {
-                                categoryId = existingCat.id;
-                            }
-                        }
-
-                        if (rawSupplier && !this.suppliers.some(s => s.name.toLowerCase() === rawSupplier.toLowerCase())) {
-                            await addDoc(colRef('suppliers'), { name: rawSupplier, phone: '' });
-                        }
-
-                        const itemExists = this.items.some(i => i.name.toLowerCase() === rawItemName.toLowerCase());
-                        if (!itemExists) {
-                            await addDoc(colRef('items'), {
-                                name: rawItemName,
-                                stock: rawBalance,
-                                threshold: rawLimit,
-                                mrp: rawMrp,
-                                category_id: categoryId,
-                                supplier_name: rawSupplier || (this.suppliers[0] ? this.suppliers[0].name : 'General Vendor'),
-                                order_index: this.items.length + 1
-                            });
-                            addedItemsCount++;
-                        }
-                    }
-
-                    alert(`Ingestion completed cleanly! Added ${addedItemsCount} brand new items.`);
-                    event.target.value = "";
-                } catch (err) {
-                    alert("Failed to parse spreadsheet: " + err.message);
-                }
-            };
-            reader.readAsArrayBuffer(file);
+        async verifyLogin() {
+            this.loginError = '';
+            const { username, password } = this.loginForm;
+            if (!username || !password) { this.loginError = 'Fields required'; return; }
+            const user = this.users.find((u) => u.username.toLowerCase() === username.trim().toLowerCase());
+            if (!user || (await sha256(password)) !== user.passwordHash) { this.loginError = 'Invalid credentials'; return; }
+            this.currentUserId = user.id; this.currentUsername = user.username; this.currentRole = user.role; this.isAuthenticated = true;
+            this.loginForm.password = '';
+            sessionStorage.setItem(SESSION_KEY, JSON.stringify({ userId: user.id }));
         },
 
-        async submitNewCategory() {
-            if (!this.newCategoryForm.name.trim()) return alert("Category title required.");
-            const palette = this.paletteOptions[this.newCategoryForm.paletteIndex];
-            
-            const rawName = this.newCategoryForm.name.trim();
-            const formattedName = rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
-            const newId = formattedName.toLowerCase().replace(/\s+/g, '-');
-            
-            try {
-                await setDoc(doc(dbFs, 'categories', newId), {
-                    name: formattedName,
-                    emoji: this.newCategoryForm.emoji,
-                    bg_color: palette.bg,
-                    border_color: palette.border,
-                    text_color: palette.text
-                });
-                this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
-                alert("New category axis provisioned cleanly.");
-            } catch(e) { alert(e.message); }
+        logout() { 
+            sessionStorage.removeItem(SESSION_KEY); 
+            this.isAuthenticated = false; 
+            this.currentRole = 'readonly'; 
+            this.currentUsername = ''; 
+            this.currentUserId = null; 
+            window.location.reload();
         },
 
         get processedItems() {
@@ -492,11 +418,11 @@ window.stockApp = function() {
         },
 
         async deleteCateringEvent(eventId) {
-            if (!confirm("Are you sure you want to completely delete this catering event?")) return;
+            if (!confirm("Are you sure you want to delete this event?")) return;
             try {
                 await deleteDoc(doc(dbFs, "catering_events", eventId));
                 this.cateringEvents = this.cateringEvents.filter(e => e.id !== eventId);
-                alert("Function successfully deleted from cloud records.");
+                alert("Event deleted successfully.");
             } catch (err) {
                 alert("Operation failed: " + err.message);
             }
@@ -504,7 +430,7 @@ window.stockApp = function() {
 
         async submitDirectTextCatering(dateString) {
             if (!this.cateringForm.partyName || !this.cateringForm.rawTextMenu) {
-                alert("Please fill out the party title and paste text menu data.");
+                alert("Please fill out the party title and paste menu text.");
                 return;
             }
 
@@ -520,11 +446,9 @@ window.stockApp = function() {
                 if (this.editingEventId) {
                     await setDoc(doc(dbFs, "catering_events", this.editingEventId), payload, { merge: true });
                     const idx = this.cateringEvents.findIndex(e => e.id === this.editingEventId);
-                    if (idx !== -1) {
-                        this.cateringEvents[idx] = { id: this.editingEventId, ...payload };
-                    }
+                    if (idx !== -1) this.cateringEvents[idx] = { id: this.editingEventId, ...payload };
                     this.editingEventId = null;
-                    alert("Function record context updated successfully!");
+                    alert("Function updated successfully!");
                 } else {
                     payload.created_at = Date.now();
                     const docRef = await addDoc(colRef('catering_events'), payload);
@@ -532,19 +456,17 @@ window.stockApp = function() {
                     this.cateringEvents = [...this.cateringEvents, payload];
                     alert("Fresh function logged successfully!");
                 }
-
                 this.clearCateringForm();
             } catch (err) {
-                alert("Mutation failure: " + err.message);
+                alert("Save failure: " + err.message);
             }
         },
 
         addItemToOrder() {
             if (!this.orderDesk.selectedItemId || !this.orderDesk.selectedQty || this.orderDesk.selectedQty <= 0) {
-                alert("Please select a product and enter a valid quantity.");
+                alert("Select product and enter valid quantity.");
                 return;
             }
-
             const itemObj = this.items.find(i => i.id === this.orderDesk.selectedItemId);
             if (!itemObj) return;
 
@@ -553,7 +475,6 @@ window.stockApp = function() {
                 name: itemObj.name,
                 qty: Number(this.orderDesk.selectedQty)
             });
-
             this.orderDesk.selectedItemId = '';
             this.orderDesk.selectedQty = '';
         },
@@ -564,115 +485,53 @@ window.stockApp = function() {
 
         sendWhatsAppOrder() {
             if (!this.orderDesk.supplierId || this.orderDesk.basket.length === 0) {
-                alert("Please select a supplier and add items to your purchase basket.");
+                alert("Select supplier and add items to purchase basket.");
                 return;
             }
-
             const supplierObj = this.suppliers.find(s => s.id === this.orderDesk.supplierId);
             const supplierName = supplierObj ? supplierObj.name : "Supplier";
-
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
-            const nextDayFormatted = tomorrow.toLocaleDateString('en-GB');
 
             let messageLines = [
                 `*PURCHASE ORDER: ${supplierName.toUpperCase()}*`,
-                `*Date:* ${nextDayFormatted}`,
+                `*Date:* ${tomorrow.toLocaleDateString('en-GB')}`,
                 `--------------------------------`
             ];
 
             this.orderDesk.basket.forEach((item, index) => {
-                let name = item.name;
-                let qty = item.qty;
-
-                const gramMatch = name.match(/(\d+)\s*(gms?|gram|grams?|g)\b/i);
-                const mlMatch = name.match(/(\d+)\s*(ml|milliliters?)\b/i);
-                const pktMatch = name.match(/\b(pkts?|packets?)\b/i);
-
-                let formattedString = `${index + 1}. *${name} - Qty: ${qty}*`;
-
-                if (gramMatch) {
-                    const unitWeightGrams = parseInt(gramMatch[1], 10);
-                    const totalGrams = unitWeightGrams * qty;
-                    const baseName = name.replace(gramMatch[0], '').trim();
-
-                    if (totalGrams >= 1000) {
-                        const totalKg = totalGrams / 1000;
-                        formattedString = `${index + 1}. *${baseName} ${totalKg} kg*`;
-                    } else {
-                        formattedString = `${index + 1}. *${baseName} ${totalGrams} gms*`;
-                    }
-                } else if (mlMatch) {
-                    const unitVolumeMl = parseInt(mlMatch[1], 10);
-                    const totalMl = unitVolumeMl * qty;
-                    const baseName = name.replace(mlMatch[0], '').trim();
-
-                    if (totalMl >= 1000) {
-                        const totalL = totalMl / 1000;
-                        formattedString = `${index + 1}. *${baseName} ${totalL} Liters*`;
-                    } else {
-                        formattedString = `${index + 1}. *${baseName} ${totalMl} ml*`;
-                    }
-                } else if (pktMatch) {
-                    const baseName = name.replace(pktMatch[0], '').trim();
-                    const unitLabel = pktMatch[0].toUpperCase();
-                    formattedString = `${index + 1}. *${baseName} ${qty} ${unitLabel}*`;
-                } else {
-                    formattedString = `${index + 1}. *${name} - Qty: ${qty}*`;
-                }
-
-                messageLines.push(formattedString);
+                messageLines.push(`${index + 1}. *${item.name} - Qty: ${item.qty}*`);
             });
 
-            const fullMessage = encodeURIComponent(messageLines.join('\n'));
-            window.open(`https://wa.me/?text=${fullMessage}`, '_blank');
+            window.open(`https://wa.me/?text=${encodeURIComponent(messageLines.join('\n'))}`, '_blank');
         },
 
         async approveIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
-            if (!confirm(`Confirm stock ingestion from ${order.supplier_name}? Live balances will update based on the quantities listed below.`)) return;
+            if (!confirm(`Confirm stock ingestion from ${order.supplier_name}?`)) return;
 
             try {
-                let hasMissingItems = false;
-                let hasReceivedItems = false;
-
                 for (let record of order.items) {
                     const arrivedQty = parseFloat(record.qty) || 0;
-                    
-                    if (arrivedQty < 0) {
-                        alert(`Operation Denied: Negative value (${arrivedQty}) detected for item "${record.name}".`);
-                        return; 
-                    }
-                    
-                    if (arrivedQty === 0) {
-                        hasMissingItems = true;
-                    }
-
                     const targetItem = this.items.find(i => String(i.id) === String(record.id));
                     if (targetItem && arrivedQty > 0) {
-                        hasReceivedItems = true;
                         const newStock = Math.round((Number(targetItem.stock || 0) + arrivedQty) * 1000) / 1000;
                         await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: newStock });
                         await addDoc(colRef('logs'), { type: 'INWARD', item_id: targetItem.id, qty: arrivedQty, supplier_name: order.supplier_name, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
                     }
                 }
-
-                let finalStatus = 'RECEIVED';
-                if (hasMissingItems && hasReceivedItems) finalStatus = 'PARTIAL';
-                else if (!hasReceivedItems) finalStatus = 'DECLINED';
-
-                await updateDoc(doc(dbFs, 'purchase_orders', order.id), { status: finalStatus, items: order.items, resolved_at: new Date().toISOString(), resolved_by: this.currentUsername });
-                alert(`Order marked as [${finalStatus}]. Balances synchronized cleanly.`);
-            } catch (error) { alert("Approval processing error: " + error.message); }
+                await updateDoc(doc(dbFs, 'purchase_orders', order.id), { status: 'RECEIVED', items: order.items, resolved_at: new Date().toISOString(), resolved_by: this.currentUsername });
+                alert("Order approved and balances synchronized.");
+            } catch (error) { alert("Error: " + error.message); }
         },
 
         async declineIncomingOrder(order) {
             if (order.status !== 'PENDING') return;
-            if (!confirm(`Are you sure you want to DECLINE and cancel this order from ${order.supplier_name}?`)) return;
+            if (!confirm(`Cancel order from ${order.supplier_name}?`)) return;
             try {
                 await updateDoc(doc(dbFs, 'purchase_orders', order.id), { status: 'DECLINED', resolved_at: new Date().toISOString(), resolved_by: this.currentUsername });
-                alert("Order successfully canceled and marked as DECLINED.");
-            } catch (error) { alert("Error canceling order: " + error.message); }
+                alert("Order canceled.");
+            } catch (error) { alert("Error: " + error.message); }
         },
 
         isWithin30Minutes(createdAt) {
@@ -681,18 +540,16 @@ window.stockApp = function() {
         },
 
         async triggerUndo(log) {
-            if (!this.isWithin30Minutes(log.created_at)) {
-                return alert("Reversal Rejected: Exceeded 30-minute undo window.");
-            }
-            if (!confirm("Are you sure you want to revert this specific entry?")) return;
+            if (!this.isWithin30Minutes(log.created_at)) return alert("Reversal window (30 min) expired.");
+            if (!confirm("Revert this entry?")) return;
             try {
                 const targetItem = this.items.find(i => String(i.id) === String(log.item_id));
-                if (!targetItem) return alert("Target item no longer exists.");
+                if (!targetItem) return alert("Item no longer exists.");
                 let currentBal = Number(targetItem.stock || 0);
                 let logQty = parseFloat(log.qty) || 0;
                 let corrected = log.type === 'INWARD' ? currentBal - logQty : currentBal + logQty;
                 corrected = Math.round(corrected * 1000) / 1000;
-                if (corrected < 0) return alert("Reversal denied: Stock cannot go below zero.");
+                if (corrected < 0) return alert("Stock cannot drop below zero.");
                 await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: corrected });
                 await deleteDoc(doc(dbFs, 'logs', log.id));
                 alert("Transaction rolled back successfully!");
@@ -702,10 +559,10 @@ window.stockApp = function() {
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) return alert('Select missing fields.');
             const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); 
-            if (!target) return alert('Selected item could not be found.');
+            if (!target) return alert('Selected item not found.');
             
             const qty = parseQuantityInput(this.formInward.qty, target.name); 
-            if (isNaN(qty) || qty <= 0) return alert('Enter a valid positive quantity (e.g., 1.25kg, 1250g, or 10).');
+            if (isNaN(qty) || qty <= 0) return alert('Enter a valid quantity (e.g. 1.25kg, 1250g, 10).');
             
             let vendor = this.formInward.supplierName.trim();
             if (vendor === "_NEW_") {
@@ -737,9 +594,9 @@ window.stockApp = function() {
                 this.lastLogId = docRef.id; 
                 this.lastLogType = 'INWARD';
                 this.formInward = { itemId: '', qty: '', supplierName: '', customDate: '' };
-                alert(`Inward recorded cleanly: +${qty} for "${target.name}".`);
+                alert(`Inward recorded: +${qty} for "${target.name}".`);
             } catch (error) { 
-                alert("Database write error: " + error.message); 
+                alert("Write error: " + error.message); 
             }
         },
 
@@ -749,7 +606,7 @@ window.stockApp = function() {
             if (!target) return alert('Item not found.');
             
             const qty = parseQuantityInput(this.formOutward.qty, target.name); 
-            if (isNaN(qty) || qty <= 0) return alert('Enter a valid positive quantity (e.g., 1.25kg, 500g, or 5).');
+            if (isNaN(qty) || qty <= 0) return alert('Enter a valid quantity (e.g. 0.5kg, 500g, 5).');
             if (Number(target.stock || 0) < qty) return alert(`Insufficient stock. Current balance is ${target.stock}.`);
 
             let entryTimestamp = new Date().toISOString();
@@ -780,7 +637,7 @@ window.stockApp = function() {
 
         async undoLastTransaction() {
             if (!this.lastLogId) return alert("No recent log found.");
-            if (!confirm(`Are you sure you want to REVERT your last ${this.lastLogType} entry?`)) return;
+            if (!confirm(`Revert your last ${this.lastLogType} entry?`)) return;
             try {
                 const logsSnap = await getDocs(colRef('logs'));
                 const targetingLog = logsSnap.docs.find(d => d.id === this.lastLogId);
@@ -795,36 +652,16 @@ window.stockApp = function() {
                 if (balanceCorrection < 0) return alert("Rollback denied.");
                 await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: balanceCorrection });
                 await deleteDoc(doc(dbFs, 'logs', this.lastLogId));
-                alert(`Rolled back successfully for "${targetItem.name}".`);
+                alert(`Rolled back successfully.`);
                 this.lastLogId = null; this.lastLogType = '';
             } catch (e) { alert(e.message); }
-        },
-
-        async verifyLogin() {
-            this.loginError = '';
-            const { username, password } = this.loginForm;
-            if (!username || !password) { this.loginError = 'Fields required'; return; }
-            const user = this.users.find((u) => u.username.toLowerCase() === username.trim().toLowerCase());
-            if (!user || (await sha256(password)) !== user.passwordHash) { this.loginError = 'Invalid credentials'; return; }
-            this.currentUserId = user.id; this.currentUsername = user.username; this.currentRole = user.role; this.isAuthenticated = true;
-            this.loginForm.password = '';
-            sessionStorage.setItem(SESSION_KEY, JSON.stringify({ userId: user.id }));
-        },
-
-        logout() { 
-            sessionStorage.removeItem(SESSION_KEY); 
-            this.isAuthenticated = false; 
-            this.currentRole = 'readonly'; 
-            this.currentUsername = ''; 
-            this.currentUserId = null; 
-            window.location.reload();
         },
 
         async changeUserRole(userId, role) { await updateDoc(doc(dbFs, 'users', userId), { role }); },
         async deleteUser(userId) { if (confirm('Delete user?')) await deleteDoc(doc(dbFs, 'users', userId)); },
         
         async changeMyPassword() {
-            if (this.currentRole !== 'admin') return alert("Access Rejected: Only platform Administrators can modify profiles.");
+            if (this.currentRole !== 'admin') return alert("Only Administrators can modify profiles.");
             this.accountError = ''; this.accountSuccess = '';
             const { currentPassword, newPassword } = this.accountForm;
             if (newPassword.length < 6) { this.accountError = 'Min 6 characters'; return; }
@@ -842,14 +679,12 @@ window.stockApp = function() {
                 const passwordHash = await sha256(password);
                 await addDoc(colRef('users'), { username: username.trim(), passwordHash, role });
                 this.newUserForm = { username: '', password: '', role: 'inward' };
-                alert("Operator successfully configured.");
-            } catch (e) {
-                alert("Error configuring operator: " + e.message);
-            }
+                alert("Operator created.");
+            } catch (e) { alert(e.message); }
         },
         
         async promptResetPassword(user) {
-            if (this.currentRole !== 'admin') return alert("Operation Denied.");
+            if (this.currentRole !== 'admin') return alert("Denied.");
             let newPass = prompt(`Enter new password for ${user.username} (Min 6 chars):`);
             if (!newPass || newPass.trim().length < 6) return alert("Minimum 6 characters needed.");
             try {
@@ -859,35 +694,15 @@ window.stockApp = function() {
         },
 
         async changeItemName(item) {
-            let updatedName = prompt(`[1/3] Update Name for "${item.name}":`, item.name);
-            if (updatedName === null) return;
-            if (!updatedName.trim()) return alert("Item Name cannot be empty.");
+            let updatedName = prompt(`[1/3] Update Name:`, item.name);
+            if (!updatedName || !updatedName.trim()) return;
 
-            let catList = this.suppliers.map((s, idx) => `${idx + 1}. ${s.name}`).join('\n');
-            let vendorChoice = prompt(`[2/3] Choose Supplier Number for "${updatedName.trim()}":\n\n${catList}\n\nOr type "NEW" to provision a fresh vendor registry directly.`);
-            if (vendorChoice === null) return;
-
-            let finalVendor = item.supplier_name || (this.suppliers[0] ? this.suppliers[0].name : 'General Vendor');
-            if (vendorChoice.trim().toUpperCase() === "NEW") {
-                let freshName = prompt("Enter Fresh Supplier Label:");
-                if (freshName?.trim()) {
-                    finalVendor = freshName.trim();
-                    const matchEx = this.suppliers.find(s => s.name.toLowerCase() === finalVendor.toLowerCase());
-                    if (!matchEx) await addDoc(colRef('suppliers'), { name: finalVendor, phone: '' });
-                }
-            } else if (vendorChoice.trim() !== "") {
-                let sIdx = parseInt(vendorChoice) - 1;
-                if (sIdx >= 0 && sIdx < this.suppliers.length) finalVendor = this.suppliers[sIdx].name;
-            }
-
-            let promptPrice = prompt(`[3/3] Update Unit Price (MRP) for "${updatedName.trim()}":`, item.mrp || 0);
-            if (promptPrice === null) return;
-            let finalPrice = Number(promptPrice);
-            if (isNaN(finalPrice) || finalPrice < 0) return alert("Enter valid numerical amount.");
+            let promptPrice = prompt(`[2/3] Unit Price (MRP):`, item.mrp || 0);
+            let finalPrice = Number(promptPrice) || 0;
 
             try {
-                await updateDoc(doc(dbFs, 'items', item.id), { name: updatedName.trim(), supplier_name: finalVendor, mrp: finalPrice });
-                alert("Matrix attributes successfully configured.");
+                await updateDoc(doc(dbFs, 'items', item.id), { name: updatedName.trim(), mrp: finalPrice });
+                alert("Updated cleanly.");
             } catch (e) { alert(e.message); }
         },
 
@@ -895,7 +710,9 @@ window.stockApp = function() {
             let promptVal = prompt('Update safety limit:', item.threshold);
             if (promptVal !== null) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parseFloat(promptVal) || 0 });
         },
+
         async purgeItem(id) { if (confirm('Purge item entry?')) await deleteDoc(doc(dbFs, 'items', id)); },
+
         async shiftOrder(id, direction) {
             const sorted = [...this.items].sort((a, b) => (a.order_index || 0) - (b.order_index || 0));
             const idx = sorted.findIndex((i) => i.id === id); if (idx === -1) return;
@@ -905,7 +722,7 @@ window.stockApp = function() {
         },
 
         async submitNewItem() {
-            if (!this.newItemForm.name.trim() || !this.newItemForm.categoryId || !this.newItemForm.supplierName) return alert("Please map all tags.");
+            if (!this.newItemForm.name.trim() || !this.newItemForm.categoryId || !this.newItemForm.supplierName) return alert("Please map all fields.");
             const maxOrder = this.items.reduce((m, i) => Math.max(m, i.order_index || 0), 0);
             await addDoc(colRef('items'), { name: this.newItemForm.name.trim(), category_id: this.newItemForm.categoryId, supplier_name: this.newItemForm.supplierName, stock: 0, threshold: this.newItemForm.threshold || 0, mrp: Number(this.newItemForm.mrp || 0), order_index: maxOrder + 1 });
             this.newItemForm = { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' };
@@ -914,8 +731,7 @@ window.stockApp = function() {
 
         downloadInwardSupplierReport() {
             const inwards = this.allRawLogs.filter(l => l.type === 'INWARD' && l.created_at);
-            if (!inwards.length) return alert("No inward data available to generate a monthly report.");
-
+            if (!inwards.length) return alert("No inward data available.");
             const wb = XLSX.utils.book_new();
             const dateGroups = {};
             inwards.forEach(log => {
@@ -923,77 +739,44 @@ window.stockApp = function() {
                 if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
                 dateGroups[dateKey].push(log);
             });
-
-            const sortedDates = Object.keys(dateGroups).sort((a, b) => new Date(a) - new Date(b));
-
-            sortedDates.forEach(dateStr => {
-                const logsForDay = dateGroups[dateStr];
-                const dateObj = new Date(dateStr);
-                const dayNum = dateObj.getDate();
-                const monthShort = dateObj.toLocaleDateString('en-GB', { month: 'short' });
-                const sheetTabName = `${dayNum}${monthShort}`; 
-
-                const supplierGroups = {};
-                logsForDay.forEach(log => {
-                    const sName = log.supplier_name || 'Historical Vendor';
-                    if (!supplierGroups[sName]) supplierGroups[sName] = [];
-                    supplierGroups[sName].push(log);
+            Object.keys(dateGroups).sort().forEach(dateStr => {
+                const sheetMatrix = [["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE", "TOTAL VALUATION"]];
+                dateGroups[dateStr].forEach(log => {
+                    const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
+                    const qty = parseFloat(log.qty) || 0;
+                    const price = parseFloat(linkedItem.mrp) || 0;
+                    sheetMatrix.push([log.item_name || linkedItem.name, qty, `₹${price}`, `₹${qty * price}`]);
                 });
-
-                const sheetMatrix = [];
-
-                Object.keys(supplierGroups).forEach(supplier => {
-                    sheetMatrix.push([`Supplier: ${supplier.toUpperCase()}`]);
-                    sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE", "TOTAL VALUATION"]);
-                    
-                    let grandTotal = 0;
-                    supplierGroups[supplier].forEach(log => {
-                        const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                        const name = log.item_name || linkedItem.name;
-                        const qty = parseFloat(log.qty) || 0;
-                        const price = parseFloat(linkedItem.mrp) || 0;
-                        const totalCost = Math.round(qty * price * 100) / 100;
-                        grandTotal += totalCost;
-                        
-                        sheetMatrix.push([name, qty, `₹${price}`, `₹${totalCost}`]);
-                    });
-                    
-                    sheetMatrix.push(["", "", "GRAND TOTAL:", `₹${grandTotal}`]);
-                    sheetMatrix.push([]); 
-                });
-
                 const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
-                ws['!cols'] = [{ wch: 26 }, { wch: 20 }, { wch: 14 }, { wch: 18 }];
-                XLSX.utils.book_append_sheet(wb, ws, sheetTabName);
+                XLSX.utils.book_append_sheet(wb, ws, dateStr);
             });
-
-            const currentMonthYear = new Date().toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }).replace(' ', '_');
-            XLSX.writeFile(wb, `Monthly_Inward_Breakdown_Report_${currentMonthYear}.xlsx`);
+            XLSX.writeFile(wb, `Inward_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
         },
 
         downloadExcelReport() {
             const getLocalDateString = (offsetDays) => { const d = new Date(); d.setDate(d.getDate() - offsetDays); return d.toISOString().slice(0, 10); };
-            const formatHeaderLabel = (dateStr) => { const parts = dateStr.split('-'); if (parts.length !== 3) return dateStr; const dateObj = new Date(parts[0], parts[1] - 1, parts[2]); return dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).replace(' ', ''); };
-            const targetDays = []; for (let i = 0; i < 30; i++) targetDays.push(getLocalDateString(i));
-            const headerRow = ["DATE", "TOTAL STOCK"]; targetDays.forEach(dateStr => { const dayLabel = formatHeaderLabel(dateStr); headerRow.push(`${dayLabel}IN`); headerRow.push(`${dayLabel}OUT`); });
-            const matrixData = [headerRow, ["ITEM NAME"]];
+            const targetDays = Array.from({length: 30}, (_, i) => getLocalDateString(i));
+            const headerRow = ["ITEM NAME", "CURRENT STOCK", ...targetDays];
+            const matrixData = [headerRow];
             this.processedItems.forEach(item => {
                 const row = [item.name, item.stock];
-                targetDays.forEach(targetDate => {
-                    let dayInwards = this.allRawLogs.filter(l => l.created_at && String(l.item_id) === String(item.id) && l.type === 'INWARD' && l.created_at.slice(0, 10) === targetDate);
-                    row.push(dayInwards.length ? `+${dayInwards.reduce((sum, l) => sum + (parseFloat(l.qty) || 0), 0)}` : "0");
-                    let dayOutwards = this.allRawLogs.filter(l => l.created_at && String(l.item_id) === String(item.id) && l.type === 'OUTWARD' && l.created_at.slice(0, 10) === targetDate);
-                    if (dayOutwards.length) { row.push(dayOutwards.map(l => `-${l.qty} (${l.department || 'General'})`).join("\n")); } else { row.push("0"); }
+                targetDays.forEach(dateStr => {
+                    const inQty = this.allRawLogs.filter(l => l.created_at?.slice(0, 10) === dateStr && String(l.item_id) === String(item.id) && l.type === 'INWARD').reduce((s, l) => s + (parseFloat(l.qty) || 0), 0);
+                    const outQty = this.allRawLogs.filter(l => l.created_at?.slice(0, 10) === dateStr && String(l.item_id) === String(item.id) && l.type === 'OUTWARD').reduce((s, l) => s + (parseFloat(l.qty) || 0), 0);
+                    row.push(`+${inQty} / -${outQty}`);
                 });
                 matrixData.push(row);
             });
-            const ws = XLSX.utils.aoa_to_sheet(matrixData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "30-Day LIFO Ledger");
-            const colWidths = [{wch: 24}, {wch: 14}]; for (let i = 0; i < 60; i++) colWidths.push({ wch: i % 2 === 0 ? 14 : 26 });
-            ws['!cols'] = colWidths; XLSX.writeFile(wb, `Stock_Rolling_Report_${getLocalDateString(0)}.xlsx`);
+            const ws = XLSX.utils.aoa_to_sheet(matrixData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "30-Day Ledger");
+            XLSX.writeFile(wb, `Stock_Report_${getLocalDateString(0)}.xlsx`);
         }
     };
 };
 
-document.addEventListener('alpine:init', () => {
-    window.Alpine.data('stockApp', window.stockApp);
-});
+if (typeof window !== 'undefined') {
+    document.addEventListener('alpine:init', () => {
+        window.Alpine.data('stockApp', window.stockApp);
+    });
+}
