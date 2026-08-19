@@ -1,3 +1,4 @@
+// sw.js - Service Worker for Mobile Push & System Notifications
 self.addEventListener('install', (event) => {
     self.skipWaiting();
 });
