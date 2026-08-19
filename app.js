@@ -19,6 +19,47 @@ async function sha256(text) {
     return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Unit parser supporting gram, kg, gm, ml, liter conversions
+function parseQuantityInput(inputStr, itemName = "") {
+    if (typeof inputStr === 'number') return inputStr;
+    if (!inputStr || !String(inputStr).trim()) return NaN;
+
+    const str = String(inputStr).trim().toLowerCase();
+    
+    // Check if input is in grams / gms
+    const gramMatch = str.match(/^([\d.]+)\s*(g|gm|gms|gram|grams)$/);
+    if (gramMatch) {
+        const grams = parseFloat(gramMatch[1]);
+        if (/\b(kg|kilo|kilogram|kgs)\b/i.test(itemName)) {
+            return grams / 1000;
+        }
+        return grams;
+    }
+
+    // Check if input is in kg
+    const kgMatch = str.match(/^([\d.]+)\s*(kg|kgs|kilo|kilograms)$/);
+    if (kgMatch) {
+        const kgs = parseFloat(kgMatch[1]);
+        if (/\b(g|gm|gms|gram|grams)\b/i.test(itemName) && !/\b(kg|kgs)\b/i.test(itemName)) {
+            return kgs * 1000;
+        }
+        return kgs;
+    }
+
+    // Check if input is in milliliters (ml -> L)
+    const mlMatch = str.match(/^([\d.]+)\s*(ml|milliliters?)$/);
+    if (mlMatch) {
+        const ml = parseFloat(mlMatch[1]);
+        if (/\b(l|ltr|liter|liters|litre)\b/i.test(itemName)) {
+            return ml / 1000;
+        }
+        return ml;
+    }
+
+    // Standard numeric value
+    return parseFloat(str.replace(/[^0-9.]/g, ''));
+}
+
 async function seedIfEmpty() {
     try {
         const usersSnap = await getDocs(colRef('users'));
@@ -176,7 +217,6 @@ window.stockApp = function() {
             this.authChecking = false;
         },
 
-        // EXCEL BULK INGEST (ADMIN / INWARD ONLY)
         async uploadExcelReport(event) {
             if (this.currentRole !== 'admin' && this.currentRole !== 'inward') {
                 alert("Security Exception: Your operating role scope does not authorize bulk database ingest mutations.");
@@ -330,7 +370,6 @@ window.stockApp = function() {
             });
         },
 
-        // CATERING MATRIX ENGINE
         getEventsForDate(dateStr) {
             if (!dateStr || !this.cateringEvents) return [];
             return this.cateringEvents.filter(ev => String(ev.date) === String(dateStr));
@@ -506,7 +545,7 @@ window.stockApp = function() {
                 let hasReceivedItems = false;
 
                 for (let record of order.items) {
-                    const arrivedQty = parseInt(record.qty) || 0;
+                    const arrivedQty = parseFloat(record.qty) || 0;
                     
                     if (arrivedQty < 0) {
                         alert(`Operation Denied: Negative value (${arrivedQty}) detected for item "${record.name}".`);
@@ -520,7 +559,8 @@ window.stockApp = function() {
                     const targetItem = this.items.find(i => String(i.id) === String(record.id));
                     if (targetItem && arrivedQty > 0) {
                         hasReceivedItems = true;
-                        await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: Number(targetItem.stock || 0) + arrivedQty });
+                        const newStock = Math.round((Number(targetItem.stock || 0) + arrivedQty) * 1000) / 1000;
+                        await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: newStock });
                         await addDoc(colRef('logs'), { type: 'INWARD', item_id: targetItem.id, qty: arrivedQty, supplier_name: order.supplier_name, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
                     }
                 }
@@ -557,7 +597,9 @@ window.stockApp = function() {
                 const targetItem = this.items.find(i => String(i.id) === String(log.item_id));
                 if (!targetItem) return alert("Target item no longer exists.");
                 let currentBal = Number(targetItem.stock || 0);
-                let corrected = log.type === 'INWARD' ? currentBal - parseInt(log.qty) : currentBal + parseInt(log.qty);
+                let logQty = parseFloat(log.qty) || 0;
+                let corrected = log.type === 'INWARD' ? currentBal - logQty : currentBal + logQty;
+                corrected = Math.round(corrected * 1000) / 1000;
                 if (corrected < 0) return alert("Reversal denied: Stock cannot go below zero.");
                 await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: corrected });
                 await deleteDoc(doc(dbFs, 'logs', log.id));
@@ -570,8 +612,8 @@ window.stockApp = function() {
             const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); 
             if (!target) return alert('Selected item could not be found.');
             
-            const qty = parseInt(this.formInward.qty); 
-            if (!qty || qty <= 0) return alert('Enter a positive quantity.');
+            const qty = parseQuantityInput(this.formInward.qty, target.name); 
+            if (isNaN(qty) || qty <= 0) return alert('Enter a valid positive quantity (e.g., 1.25kg, 1250g, or 10).');
             
             let vendor = this.formInward.supplierName.trim();
             if (vendor === "_NEW_") {
@@ -588,7 +630,8 @@ window.stockApp = function() {
             }
 
             try {
-                await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock || 0) + qty });
+                const newStock = Math.round((Number(target.stock || 0) + qty) * 1000) / 1000;
+                await updateDoc(doc(dbFs, 'items', target.id), { stock: newStock });
                 const docRef = await addDoc(colRef('logs'), { 
                     type: 'INWARD', 
                     item_id: target.id, 
@@ -602,7 +645,7 @@ window.stockApp = function() {
                 this.lastLogId = docRef.id; 
                 this.lastLogType = 'INWARD';
                 this.formInward = { itemId: '', qty: '', supplierName: '', customDate: '' };
-                alert("Inward entry recorded successfully!");
+                alert(`Inward recorded cleanly: +${qty} for "${target.name}".`);
             } catch (error) { 
                 alert("Database write error: " + error.message); 
             }
@@ -613,9 +656,9 @@ window.stockApp = function() {
             const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId)); 
             if (!target) return alert('Item not found.');
             
-            const qty = parseInt(this.formOutward.qty); 
-            if (!qty || qty <= 0) return alert('Enter positive quantity.');
-            if (Number(target.stock || 0) < qty) return alert('Insufficient stock.');
+            const qty = parseQuantityInput(this.formOutward.qty, target.name); 
+            if (isNaN(qty) || qty <= 0) return alert('Enter a valid positive quantity (e.g., 1.25kg, 500g, or 5).');
+            if (Number(target.stock || 0) < qty) return alert(`Insufficient stock. Current balance is ${target.stock}.`);
 
             let entryTimestamp = new Date().toISOString();
             if (this.currentRole === 'admin' && this.formOutward.customDate) {
@@ -623,6 +666,7 @@ window.stockApp = function() {
             }
 
             try {
+                const newStock = Math.round((Number(target.stock) - qty) * 1000) / 1000;
                 const docRef = await addDoc(colRef('logs'), { 
                     type: 'OUTWARD', 
                     item_id: target.id, 
@@ -632,11 +676,11 @@ window.stockApp = function() {
                     created_by_name: this.currentUsername 
                 });
                 
-                await updateDoc(doc(dbFs, 'items', target.id), { stock: Number(target.stock) - qty });
+                await updateDoc(doc(dbFs, 'items', target.id), { stock: newStock });
                 this.lastLogId = docRef.id; 
                 this.lastLogType = 'OUTWARD';
                 this.formOutward = { itemId: '', department: 'Indian', qty: '', customDate: '' };
-                alert("Outward deduction logged successfully!");
+                alert(`Outward deduction logged: -${qty} for "${target.name}".`);
             } catch (error) { 
                 alert("Error: " + error.message); 
             }
@@ -653,7 +697,9 @@ window.stockApp = function() {
                 if (!this.isWithin30Minutes(logData.created_at)) return alert("Reversal window expired.");
                 const targetItem = this.items.find(i => String(i.id) === String(logData.item_id));
                 if (!targetItem) return;
-                let balanceCorrection = logData.type === 'INWARD' ? Number(targetItem.stock || 0) - parseInt(logData.qty) : Number(targetItem.stock || 0) + parseInt(logData.qty);
+                let logQty = parseFloat(logData.qty) || 0;
+                let balanceCorrection = logData.type === 'INWARD' ? Number(targetItem.stock || 0) - logQty : Number(targetItem.stock || 0) + logQty;
+                balanceCorrection = Math.round(balanceCorrection * 1000) / 1000;
                 if (balanceCorrection < 0) return alert("Rollback denied.");
                 await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: balanceCorrection });
                 await deleteDoc(doc(dbFs, 'logs', this.lastLogId));
@@ -755,7 +801,7 @@ window.stockApp = function() {
 
         async modifyThreshold(item) {
             let promptVal = prompt('Update safety limit:', item.threshold);
-            if (promptVal !== null) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parseInt(promptVal) || 0 });
+            if (promptVal !== null) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parseFloat(promptVal) || 0 });
         },
         async purgeItem(id) { if (confirm('Purge item entry?')) await deleteDoc(doc(dbFs, 'items', id)); },
         async shiftOrder(id, direction) {
@@ -812,9 +858,9 @@ window.stockApp = function() {
                     supplierGroups[supplier].forEach(log => {
                         const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
                         const name = log.item_name || linkedItem.name;
-                        const qty = parseInt(log.qty) || 0;
+                        const qty = parseFloat(log.qty) || 0;
                         const price = parseFloat(linkedItem.mrp) || 0;
-                        const totalCost = qty * price;
+                        const totalCost = Math.round(qty * price * 100) / 100;
                         grandTotal += totalCost;
                         
                         sheetMatrix.push([name, qty, `₹${price}`, `₹${totalCost}`]);
@@ -843,7 +889,7 @@ window.stockApp = function() {
                 const row = [item.name, item.stock];
                 targetDays.forEach(targetDate => {
                     let dayInwards = this.allRawLogs.filter(l => l.created_at && String(l.item_id) === String(item.id) && l.type === 'INWARD' && l.created_at.slice(0, 10) === targetDate);
-                    row.push(dayInwards.length ? `+${dayInwards.reduce((sum, l) => sum + (parseInt(l.qty) || 0), 0)}` : "0");
+                    row.push(dayInwards.length ? `+${dayInwards.reduce((sum, l) => sum + (parseFloat(l.qty) || 0), 0)}` : "0");
                     let dayOutwards = this.allRawLogs.filter(l => l.created_at && String(l.item_id) === String(item.id) && l.type === 'OUTWARD' && l.created_at.slice(0, 10) === targetDate);
                     if (dayOutwards.length) { row.push(dayOutwards.map(l => `-${l.qty} (${l.department || 'General'})`).join("\n")); } else { row.push("0"); }
                 });
