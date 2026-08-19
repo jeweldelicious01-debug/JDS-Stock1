@@ -90,7 +90,25 @@ function parseQuantityInput(inputStr, itemName = "") {
     // Standard Decimal Floating Value
     return parseFloat(str.replace(/[^0-9.]/g, ''));
 }
+async function sendBrowserNotification(title, body) {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
 
+    try {
+        if ('serviceWorker' in navigator) {
+            const registration = await navigator.serviceWorker.ready;
+            registration.showNotification(title, {
+                body: body,
+                icon: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png",
+                badge: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png",
+                vibrate: [200, 100, 200]
+            });
+        } else {
+            new Notification(title, { body: body });
+        }
+    } catch (err) {
+        console.error("Notification trigger error:", err);
+    }
+}
 async function seedIfEmpty() {
     try {
         const usersSnap = await getDocs(colRef('users'));
