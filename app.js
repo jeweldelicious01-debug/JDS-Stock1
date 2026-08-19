@@ -19,7 +19,7 @@ async function sha256(text) {
     return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Service Worker Registration for Mobile Push Notifications
+// Service Worker Registration for Mobile Support
 let swRegistration = null;
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').then((reg) => {
@@ -27,37 +27,37 @@ if ('serviceWorker' in navigator) {
     }).catch((err) => console.warn('SW registration bypassed:', err));
 }
 
-// Universal Mobile & Desktop Browser Notification Trigger
-function sendBrowserNotification(title, body) {
+// Browser Notification Dispatcher (Mobile Service Worker + Desktop)
+async function sendBrowserNotification(title, body) {
     if (!("Notification" in window)) return;
-    
-    if (Notification.permission === "granted") {
-        if (swRegistration && swRegistration.active) {
-            swRegistration.showNotification(title, {
+    if (Notification.permission !== "granted") return;
+
+    try {
+        if ('serviceWorker' in navigator) {
+            const reg = await navigator.serviceWorker.ready;
+            await reg.showNotification(title, {
                 body: body,
                 icon: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png",
-                vibrate: [200, 100, 200]
+                badge: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png",
+                vibrate: [200, 100, 200],
+                tag: 'stock-alert-' + Date.now()
             });
         } else {
             new Notification(title, { body: body, icon: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png" });
         }
-    } else if (Notification.permission !== "denied") {
-        Notification.requestPermission().then(permission => {
-            if (permission === "granted") {
-                sendBrowserNotification(title, body);
-            }
-        });
+    } catch (err) {
+        console.error("Notification dispatch failed:", err);
     }
 }
 
-// Input Quantity Parser supporting grams, kg, gm, ml, liter conversions
+// Quantity Parser: Auto-converts g to kg, ml to L, and parses raw numbers
 function parseQuantityInput(inputStr, itemName = "") {
     if (typeof inputStr === 'number') return inputStr;
     if (!inputStr || !String(inputStr).trim()) return NaN;
 
     const str = String(inputStr).trim().toLowerCase();
     
-    // Ingest Grams / GMS
+    // Grams / GMS
     const gramMatch = str.match(/^([\d.]+)\s*(g|gm|gms|gram|grams)$/);
     if (gramMatch) {
         const grams = parseFloat(gramMatch[1]);
@@ -67,7 +67,7 @@ function parseQuantityInput(inputStr, itemName = "") {
         return grams;
     }
 
-    // Ingest Kilograms / KG
+    // Kilograms / KG
     const kgMatch = str.match(/^([\d.]+)\s*(kg|kgs|kilo|kilograms)$/);
     if (kgMatch) {
         const kgs = parseFloat(kgMatch[1]);
@@ -77,7 +77,7 @@ function parseQuantityInput(inputStr, itemName = "") {
         return kgs;
     }
 
-    // Ingest Milliliters / ML
+    // Milliliters / ML
     const mlMatch = str.match(/^([\d.]+)\s*(ml|milliliters?)$/);
     if (mlMatch) {
         const ml = parseFloat(mlMatch[1]);
@@ -87,28 +87,9 @@ function parseQuantityInput(inputStr, itemName = "") {
         return ml;
     }
 
-    // Standard Decimal Floating Value
     return parseFloat(str.replace(/[^0-9.]/g, ''));
 }
-async function sendBrowserNotification(title, body) {
-    if (!("Notification" in window) || Notification.permission !== "granted") return;
 
-    try {
-        if ('serviceWorker' in navigator) {
-            const registration = await navigator.serviceWorker.ready;
-            registration.showNotification(title, {
-                body: body,
-                icon: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png",
-                badge: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png",
-                vibrate: [200, 100, 200]
-            });
-        } else {
-            new Notification(title, { body: body });
-        }
-    } catch (err) {
-        console.error("Notification trigger error:", err);
-    }
-}
 async function seedIfEmpty() {
     try {
         const usersSnap = await getDocs(colRef('users'));
@@ -215,10 +196,6 @@ window.stockApp = function() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         async init() {
-            if ("Notification" in window && Notification.permission !== "granted") {
-                Notification.requestPermission();
-            }
-
             await seedIfEmpty();
             
             onSnapshot(colRef('categories'), (snap) => { this.categories = snap.docs.map((d) => ({ id: d.id, ...d.data() })); });
@@ -230,8 +207,23 @@ window.stockApp = function() {
                     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             });
             
+            // REAL-TIME CATERING EVENT LISTENER (Triggers alerts on every new event logged)
+            let isInitialEventLoad = true;
             onSnapshot(colRef('catering_events'), (snap) => { 
-                this.cateringEvents = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
+                const events = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
+                if (!isInitialEventLoad) {
+                    snap.docChanges().forEach((change) => {
+                        if (change.type === "added") {
+                            const data = change.doc.data();
+                            sendBrowserNotification(
+                                "🎉 High-Pax Catering Event Scheduled!",
+                                `Party: ${data.partyName} | Attendance: ${data.paxCount} Pax | Date: ${data.date}`
+                            );
+                        }
+                    });
+                }
+                this.cateringEvents = events;
+                isInitialEventLoad = false;
             });
 
             onSnapshot(colRef('logs'), (snap) => { 
@@ -258,7 +250,7 @@ window.stockApp = function() {
                 if (!this.ready) { this.ready = true; this.restoreSession(); }
             });
 
-            // Run automated daily checks at 11:00 AM and 10:30 PM
+            // Start daily 11:00 AM and 10:30 PM low stock alerts
             this.initDailyStockCheckSchedule();
         },
 
@@ -270,18 +262,31 @@ window.stockApp = function() {
                 const minutes = now.getMinutes();
                 const todayStr = now.toISOString().slice(0, 10);
 
-                // Check 11:00 AM
+                // 11:00 AM Alert
                 if (hours === 11 && minutes === 0 && lastTrigger !== `${todayStr}_1100`) {
                     lastTrigger = `${todayStr}_1100`;
                     this.notifyLowStockItems("11:00 AM Low Stock Audit Alert");
                 }
 
-                // Check 10:30 PM (22:30)
+                // 10:30 PM Alert (22:30)
                 if (hours === 22 && minutes === 30 && lastTrigger !== `${todayStr}_2230`) {
                     lastTrigger = `${todayStr}_2230`;
-                    this.notifyLowStockItems("10:30 PM Nightly Low Stock Alert");
+                    this.notifyLowStockItems("10:30 PM Nightly Stock Alert");
                 }
             }, 30000);
+        },
+
+        async requestNotificationAccess() {
+            if (!("Notification" in window)) {
+                alert("This browser/device does not support Web Notifications.");
+                return;
+            }
+            const permission = await Notification.requestPermission();
+            if (permission === "granted") {
+                await sendBrowserNotification("Notifications Activated! 🔔", "You will receive real-time catering allocations and low stock reports.");
+            } else {
+                alert("Permission was denied. Please allow notifications in your browser or device settings.");
+            }
         },
 
         notifyLowStockItems(triggerTitle = "Low Stock Alert") {
@@ -520,22 +525,12 @@ window.stockApp = function() {
                     }
                     this.editingEventId = null;
                     alert("Function record context updated successfully!");
-                    
-                    sendBrowserNotification(
-                        "📝 Catering Function Updated",
-                        `${payload.partyName} (${payload.paxCount} Pax) for ${dateString} updated.`
-                    );
                 } else {
                     payload.created_at = Date.now();
                     const docRef = await addDoc(colRef('catering_events'), payload);
                     payload.id = docRef.id;
                     this.cateringEvents = [...this.cateringEvents, payload];
                     alert("Fresh function logged successfully!");
-
-                    sendBrowserNotification(
-                        "🎉 High-Pax Catering Event Matrix Allocated!",
-                        `${payload.partyName} (${payload.paxCount} Pax) committed for ${dateString}.`
-                    );
                 }
 
                 this.clearCateringForm();
