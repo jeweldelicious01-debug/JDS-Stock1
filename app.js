@@ -241,7 +241,7 @@ async function seedIfEmpty() {
     }
 }
 
-export function stockAppDefinition() {
+export function stockApp() {
     return {
         categories: [],
         items: [],
@@ -892,11 +892,12 @@ export function stockAppDefinition() {
     };
 }
 
-window.stockApp = stockAppDefinition;
+// Global Alpine Registration
+window.stockApp = stockApp;
 if (window.Alpine) {
-    window.Alpine.data('stockApp', stockAppDefinition);
+    window.Alpine.data('stockApp', stockApp);
 } else {
     document.addEventListener('alpine:init', () => {
-        window.Alpine.data('stockApp', stockAppDefinition);
+        window.Alpine.data('stockApp', stockApp);
     });
 }
