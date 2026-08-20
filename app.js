@@ -318,7 +318,66 @@ export function stockApp() {
         formatStock(stock, itemName = "") {
             return formatStockDisplay(stock, itemName);
         },
+downloadCurrentStockReport() {
+    if (!this.processedItems.length) return alert("No inventory items found to export.");
 
+    const headerRow = [
+        "Item Name",
+        "Category",
+        "Primary Supplier",
+        "Current Stock",
+        "Safety Limit",
+        "Unit Price (MRP)",
+        "Total Valuation (₹)",
+        "Stock Status"
+    ];
+
+    const rows = [headerRow];
+    let grandTotalValuation = 0;
+
+    this.processedItems.forEach(item => {
+        const stockDisplay = this.formatStock(item.stock, item.name);
+        const limitDisplay = this.formatStock(item.threshold, item.name);
+        const mrp = Number(item.mrp) || 0;
+        const totalVal = Math.round((Number(item.stock) || 0) * mrp * 100) / 100;
+        grandTotalValuation += totalVal;
+
+        let status = "Healthy";
+        if (item.stock === 0) status = "Out of Stock";
+        else if (item.stock <= item.threshold) status = "Low Stock";
+
+        rows.push([
+            item.name,
+            item.category_name,
+            item.supplier_name || 'General Vendor',
+            stockDisplay,
+            limitDisplay,
+            `₹${mrp}`,
+            `₹${totalVal}`,
+            status
+        ]);
+    });
+
+    rows.push([]);
+    rows.push(["", "", "", "", "", "GRAND TOTAL:", `₹${grandTotalValuation}`, ""]);
+
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [
+        { wch: 28 }, // Item Name
+        { wch: 16 }, // Category
+        { wch: 22 }, // Supplier
+        { wch: 16 }, // Stock
+        { wch: 14 }, // Limit
+        { wch: 16 }, // MRP
+        { wch: 20 }, // Total Valuation
+        { wch: 14 }  // Status
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Current Stock");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `Current_Stock_Report_${dateStr}.xlsx`);
+}
         async init() {
             this.restoreSession();
 
