@@ -1,4 +1,4 @@
-import { dbFs } from './firebase-config.js';[cite: 1, 4]
+import { dbFs } from './firebase-config.js';[cite: 4]
 import {
     collection,
     doc,
@@ -27,7 +27,7 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.loca
     }).catch((err) => console.warn('Service Worker registration skipped:', err));
 }
 
-// Notification Helper
+// Push & System Notification Dispatcher
 async function sendBrowserNotification(title, body) {
     if (typeof window === 'undefined' || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
@@ -48,7 +48,7 @@ async function sendBrowserNotification(title, body) {
     }
 }
 
-// Extract pack size and unit from item name
+// Extract pack size and unit details from item name
 function getItemPackDetails(itemName = "") {
     if (!itemName) return { packSize: 1, unit: "", hasPack: false };
     
@@ -73,7 +73,7 @@ function getItemPackDetails(itemName = "") {
     return { packSize: 1, unit: "", hasPack: false };
 }
 
-// Parse inputs: 1 packet (multiplied), 1250g, 1.25kg, 5kg 250g
+// Inward / Outward Input Parser
 function parseQuantityInput(inputStr, itemName = "") {
     if (typeof inputStr === 'number') inputStr = String(inputStr);
     if (!inputStr || !String(inputStr).trim()) return NaN;
@@ -85,7 +85,7 @@ function parseQuantityInput(inputStr, itemName = "") {
     const isGramItem = /\b(g|gm|gms|gram|grams)\b/i.test(itemUnit) && !isKgItem;
     const isLiterItem = /\b(l|ltr|liter|liters|litre)\b/i.test(itemUnit) || /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
 
-    // Compound input: "5kg 250g"
+    // 1. Compound Input: "5kg 250g"
     const compoundKgG = str.match(/^([\d.]+)\s*(?:kg|kgs|kilo|kilograms?)\s*([\d.]+)\s*(?:g|gm|gms|gram|grams)$/);
     if (compoundKgG) {
         const k = parseFloat(compoundKgG[1]) || 0;
@@ -93,7 +93,7 @@ function parseQuantityInput(inputStr, itemName = "") {
         return Math.round((k + g / 1000) * 1000) / 1000;
     }
 
-    // Grams input
+    // 2. Explicit Grams
     const gramMatch = str.match(/^([\d.]+)\s*(g|gm|gms|gram|grams)$/);
     if (gramMatch) {
         const grams = parseFloat(gramMatch[1]);
@@ -101,7 +101,7 @@ function parseQuantityInput(inputStr, itemName = "") {
         return grams;
     }
 
-    // Kilograms input
+    // 3. Explicit Kilograms
     const kgMatch = str.match(/^([\d.]+)\s*(kg|kgs|kilo|kilograms)$/);
     if (kgMatch) {
         const kgs = parseFloat(kgMatch[1]);
@@ -109,7 +109,7 @@ function parseQuantityInput(inputStr, itemName = "") {
         return kgs;
     }
 
-    // Milliliters input
+    // 4. Explicit Milliliters
     const mlMatch = str.match(/^([\d.]+)\s*(ml|milliliters?)$/);
     if (mlMatch) {
         const ml = parseFloat(mlMatch[1]);
@@ -117,19 +117,19 @@ function parseQuantityInput(inputStr, itemName = "") {
         return ml;
     }
 
-    // Liters input
+    // 5. Explicit Liters
     const literMatch = str.match(/^([\d.]+)\s*(l|ltr|liter|liters|litre)$/);
     if (literMatch) {
         return parseFloat(literMatch[1]);
     }
 
-    // Decimal Number
+    // 6. Direct Decimal Number
     if (str.includes('.')) {
         const decimalNum = parseFloat(str.replace(/[^0-9.]/g, ''));
         return isNaN(decimalNum) ? NaN : Math.round(decimalNum * 1000) / 1000;
     }
 
-    // Bare Number (Multiplies by pack size)
+    // 7. Bare Number (Multiplies by pack size)
     const rawNum = parseFloat(str.replace(/[^0-9.]/g, ''));
     if (isNaN(rawNum)) return NaN;
 
@@ -140,7 +140,7 @@ function parseQuantityInput(inputStr, itemName = "") {
     return rawNum;
 }
 
-// Format stock into kg/g or L/ml
+// Unit & Combined Representation Formatter
 function formatStockDisplay(stock, itemName = "") {
     const val = Number(stock) || 0;
     const pack = getItemPackDetails(itemName);
@@ -257,12 +257,12 @@ export function stockAppDefinition() {
     return {
         categories: [],[cite: 4]
         items: [],[cite: 4]
-        cateringEvents: [], [cite: 4]
+        cateringEvents: [],  [cite: 4]
         logs: [],[cite: 4]
         allRawLogs: [],[cite: 4]
         users: [],[cite: 4]
         suppliers: [], [cite: 4]
-        purchaseOrders: [],  [cite: 4]
+        purchaseOrders: [], [cite: 4]
         
         ready: true,
         isAuthenticated: false,[cite: 4]
@@ -338,7 +338,7 @@ export function stockAppDefinition() {
             });
             
             let isInitialEventLoad = true;
-            onSnapshot(colRef('catering_events'), (snap) => {  [cite: 4]
+            onSnapshot(colRef('catering_events'), (snap) => { [cite: 4]
                 const events = snap.docs.map((d) => ({ id: d.id, ...d.data() })); [cite: 4]
                 if (!isInitialEventLoad) {
                     snap.docChanges().forEach((change) => {
@@ -458,7 +458,7 @@ export function stockAppDefinition() {
             sessionStorage.removeItem(SESSION_KEY); [cite: 4]
             this.isAuthenticated = false; [cite: 4]
             this.currentRole = 'readonly';  [cite: 4]
-            this.currentUsername = ''; [cite: 4]
+            this.currentUsername = '';  [cite: 4]
             this.currentUserId = null; [cite: 4]
             window.location.reload();[cite: 4]
         },
@@ -665,7 +665,7 @@ export function stockAppDefinition() {
 
         isWithin30Minutes(createdAt) {
             if (!createdAt) return false;[cite: 4]
-            return (new Date() - new Date(createdAt)) < 1800000; [cite: 4]
+            return (new Date() - new Date(createdAt)) < 1800000;[cite: 4]
         },
 
         async triggerUndo(log) {
@@ -687,7 +687,7 @@ export function stockAppDefinition() {
 
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) return alert('Select missing fields.');[cite: 4]
-            const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); [cite: 4]
+            const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId));[cite: 4]
             if (!target) return alert('Selected item not found.');[cite: 4]
             
             const qty = parseQuantityInput(this.formInward.qty, target.name); 
@@ -695,7 +695,7 @@ export function stockAppDefinition() {
             
             let vendor = this.formInward.supplierName.trim();[cite: 4]
             if (vendor === "_NEW_") {[cite: 4]
-                let newVendorName = prompt("Enter new Supplier Name:");  [cite: 4]
+                let newVendorName = prompt("Enter new Supplier Name:");[cite: 4]
                 if (!newVendorName || !newVendorName.trim()) return alert("Supplier name required.");[cite: 4]
                 vendor = newVendorName.trim();[cite: 4]
                 const matchEx = this.suppliers.find(s => s.name.toLowerCase() === vendor.toLowerCase());[cite: 4]
@@ -710,28 +710,28 @@ export function stockAppDefinition() {
             try {
                 const newStock = Math.round((Number(target.stock || 0) + qty) * 1000) / 1000;
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: newStock });[cite: 4]
-                const docRef = await addDoc(colRef('logs'), { [cite: 4]
-                    type: 'INWARD', [cite: 4]
-                    item_id: target.id, [cite: 4]
+                const docRef = await addDoc(colRef('logs'), {[cite: 4]
+                    type: 'INWARD',[cite: 4]
+                    item_id: target.id,[cite: 4]
                     qty, 
-                    supplier_name: vendor, [cite: 4]
-                    department: null, [cite: 4]
-                    created_at: entryTimestamp,  [cite: 4]
-                    created_by_name: this.currentUsername [cite: 4]
+                    supplier_name: vendor,[cite: 4]
+                    department: null,[cite: 4]
+                    created_at: entryTimestamp,[cite: 4]
+                    created_by_name: this.currentUsername[cite: 4]
                 });
                 
-                this.lastLogId = docRef.id; [cite: 4]
+                this.lastLogId = docRef.id;[cite: 4]
                 this.lastLogType = 'INWARD';[cite: 4]
                 this.formInward = { itemId: '', qty: '', supplierName: '', customDate: '' };[cite: 4]
                 alert(`Inward recorded: +${this.formatStock(qty, target.name)} for "${target.name}".`);
             } catch (error) { 
-                alert("Write error: " + error.message);  [cite: 4]
+                alert("Write error: " + error.message);[cite: 4]
             }
         },
 
         async deductOutward() {
             if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');[cite: 4]
-            const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId)); [cite: 4]
+            const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId));[cite: 4]
             if (!target) return alert('Item not found.');[cite: 4]
             
             const qty = parseQuantityInput(this.formOutward.qty, target.name); 
@@ -745,22 +745,22 @@ export function stockAppDefinition() {
 
             try {
                 const newStock = Math.round((Number(target.stock) - qty) * 1000) / 1000;
-                const docRef = await addDoc(colRef('logs'), { [cite: 4]
-                    type: 'OUTWARD', [cite: 4]
-                    item_id: target.id,    [cite: 4]
+                const docRef = await addDoc(colRef('logs'), {[cite: 4]
+                    type: 'OUTWARD',[cite: 4]
+                    item_id: target.id,[cite: 4]
                     qty, 
-                    department: this.formOutward.department,  [cite: 4]
-                    created_at: entryTimestamp, [cite: 4]
-                    created_by_name: this.currentUsername [cite: 4]
+                    department: this.formOutward.department,[cite: 4]
+                    created_at: entryTimestamp,[cite: 4]
+                    created_by_name: this.currentUsername[cite: 4]
                 });
                 
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: newStock });[cite: 4]
-                this.lastLogId = docRef.id; [cite: 4]
+                this.lastLogId = docRef.id;[cite: 4]
                 this.lastLogType = 'OUTWARD';[cite: 4]
                 this.formOutward = { itemId: '', department: 'Indian', qty: '', customDate: '' };[cite: 4]
                 alert(`Outward deduction logged: -${this.formatStock(qty, target.name)} for "${target.name}".`);
             } catch (error) { 
-                alert("Error: " + error.message); [cite: 4]
+                alert("Error: " + error.message);[cite: 4]
             }
         },
 
@@ -864,7 +864,7 @@ export function stockAppDefinition() {
             const wb = XLSX.utils.book_new();[cite: 4]
             const dateGroups = {};[cite: 4]
             inwards.forEach(log => {[cite: 4]
-                const dateKey = log.created_at.slice(0, 10); [cite: 4]
+                const dateKey = log.created_at.slice(0, 10);[cite: 4]
                 if (!dateGroups[dateKey]) dateGroups[dateKey] = [];[cite: 4]
                 dateGroups[dateKey].push(log);[cite: 4]
             });
@@ -904,7 +904,7 @@ export function stockAppDefinition() {
     };
 }
 
-// Direct & Robust Alpine Global Registration
+// Global Alpine Registration
 window.stockApp = stockAppDefinition;
 if (window.Alpine) {
     window.Alpine.data('stockApp', stockAppDefinition);
