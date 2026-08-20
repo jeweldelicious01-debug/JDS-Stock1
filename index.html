@@ -8,7 +8,6 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="app.css">
     
-    <!-- Inline fallback so Alpine never crashes while ES modules load -->
     <script>
         window.stockApp = function() {
             return {
@@ -23,6 +22,9 @@
                 orderViewTab: 'pending',
                 loginForm: { username: '', password: '' },
                 loginError: '',
+                inwardSearchQuery: '',
+                outwardSearchQuery: '',
+                orderDeskSearchQuery: '',
                 formInward: { itemId: '', qty: '', supplierName: '', customDate: '' },
                 formOutward: { itemId: '', department: 'Indian', qty: '', customDate: '' },
                 cateringForm: { partyName: '', paxCount: '', rawTextMenu: '' },
@@ -54,6 +56,7 @@
                 processedItems: [],
                 processedPurchaseOrders: [],
                 filteredInwardItems: [],
+                filteredOutwardItems: [],
                 filteredOrderDeskItems: [],
                 formatStock(val) { return val; },
                 init() {}
@@ -65,9 +68,6 @@
     <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp" x-init="init()">
-    <button @click="downloadCurrentStockReport()" class="text-xs bg-teal-700 hover:bg-teal-800 text-white px-3 py-2 rounded-lg font-bold tracking-wide flex items-center gap-1.5 transition shadow-md">
-    📦 Current Stock (.xlsx)
-</button>
 
     <!-- Login Authentication Overlay Matrix -->
     <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
@@ -103,6 +103,8 @@
                     </div>
                     <div class="flex gap-2 items-center flex-wrap">
                         <button type="button" @click="requestNotificationAccess()" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg font-bold tracking-wide transition shadow-sm">🔔 Enable Push Alerts</button>
+                        <button x-show="currentRole === 'admin' || currentRole === 'inward'" @click="promptAddNewSupplier()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-lg font-bold tracking-wide transition shadow-sm">➕ Add Supplier</button>
+                        <button @click="downloadCurrentStockReport()" class="text-xs bg-teal-700 hover:bg-teal-800 text-white px-3 py-2 rounded-lg font-bold tracking-wide flex items-center gap-1.5 transition shadow-md">📦 Current Stock (.xlsx)</button>
                         <button @click="notifyLowStockItems('Manual Stock Audit')" class="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-3 py-2 rounded-lg font-bold tracking-wide transition shadow-sm">🔔 Alert Low Items</button>
                         <button @click="showAccountModal = true" class="text-xs bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-3 py-2 rounded-lg font-bold tracking-wide transition shadow-sm">👤 Security Settings</button>
                         <button x-show="currentRole === 'admin'" @click="showUserAdminModal = true" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg font-bold tracking-wide border border-indigo-200 transition shadow-sm">🧑‍💼 Operator Suite</button>
@@ -271,7 +273,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                         <div class="bg-slate-50 p-3 rounded-lg border">
                             <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Target Supplier</label>
-                            <select x-model="orderDesk.supplierId" @change="orderDesk.selectedItemId = ''" class="border p-2.5 rounded-md w-full bg-white font-bold text-slate-700">
+                            <select x-model="orderDesk.supplierId" @change="orderDesk.selectedItemId = ''; orderDeskSearchQuery = '';" class="border p-2.5 rounded-md w-full bg-white font-bold text-slate-700">
                                 <option value="">-- Choose Vendor --</option>
                                 <template x-for="sup in suppliers" :key="sup.id">
                                     <option :value="sup.id" x-text="sup.name"></option>
@@ -280,8 +282,9 @@
                         </div>
                         <div class="bg-slate-50 p-3 rounded-lg border md:col-span-2 space-y-3">
                             <div class="flex gap-2 items-end">
-                                <div class="flex-1">
-                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Select Product Item (Cascading Supplier Filter)</label>
+                                <div class="flex-1 space-y-1">
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Search & Select Product</label>
+                                    <input type="text" x-model="orderDeskSearchQuery" :disabled="!orderDesk.supplierId" placeholder="Type powder, haldi..." class="border p-1.5 rounded-md w-full bg-white text-xs mb-1 focus:ring-1 focus:ring-indigo-500">
                                     <select x-model="orderDesk.selectedItemId" :disabled="!orderDesk.supplierId" class="border p-2 rounded-md w-full bg-white font-medium text-slate-700 disabled:opacity-50">
                                         <option value="">-- Choose Product --</option>
                                         <template x-for="item in filteredOrderDeskItems" :key="item.id">
@@ -318,17 +321,18 @@
                         <div class="text-xs font-bold uppercase tracking-wider text-emerald-800 border-b border-slate-100 pb-2">📥 Log New Inward Manual Consignment</div>
                         <div class="grid grid-cols-4 gap-3 text-xs">
                             <div class="col-span-2">
-                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">First Select Registered Supplier</label>
-                                <select x-model="formInward.supplierName" @change="formInward.itemId = ''" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-bold text-slate-700">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">1. Choose Supplier</label>
+                                <select x-model="formInward.supplierName" @change="formInward.itemId = ''; inwardSearchQuery = '';" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-bold text-slate-700">
                                     <option value="">-- Choose Supplier --</option>
                                     <template x-for="sup in suppliers" :key="sup.id">
                                         <option :value="sup.name" x-text="sup.name"></option>
                                     </template>
                                 </select>
                             </div>
-                            <div class="col-span-2">
-                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Select Product (Filtered Axis)</label>
-                                <select x-model="formInward.itemId" :disabled="!formInward.supplierName" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-medium text-slate-700 disabled:opacity-50">
+                            <div class="col-span-2 space-y-1">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">2. Search & Select Product</label>
+                                <input type="text" x-model="inwardSearchQuery" :disabled="!formInward.supplierName" placeholder="Type powder, haldi..." class="border border-slate-300 p-1.5 rounded-lg bg-white w-full text-xs focus:ring-1 focus:ring-emerald-500">
+                                <select x-model="formInward.itemId" :disabled="!formInward.supplierName" class="border border-slate-300 p-2 rounded-lg bg-slate-50 w-full font-medium text-slate-700 disabled:opacity-50">
                                     <option value="">-- Select Product --</option>
                                     <template x-for="item in filteredInwardItems" :key="item.id">
                                         <option :value="item.id" x-text="item.name"></option>
@@ -362,18 +366,28 @@
                     <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" x-show="currentRole === 'admin' || currentRole === 'outward'">
                         <div class="text-xs font-bold uppercase tracking-wider text-rose-800 border-b border-slate-100 pb-2">📤 Issue Line Outward Allocation</div>
                         <div class="grid grid-cols-3 gap-3 text-xs">
-                            <select x-model="formOutward.itemId" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-medium text-slate-700">
-                                <option value="">-- Item --</option>
-                                <template x-for="item in items" :key="item.id">
-                                    <option :value="item.id" x-text="item.name"></option>
-                                </template>
-                            </select>
-                            <select x-model="formOutward.department" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-bold text-slate-700">
-                                <template x-for="dept in departments" :key="dept">
-                                    <option :value="dept" x-text="dept"></option>
-                                </template>
-                            </select>
-                            <input type="text" x-model="formOutward.qty" placeholder="Qty (e.g. 1, 0.5kg, 500g)" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
+                            <div class="col-span-3 space-y-1">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Search & Select Product</label>
+                                <input type="text" x-model="outwardSearchQuery" placeholder="Type powder, haldi..." class="border border-slate-300 p-1.5 rounded-lg bg-white w-full text-xs focus:ring-1 focus:ring-rose-500">
+                                <select x-model="formOutward.itemId" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-medium text-slate-700">
+                                    <option value="">-- Item --</option>
+                                    <template x-for="item in filteredOutwardItems" :key="item.id">
+                                        <option :value="item.id" x-text="item.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div class="col-span-1">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Department</label>
+                                <select x-model="formOutward.department" class="border border-slate-300 p-2.5 rounded-lg bg-slate-50 w-full font-bold text-slate-700">
+                                    <template x-for="dept in departments" :key="dept">
+                                        <option :value="dept" x-text="dept"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity</label>
+                                <input type="text" x-model="formOutward.qty" placeholder="Qty (e.g. 1, 0.5kg, 500g)" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
+                            </div>
                             
                             <div class="col-span-3" x-show="currentRole === 'admin'">
                                 <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Entry Date/Time (Past Allowed)</label>
