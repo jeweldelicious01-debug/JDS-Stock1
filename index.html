@@ -280,8 +280,8 @@
                                 </select>
                             </div>
                             <div :class="currentRole === 'admin' ? 'col-span-2' : 'col-span-4'">[cite: 2]
-                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity (e.g. 1, 1.25kg, 1250g)</label>
-                                <input type="text" x-model="formInward.qty" placeholder="e.g. 1, 1.25kg, 1250g" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity (e.g. 1, 1.25kg, 1250g, 5kg 250g)</label>
+                                <input type="text" x-model="formInward.qty" placeholder="e.g. 1, 1.25kg, 1250g, 5kg 250g" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
                             </div>
                             
                             <div class="col-span-2" x-show="currentRole === 'admin'">[cite: 2]
@@ -335,7 +335,7 @@
                         <template x-for="log in logs" :key="log.id">[cite: 2]
                             <div class="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2.5 font-mono shadow-2xs">[cite: 2]
                                 <span :class="log.type === 'INWARD' ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' : 'text-rose-700 bg-rose-50 border border-rose-200'" class="font-bold px-1.5 py-0.5 rounded text-[10px]">[cite: 2]
-                                    <span x-text="log.type === 'INWARD' ? '📥 IN +' : '📤 OUT -'"></span><span x-text="log.qty"></span>[cite: 2]
+                                    <span x-text="log.type === 'INWARD' ? '📥 IN +' : '📤 OUT -'"></span><span x-text="formatStock(log.qty, log.item_name)"></span>
                                 </span>
                                 <span class="font-bold font-sans text-slate-800" x-text="log.item_name"></span>[cite: 2]
                                 <span x-show="log.supplier_name" class="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded font-bold" x-text="'Vendor: ' + log.supplier_name"></span>[cite: 2]
@@ -374,7 +374,7 @@
                         </div>
                     </div>
                     
-                    <!-- MOBILE CARD VIEW: Completely eliminates horizontal scroll on phones -->
+                    <!-- MOBILE CARD VIEW: Zero horizontal scroll on phones -->
                     <div class="block md:hidden divide-y divide-slate-100 p-2 space-y-2">
                         <template x-for="item in processedItems" :key="'mob-' + item.id">
                             <div :class="item.stock <= item.threshold ? 'bg-rose-50/60 border-rose-200' : 'bg-white border-slate-200'" class="p-3 rounded-lg border shadow-2xs space-y-2">
@@ -395,7 +395,7 @@
                                 </div>
 
                                 <div class="flex justify-between items-center text-[10px] text-slate-500 border-t pt-1.5 border-slate-100">
-                                    <div>Limit: <span class="font-mono font-bold text-slate-700" x-text="item.threshold"></span> | Price: <span class="font-mono font-bold text-slate-700" x-text="'₹' + (item.mrp || 0)"></span></div>
+                                    <div>Limit: <span class="font-mono font-bold text-slate-700" x-text="formatStock(item.threshold, item.name)"></span> | Price: <span class="font-mono font-bold text-slate-700" x-text="'₹' + (item.mrp || 0)"></span></div>
                                     <div class="space-x-2" x-show="currentRole === 'admin' || currentRole === 'inward'">
                                         <button @click="changeItemName(item)" class="text-slate-700 font-bold hover:underline">✏️ Edit</button>
                                         <button @click="modifyThreshold(item)" class="text-slate-700 font-bold hover:underline">⚙️ Limit</button>
@@ -413,13 +413,13 @@
                                 <tr class="bg-slate-100 border-b border-slate-200 text-slate-600 uppercase tracking-wider text-[9px] font-black">
                                     <th class="py-2.5 px-1 text-center w-[5%]" x-show="currentRole === 'admin'">Move</th>
                                     <th class="py-2.5 px-2 w-[22%]">Item Name</th>                       
-                                    <th class="py-2.5 px-1 text-center w-[10%]">Stock</th>  
+                                    <th class="py-2.5 px-1 text-center w-[12%]">Stock</th>  
                                     <th class="py-2.5 px-1 text-center w-[10%]">Status</th>         
                                     <th class="py-2.5 px-2 w-[16%]">Supplier</th>        
-                                    <th class="py-2.5 px-1 text-center w-[10%]" x-show="currentRole !== 'readonly'">Price</th> 
+                                    <th class="py-2.5 px-1 text-center w-[9%]" x-show="currentRole !== 'readonly'">Price</th> 
                                     <th class="py-2.5 px-1 text-center w-[11%]">Category</th>
-                                    <th class="py-2.5 px-1 text-center w-[6%]">Limit</th>
-                                    <th class="py-2.5 px-2 text-right w-[10%]" x-show="currentRole === 'admin' || currentRole === 'inward'">Actions</th>
+                                    <th class="py-2.5 px-1 text-center w-[7%]">Limit</th>
+                                    <th class="py-2.5 px-2 text-right w-[8%]" x-show="currentRole === 'admin' || currentRole === 'inward'">Actions</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 text-[11px]">
@@ -443,7 +443,7 @@
                                         <td class="py-2 px-1 text-center truncate">
                                             <span :style="'background-color: ' + item.bg + '; color: ' + item.text_color + '; border-color: ' + item.border" class="px-1 py-0.5 rounded text-[8px] uppercase font-black border inline-block max-w-full truncate" x-text="item.emoji + ' ' + item.category_name"></span>
                                         </td>
-                                        <td class="py-2 px-1 text-center font-mono text-slate-400 font-bold truncate" x-text="item.threshold"></td>
+                                        <td class="py-2 px-1 text-center font-mono text-slate-400 font-bold truncate" x-text="formatStock(item.threshold, item.name)"></td>
                                         <td class="py-2 px-2 text-right space-x-1 whitespace-nowrap" x-show="currentRole === 'admin' || currentRole === 'inward'">
                                             <button @click="changeItemName(item)" class="text-slate-600 font-bold text-[9px] hover:underline" title="Edit">✏️</button>
                                             <button @click="modifyThreshold(item)" class="text-slate-600 font-bold text-[9px] hover:underline" title="Limit">⚙️</button>
@@ -558,7 +558,7 @@
                                 </select>
                             </div>
                             <div class="grid grid-cols-2 gap-2">[cite: 2]
-                                <div><label class="block font-bold text-slate-600 mb-1">Safety Limit</label><input type="number" step="any" x-model.number="newItemForm.threshold" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="10"></div>[cite: 2]
+                                <div><label class="block font-bold text-slate-600 mb-1">Safety Limit</label><input type="text" x-model="newItemForm.threshold" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="10"></div>
                                 <div x-show="currentRole !== 'readonly'"><label class="block font-bold text-slate-600 mb-1">Unit Price (MRP)</label><input type="number" step="any" x-model.number="newItemForm.mrp" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="0"></div>[cite: 2]
                             </div>
                         </div>
