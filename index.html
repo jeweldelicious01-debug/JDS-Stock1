@@ -7,8 +7,8 @@
     <script src="https://cdn.tailwindcss.com"></script>[cite: 2]
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>[cite: 2]
     <link rel="stylesheet" href="app.css">
-    <script type="module" src="app.js"></script>[cite: 2]
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>[cite: 2]
+    <script type="module" src="app.js"></script>[cite: 2]
     <style>[x-cloak] { display: none !important; }</style>[cite: 2]
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp" x-init="init()">[cite: 2]
@@ -374,7 +374,7 @@
                         </div>
                     </div>
                     
-                    <!-- MOBILE CARD VIEW: Zero horizontal scroll on phones -->
+                    <!-- MOBILE CARD VIEW -->
                     <div class="block md:hidden divide-y divide-slate-100 p-2 space-y-2">
                         <template x-for="item in processedItems" :key="'mob-' + item.id">
                             <div :class="item.stock <= item.threshold ? 'bg-rose-50/60 border-rose-200' : 'bg-white border-slate-200'" class="p-3 rounded-lg border shadow-2xs space-y-2">
@@ -406,7 +406,7 @@
                         </template>
                     </div>
 
-                    <!-- DESKTOP VIEW: Screen-Fit Locked Table Layout -->
+                    <!-- DESKTOP SCREEN-FIT TABLE VIEW -->
                     <div class="hidden md:block w-full overflow-hidden">
                         <table class="w-full table-fixed text-left text-xs border-collapse">
                             <thead>
