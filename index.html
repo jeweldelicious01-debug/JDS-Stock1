@@ -8,11 +8,63 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="app.css">
     
-    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Inline fallback so Alpine never crashes while ES modules load -->
+    <script>
+        window.stockApp = function() {
+            return {
+                ready: false,
+                isAuthenticated: false,
+                authChecking: true,
+                currentRole: 'readonly',
+                currentUsername: '',
+                currentUserId: null,
+                filterCat: 'all',
+                filterSupplier: 'all',
+                orderViewTab: 'pending',
+                loginForm: { username: '', password: '' },
+                loginError: '',
+                formInward: { itemId: '', qty: '', supplierName: '', customDate: '' },
+                formOutward: { itemId: '', department: 'Indian', qty: '', customDate: '' },
+                cateringForm: { partyName: '', paxCount: '', rawTextMenu: '' },
+                cateringModal: { show: false, label: '', text: '' },
+                editingEventId: null,
+                orderDesk: { supplierId: '', selectedItemId: '', selectedQty: '', basket: [] },
+                lastLogId: null,
+                lastLogType: '',
+                showNewItemModal: false,
+                showAccountModal: false,
+                showUserAdminModal: false,
+                newItemForm: { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' },
+                newCategoryForm: { name: '', emoji: '📦', paletteIndex: 0 },
+                paletteOptions: [],
+                accountForm: { currentPassword: '', newPassword: '' },
+                accountError: '',
+                accountSuccess: '',
+                newUserForm: { username: '', password: '', role: 'inward' },
+                newUserError: '',
+                departments: [],
+                categories: [],
+                items: [],
+                suppliers: [],
+                purchaseOrders: [],
+                cateringEvents: [],
+                logs: [],
+                allRawLogs: [],
+                users: [],
+                processedItems: [],
+                processedPurchaseOrders: [],
+                filteredInwardItems: [],
+                filteredOrderDeskItems: [],
+                formatStock(val) { return val; },
+                init() {}
+            };
+        };
+    </script>
     <script type="module" src="app.js"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>[x-cloak] { display: none !important; }</style>
 </head>
-<body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp()" x-init="init()">
+<body class="bg-slate-50 text-slate-900 font-sans antialiased" x-data="stockApp" x-init="init()">
 
     <!-- Login Authentication Overlay Matrix -->
     <div x-show="!isAuthenticated && !authChecking" class="fixed inset-0 bg-slate-900 flex flex-col justify-center items-center z-50 p-4" x-cloak>
@@ -23,7 +75,7 @@
             <form @submit.prevent="verifyLogin()" class="space-y-4 text-left text-xs">
                 <div>
                     <label class="block font-bold mb-1 text-slate-700 tracking-wide uppercase text-[10px]">Operator Username</label>
-                    <input type="text" x-model="loginForm.username" placeholder="e.g. admin" class="border border-slate-300 p-2.5 w-full rounded-lg bg-slate-50 focus:ring-2 focus:ring-slate-500">
+                    <input type="text" autocomplete="username" x-model="loginForm.username" placeholder="e.g. admin" class="border border-slate-300 p-2.5 w-full rounded-lg bg-slate-50 focus:ring-2 focus:ring-slate-500">
                 </div>
                 <div>
                     <label class="block font-bold mb-1 text-slate-700 tracking-wide uppercase text-[10px]">Passphrase Code</label>
