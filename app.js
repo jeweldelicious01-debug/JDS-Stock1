@@ -19,7 +19,7 @@ async function sha256(text) {
     return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, '0')).join('');[cite: 4]
 }
 
-// Safe Service Worker Registration
+// Service Worker Registration for Mobile Push
 let swRegistration = null;
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js').then((reg) => {
@@ -27,7 +27,7 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.loca
     }).catch((err) => console.warn('Service Worker registration skipped:', err));
 }
 
-// Resilient Push & Browser Notification Trigger
+// Push & System Notification Dispatcher
 async function sendBrowserNotification(title, body) {
     if (typeof window === 'undefined' || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
@@ -44,11 +44,11 @@ async function sendBrowserNotification(title, body) {
             new Notification(title, { body: body, icon: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png" });
         }
     } catch (err) {
-        console.warn("Notification dispatch failed:", err);
+        console.warn("Notification dispatch error:", err);
     }
 }
 
-// Extract pack size and units from item labels (e.g., "KC haldar 5 kg" -> { packSize: 5, unit: "kg", hasPack: true })
+// Extract pack size and unit details from item name (e.g. "KC haldar 5 kg" -> packSize: 5, unit: "kg")
 function getItemPackDetails(itemName = "") {
     if (!itemName) return { packSize: 1, unit: "", hasPack: false };
     
@@ -73,64 +73,142 @@ function getItemPackDetails(itemName = "") {
     return { packSize: 1, unit: "", hasPack: false };
 }
 
-// Auto-converts units (g, kg, ml, L) and applies pack size multipliers if bare numbers are typed
+// Full-featured parser: handles pack multipliers (1 packet = 5kg), typed units (1.25kg, 1250g, 5kg 250g)
 function parseQuantityInput(inputStr, itemName = "") {
     if (typeof inputStr === 'number') inputStr = String(inputStr);
     if (!inputStr || !String(inputStr).trim()) return NaN;
 
     const str = String(inputStr).trim().toLowerCase();
     const pack = getItemPackDetails(itemName);
-    const itemUnit = pack.unit.toLowerCase();
+    const itemUnit = (pack.unit || "").toLowerCase();
+    const isKgItem = /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemUnit) || /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
+    const isGramItem = /\b(g|gm|gms|gram|grams)\b/i.test(itemUnit) && !isKgItem;
+    const isLiterItem = /\b(l|ltr|liter|liters|litre)\b/i.test(itemUnit) || /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
 
-    // 1. Explicit Grams
+    // 1. Compound input: "5kg 250g" or "2kg 500gm"
+    const compoundKgG = str.match(/^([\d.]+)\s*(?:kg|kgs|kilo|kilograms?)\s*([\d.]+)\s*(?:g|gm|gms|gram|grams)$/);
+    if (compoundKgG) {
+        const k = parseFloat(compoundKgG[1]) || 0;
+        const g = parseFloat(compoundKgG[2]) || 0;
+        return Math.round((k + g / 1000) * 1000) / 1000;
+    }
+
+    // 2. Explicit Grams: "1250g", "500gm", "250 gram"
     const gramMatch = str.match(/^([\d.]+)\s*(g|gm|gms|gram|grams)$/);
     if (gramMatch) {
-        const val = parseFloat(gramMatch[1]);
-        if (/\b(kg|kgs|kilo|kilograms?)\b/i.test(itemUnit)) {
-            return val / 1000;
-        }
-        return val;
+        const grams = parseFloat(gramMatch[1]);
+        if (isKgItem) return Math.round((grams / 1000) * 1000) / 1000;
+        return grams;
     }
 
-    // 2. Explicit Kilograms
+    // 3. Explicit Kilograms: "1.25kg", "5kg"
     const kgMatch = str.match(/^([\d.]+)\s*(kg|kgs|kilo|kilograms)$/);
     if (kgMatch) {
-        const val = parseFloat(kgMatch[1]);
-        if (/\b(g|gm|gms|gram|grams)\b/i.test(itemUnit) && !/\b(kg|kgs)\b/i.test(itemUnit)) {
-            return val * 1000;
-        }
-        return val;
+        const kgs = parseFloat(kgMatch[1]);
+        if (isGramItem) return Math.round(kgs * 1000);
+        return kgs;
     }
 
-    // 3. Explicit Milliliters
+    // 4. Explicit Milliliters: "500ml"
     const mlMatch = str.match(/^([\d.]+)\s*(ml|milliliters?)$/);
     if (mlMatch) {
-        const val = parseFloat(mlMatch[1]);
-        if (/\b(l|ltr|liter|liters|litre)\b/i.test(itemUnit)) {
-            return val / 1000;
-        }
-        return val;
+        const ml = parseFloat(mlMatch[1]);
+        if (isLiterItem) return Math.round((ml / 1000) * 1000) / 1000;
+        return ml;
     }
 
-    // 4. Explicit Liters
+    // 5. Explicit Liters: "1.5L"
     const literMatch = str.match(/^([\d.]+)\s*(l|ltr|liter|liters|litre)$/);
     if (literMatch) {
-        const val = parseFloat(literMatch[1]);
-        if (/\b(ml)\b/i.test(itemUnit)) {
-            return val * 1000;
-        }
-        return val;
+        return parseFloat(literMatch[1]);
     }
 
-    // 5. Bare Number (e.g. typing "1" for "KC haldar 5 kg" multiplies to 5)
-    const num = parseFloat(str.replace(/[^0-9.]/g, ''));
-    if (isNaN(num)) return NaN;
+    // 6. Direct decimal entered (e.g. "1.25" or "0.5")
+    if (str.includes('.')) {
+        const decimalNum = parseFloat(str.replace(/[^0-9.]/g, ''));
+        return isNaN(decimalNum) ? NaN : Math.round(decimalNum * 1000) / 1000;
+    }
+
+    // 7. Whole Pack Number (e.g. typing "1" for "KC haldar 5 kg" multiplies to 5)
+    const rawNum = parseFloat(str.replace(/[^0-9.]/g, ''));
+    if (isNaN(rawNum)) return NaN;
 
     if (pack.hasPack && pack.packSize > 0) {
-        return Math.round(num * pack.packSize * 1000) / 1000;
+        return Math.round(rawNum * pack.packSize * 1000) / 1000;
     }
 
-    return num;
+    return rawNum;
+}
+
+// Formats stock cleanly into combined units (e.g. 5.25 -> "5 kg 250 g", 5 -> "5 kg", 0.5 -> "500 g")
+function formatStockDisplay(stock, itemName = "") {
+    const val = Number(stock) || 0;
+    const pack = getItemPackDetails(itemName);
+    const unit = (pack.unit || "").toLowerCase();
+    const isKg = /\b(kg|kgs|kilo|kilograms?)\b/i.test(unit) || /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
+    const isLiter = /\b(l|ltr|liter|liters|litre)\b/i.test(unit) || /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
+    const isGram = /\b(g|gm|gms|gram|grams)\b/i.test(unit) && !isKg;
+
+    if (isKg) {
+        const isNegative = val < 0;
+        const absVal = Math.abs(val);
+        let wholeKg = Math.floor(absVal);
+        let remGrams = Math.round((absVal - wholeKg) * 1000);
+        if (remGrams === 1000) {
+            wholeKg += 1;
+            remGrams = 0;
+        }
+
+        let formatted = "";
+        if (wholeKg > 0 && remGrams > 0) {
+            formatted = `${wholeKg} kg ${remGrams} g`;
+        } else if (wholeKg > 0 && remGrams === 0) {
+            formatted = `${wholeKg} kg`;
+        } else if (wholeKg === 0 && remGrams > 0) {
+            formatted = `${remGrams} g`;
+        } else {
+            formatted = `0 kg`;
+        }
+        return (isNegative ? "-" : "") + formatted;
+    }
+
+    if (isGram) {
+        if (val >= 1000) {
+            let wholeKg = Math.floor(val / 1000);
+            let remG = Math.round(val % 1000);
+            return remG > 0 ? `${wholeKg} kg ${remG} g` : `${wholeKg} kg`;
+        }
+        return `${val} g`;
+    }
+
+    if (isLiter) {
+        const isNegative = val < 0;
+        const absVal = Math.abs(val);
+        let wholeL = Math.floor(absVal);
+        let remMl = Math.round((absVal - wholeL) * 1000);
+        if (remMl === 1000) {
+            wholeL += 1;
+            remMl = 0;
+        }
+
+        let formatted = "";
+        if (wholeL > 0 && remMl > 0) {
+            formatted = `${wholeL} L ${remMl} ml`;
+        } else if (wholeL > 0 && remMl === 0) {
+            formatted = `${wholeL} L`;
+        } else if (wholeL === 0 && remMl > 0) {
+            formatted = `${remMl} ml`;
+        } else {
+            formatted = `0 L`;
+        }
+        return (isNegative ? "-" : "") + formatted;
+    }
+
+    if (pack.unit) {
+        return `${val} ${pack.unit}`;
+    }
+
+    return `${val}`;
 }
 
 async function seedIfEmpty() {
@@ -179,11 +257,11 @@ window.stockApp = function() {
     return {
         categories: [],[cite: 4]
         items: [],[cite: 4]
-        cateringEvents: [],  [cite: 4]
+        cateringEvents: [], [cite: 4]
         logs: [],[cite: 4]
         allRawLogs: [],[cite: 4]
         users: [],[cite: 4]
-        suppliers: [], [cite: 4]
+        suppliers: [],  [cite: 4]
         purchaseOrders: [], [cite: 4]
         
         ready: false,[cite: 4]
@@ -237,8 +315,11 @@ window.stockApp = function() {
         newUserError: '',[cite: 4]
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],[cite: 4]
 
+        formatStock(stock, itemName = "") {
+            return formatStockDisplay(stock, itemName);
+        },
+
         async init() {
-            // Safety timeout: prevents UI freezing if offline/slow
             setTimeout(() => {
                 if (this.authChecking) {
                     this.authChecking = false;
@@ -263,7 +344,7 @@ window.stockApp = function() {
             
             // Real-Time High-Pax Catering Event Listener
             let isInitialEventLoad = true;
-            onSnapshot(colRef('catering_events'), (snap) => {  [cite: 4]
+            onSnapshot(colRef('catering_events'), (snap) => { [cite: 4]
                 const events = snap.docs.map((d) => ({ id: d.id, ...d.data() })); [cite: 4]
                 if (!isInitialEventLoad) {
                     snap.docChanges().forEach((change) => {
@@ -349,15 +430,6 @@ window.stockApp = function() {
                 const extra = lowItems.length > 4 ? ` and ${lowItems.length - 4} more` : '';
                 sendBrowserNotification(`⚠️ ${triggerTitle}`, `${lowItems.length} items reached safety limit: ${itemSummary}${extra}`);
             }
-        },
-
-        formatStock(stock, itemName = "") {
-            const val = Number(stock) || 0;
-            const pack = getItemPackDetails(itemName);
-            if (pack.unit) {
-                return `${val} ${pack.unit}`;
-            }
-            return val;
         },
 
         restoreSession() {
@@ -611,7 +683,7 @@ window.stockApp = function() {
                 if (!targetItem) return alert("Item no longer exists.");[cite: 4]
                 let currentBal = Number(targetItem.stock || 0);[cite: 4]
                 let logQty = parseFloat(log.qty) || 0;
-                let corrected = log.type === 'INWARD' ? currentBal - logQty : currentBal + logQty;
+                let corrected = log.type === 'INWARD' ? currentBal - logQty : currentBal + logQty;[cite: 4]
                 corrected = Math.round(corrected * 1000) / 1000;
                 if (corrected < 0) return alert("Stock cannot drop below zero.");[cite: 4]
                 await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: corrected });[cite: 4]
@@ -622,11 +694,11 @@ window.stockApp = function() {
 
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) return alert('Select missing fields.');[cite: 4]
-            const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId));  [cite: 4]
+            const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); [cite: 4]
             if (!target) return alert('Selected item not found.');[cite: 4]
             
             const qty = parseQuantityInput(this.formInward.qty, target.name); 
-            if (isNaN(qty) || qty <= 0) return alert('Enter a valid quantity (e.g. 1.25kg, 1250g, 10).');
+            if (isNaN(qty) || qty <= 0) return alert('Enter a valid quantity (e.g. 1, 1.25kg, 1250g, 5kg 250g).');
             
             let vendor = this.formInward.supplierName.trim();[cite: 4]
             if (vendor === "_NEW_") {[cite: 4]
@@ -651,14 +723,14 @@ window.stockApp = function() {
                     qty, 
                     supplier_name: vendor, [cite: 4]
                     department: null, [cite: 4]
-                    created_at: entryTimestamp, [cite: 4]
+                    created_at: entryTimestamp,  [cite: 4]
                     created_by_name: this.currentUsername [cite: 4]
                 });
                 
                 this.lastLogId = docRef.id; [cite: 4]
                 this.lastLogType = 'INWARD';[cite: 4]
                 this.formInward = { itemId: '', qty: '', supplierName: '', customDate: '' };[cite: 4]
-                alert(`Inward recorded: +${qty} for "${target.name}".`);
+                alert(`Inward recorded: +${this.formatStock(qty, target.name)} for "${target.name}".`);
             } catch (error) { 
                 alert("Write error: " + error.message); [cite: 4]
             }
@@ -670,7 +742,7 @@ window.stockApp = function() {
             if (!target) return alert('Item not found.');[cite: 4]
             
             const qty = parseQuantityInput(this.formOutward.qty, target.name); 
-            if (isNaN(qty) || qty <= 0) return alert('Enter a valid quantity (e.g. 0.5kg, 500g, 5).');
+            if (isNaN(qty) || qty <= 0) return alert('Enter a valid quantity (e.g. 1, 0.5kg, 500g, 5).');
             if (Number(target.stock || 0) < qty) return alert(`Insufficient stock. Current balance is ${this.formatStock(target.stock, target.name)}.`);
 
             let entryTimestamp = new Date().toISOString();[cite: 4]
@@ -682,9 +754,9 @@ window.stockApp = function() {
                 const newStock = Math.round((Number(target.stock) - qty) * 1000) / 1000;
                 const docRef = await addDoc(colRef('logs'), { [cite: 4]
                     type: 'OUTWARD', [cite: 4]
-                    item_id: target.id,  [cite: 4]
+                    item_id: target.id,   [cite: 4]
                     qty, 
-                    department: this.formOutward.department, [cite: 4]
+                    department: this.formOutward.department,  [cite: 4]
                     created_at: entryTimestamp, [cite: 4]
                     created_by_name: this.currentUsername [cite: 4]
                 });
@@ -693,7 +765,7 @@ window.stockApp = function() {
                 this.lastLogId = docRef.id; [cite: 4]
                 this.lastLogType = 'OUTWARD';[cite: 4]
                 this.formOutward = { itemId: '', department: 'Indian', qty: '', customDate: '' };[cite: 4]
-                alert(`Outward deduction logged: -${qty} for "${target.name}".`);
+                alert(`Outward deduction logged: -${this.formatStock(qty, target.name)} for "${target.name}".`);
             } catch (error) { 
                 alert("Error: " + error.message); [cite: 4]
             }
@@ -711,7 +783,7 @@ window.stockApp = function() {
                 const targetItem = this.items.find(i => String(i.id) === String(logData.item_id));[cite: 4]
                 if (!targetItem) return;[cite: 4]
                 let logQty = parseFloat(logData.qty) || 0;
-                let balanceCorrection = logData.type === 'INWARD' ? Number(targetItem.stock || 0) - logQty : Number(targetItem.stock || 0) + logQty;
+                let balanceCorrection = logData.type === 'INWARD' ? Number(targetItem.stock || 0) - logQty : Number(targetItem.stock || 0) + logQty;[cite: 4]
                 balanceCorrection = Math.round(balanceCorrection * 1000) / 1000;
                 if (balanceCorrection < 0) return alert("Rollback denied.");[cite: 4]
                 await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: balanceCorrection });[cite: 4]
@@ -809,12 +881,12 @@ window.stockApp = function() {
                     const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};[cite: 4]
                     const qty = parseFloat(log.qty) || 0;
                     const price = parseFloat(linkedItem.mrp) || 0;[cite: 4]
-                    sheetMatrix.push([log.item_name || linkedItem.name, qty, `₹${price}`, `₹${qty * price}`]);[cite: 4]
+                    sheetMatrix.push([log.item_name || linkedItem.name, this.formatStock(qty, log.item_name || linkedItem.name), `₹${price}`, `₹${qty * price}`]);
                 });
                 const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);[cite: 4]
                 XLSX.utils.book_append_sheet(wb, ws, dateStr);[cite: 4]
             });
-            XLSX.writeFile(wb, `Inward_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+            XLSX.writeFile(wb, `Inward_Report_${new Date().toISOString().slice(0,10)}.xlsx`);[cite: 4]
         },
 
         downloadExcelReport() {
@@ -827,14 +899,14 @@ window.stockApp = function() {
                 targetDays.forEach(dateStr => {[cite: 4]
                     const inQty = this.allRawLogs.filter(l => l.created_at?.slice(0, 10) === dateStr && String(l.item_id) === String(item.id) && l.type === 'INWARD').reduce((s, l) => s + (parseFloat(l.qty) || 0), 0);
                     const outQty = this.allRawLogs.filter(l => l.created_at?.slice(0, 10) === dateStr && String(l.item_id) === String(item.id) && l.type === 'OUTWARD').reduce((s, l) => s + (parseFloat(l.qty) || 0), 0);
-                    row.push(`+${inQty} / -${outQty}`);
+                    row.push(`+${this.formatStock(inQty, item.name)} / -${this.formatStock(outQty, item.name)}`);
                 });
                 matrixData.push(row);[cite: 4]
             });
             const ws = XLSX.utils.aoa_to_sheet(matrixData);[cite: 4]
             const wb = XLSX.utils.book_new();[cite: 4]
             XLSX.utils.book_append_sheet(wb, ws, "30-Day Ledger");[cite: 4]
-            XLSX.writeFile(wb, `Stock_Report_${getLocalDateString(0)}.xlsx`);
+            XLSX.writeFile(wb, `Stock_Report_${getLocalDateString(0)}.xlsx`);[cite: 4]
         }
     };
 };
