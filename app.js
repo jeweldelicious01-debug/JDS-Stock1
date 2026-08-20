@@ -19,6 +19,7 @@ async function sha256(text) {
     return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Safe Service Worker Register
 let swRegistration = null;
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js').then((reg) => {
@@ -26,6 +27,7 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.loca
     }).catch((err) => console.warn('Service Worker registration skipped:', err));
 }
 
+// Resilient Notification Dispatcher (Never hangs)
 async function sendBrowserNotification(title, body) {
     if (typeof window === 'undefined' || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
@@ -42,161 +44,39 @@ async function sendBrowserNotification(title, body) {
             new Notification(title, { body: body, icon: "https://cdn-icons-png.flaticon.com/512/3081/3081840.png" });
         }
     } catch (err) {
-        console.warn("Notification dispatch error:", err);
+        console.warn("Notification trigger fallback:", err);
     }
 }
 
-function getItemPackDetails(itemName = "") {
-    if (!itemName) return { packSize: 1, unit: "", hasPack: false };
-    
-    const match = itemName.match(/(\d+(?:\.\d+)?)\s*(kg|kgs|kilo|kilograms?|gm|gms|g|grams?|l|ltr|liters?|litres?|ml|pkts?|packets?|pcs?|pieces?|box|boxes|tins?|bottles?|cans?)\b/i);
-    if (match) {
-        return {
-            packSize: parseFloat(match[1]),
-            unit: match[2],
-            hasPack: true
-        };
-    }
-
-    const unitOnlyMatch = itemName.match(/\b(kg|kgs|kilo|kilograms?|gm|gms|g|grams?|l|ltr|liters?|litres?|ml|pkts?|packets?|pcs?|pieces?|box|boxes|tins?|bottles?|cans?)\b/i);
-    if (unitOnlyMatch) {
-        return {
-            packSize: 1,
-            unit: unitOnlyMatch[1],
-            hasPack: false
-        };
-    }
-
-    return { packSize: 1, unit: "", hasPack: false };
-}
-
+// Quantity Parser: Handles numbers, grams (g/gm), kilograms (kg), and milliliters (ml)
 function parseQuantityInput(inputStr, itemName = "") {
-    if (typeof inputStr === 'number') inputStr = String(inputStr);
+    if (typeof inputStr === 'number') return inputStr;
     if (!inputStr || !String(inputStr).trim()) return NaN;
 
     const str = String(inputStr).trim().toLowerCase();
-    const pack = getItemPackDetails(itemName);
-    const itemUnit = (pack.unit || "").toLowerCase();
-    const isKgItem = /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemUnit) || /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
-    const isGramItem = /\b(g|gm|gms|gram|grams)\b/i.test(itemUnit) && !isKgItem;
-    const isLiterItem = /\b(l|ltr|liter|liters|litre)\b/i.test(itemUnit) || /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
-
-    const compoundKgG = str.match(/^([\d.]+)\s*(?:kg|kgs|kilo|kilograms?)\s*([\d.]+)\s*(?:g|gm|gms|gram|grams)$/);
-    if (compoundKgG) {
-        const k = parseFloat(compoundKgG[1]) || 0;
-        const g = parseFloat(compoundKgG[2]) || 0;
-        return Math.round((k + g / 1000) * 1000) / 1000;
-    }
-
+    
     const gramMatch = str.match(/^([\d.]+)\s*(g|gm|gms|gram|grams)$/);
     if (gramMatch) {
         const grams = parseFloat(gramMatch[1]);
-        if (isKgItem) return Math.round((grams / 1000) * 1000) / 1000;
+        if (/\b(kg|kilo|kilogram|kgs)\b/i.test(itemName)) return grams / 1000;
         return grams;
     }
 
     const kgMatch = str.match(/^([\d.]+)\s*(kg|kgs|kilo|kilograms)$/);
     if (kgMatch) {
         const kgs = parseFloat(kgMatch[1]);
-        if (isGramItem) return Math.round(kgs * 1000);
+        if (/\b(g|gm|gms|gram|grams)\b/i.test(itemName) && !/\b(kg|kgs)\b/i.test(itemName)) return kgs * 1000;
         return kgs;
     }
 
     const mlMatch = str.match(/^([\d.]+)\s*(ml|milliliters?)$/);
     if (mlMatch) {
         const ml = parseFloat(mlMatch[1]);
-        if (isLiterItem) return Math.round((ml / 1000) * 1000) / 1000;
+        if (/\b(l|ltr|liter|liters|litre)\b/i.test(itemName)) return ml / 1000;
         return ml;
     }
 
-    const literMatch = str.match(/^([\d.]+)\s*(l|ltr|liter|liters|litre)$/);
-    if (literMatch) {
-        return parseFloat(literMatch[1]);
-    }
-
-    if (str.includes('.')) {
-        const decimalNum = parseFloat(str.replace(/[^0-9.]/g, ''));
-        return isNaN(decimalNum) ? NaN : Math.round(decimalNum * 1000) / 1000;
-    }
-
-    const rawNum = parseFloat(str.replace(/[^0-9.]/g, ''));
-    if (isNaN(rawNum)) return NaN;
-
-    if (pack.hasPack && pack.packSize > 0) {
-        return Math.round(rawNum * pack.packSize * 1000) / 1000;
-    }
-
-    return rawNum;
-}
-
-function formatStockDisplay(stock, itemName = "") {
-    const val = Number(stock) || 0;
-    const pack = getItemPackDetails(itemName);
-    const unit = (pack.unit || "").toLowerCase();
-    const isKg = /\b(kg|kgs|kilo|kilograms?)\b/i.test(unit) || /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
-    const isLiter = /\b(l|ltr|liter|liters|litre)\b/i.test(unit) || /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
-    const isGram = /\b(g|gm|gms|gram|grams)\b/i.test(unit) && !isKg;
-
-    if (isKg) {
-        const isNegative = val < 0;
-        const absVal = Math.abs(val);
-        let wholeKg = Math.floor(absVal);
-        let remGrams = Math.round((absVal - wholeKg) * 1000);
-        if (remGrams === 1000) {
-            wholeKg += 1;
-            remGrams = 0;
-        }
-
-        let formatted = "";
-        if (wholeKg > 0 && remGrams > 0) {
-            formatted = `${wholeKg} kg ${remGrams} g`;
-        } else if (wholeKg > 0 && remGrams === 0) {
-            formatted = `${wholeKg} kg`;
-        } else if (wholeKg === 0 && remGrams > 0) {
-            formatted = `${remGrams} g`;
-        } else {
-            formatted = `0 kg`;
-        }
-        return (isNegative ? "-" : "") + formatted;
-    }
-
-    if (isGram) {
-        if (val >= 1000) {
-            let wholeKg = Math.floor(val / 1000);
-            let remG = Math.round(val % 1000);
-            return remG > 0 ? `${wholeKg} kg ${remG} g` : `${wholeKg} kg`;
-        }
-        return `${val} g`;
-    }
-
-    if (isLiter) {
-        const isNegative = val < 0;
-        const absVal = Math.abs(val);
-        let wholeL = Math.floor(absVal);
-        let remMl = Math.round((absVal - wholeL) * 1000);
-        if (remMl === 1000) {
-            wholeL += 1;
-            remMl = 0;
-        }
-
-        let formatted = "";
-        if (wholeL > 0 && remMl > 0) {
-            formatted = `${wholeL} L ${remMl} ml`;
-        } else if (wholeL > 0 && remMl === 0) {
-            formatted = `${wholeL} L`;
-        } else if (wholeL === 0 && remMl > 0) {
-            formatted = `${remMl} ml`;
-        } else {
-            formatted = `0 L`;
-        }
-        return (isNegative ? "-" : "") + formatted;
-    }
-
-    if (pack.unit) {
-        return `${val} ${pack.unit}`;
-    }
-
-    return `${val}`;
+    return parseFloat(str.replace(/[^0-9.]/g, ''));
 }
 
 async function seedIfEmpty() {
@@ -241,7 +121,7 @@ async function seedIfEmpty() {
     }
 }
 
-export function stockApp() {
+window.stockApp = function() {
     return {
         categories: [],
         items: [],
@@ -252,9 +132,9 @@ export function stockApp() {
         suppliers: [], 
         purchaseOrders: [], 
         
-        ready: true,
+        ready: false,
         isAuthenticated: false,
-        authChecking: false,
+        authChecking: true,
         currentRole: 'readonly',
         currentUsername: '',
         currentUserId: null,
@@ -303,12 +183,14 @@ export function stockApp() {
         newUserError: '',
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
-        formatStock(stock, itemName = "") {
-            return formatStockDisplay(stock, itemName);
-        },
-
         async init() {
-            this.restoreSession();
+            // Safety timeout: unlock authentication UI if network takes longer than 2.5s
+            setTimeout(() => {
+                if (this.authChecking) {
+                    this.authChecking = false;
+                    this.ready = true;
+                }
+            }, 2500);
 
             try {
                 await seedIfEmpty();
@@ -325,6 +207,7 @@ export function stockApp() {
                     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             });
             
+            // Real-time Event Listener for High-Pax Allocation
             let isInitialEventLoad = true;
             onSnapshot(colRef('catering_events'), (snap) => { 
                 const events = snap.docs.map((d) => ({ id: d.id, ...d.data() })); 
@@ -364,6 +247,7 @@ export function stockApp() {
                     if (!me) this.logout();
                     else { this.currentRole = me.role; this.currentUsername = me.username; }
                 }
+                this.ready = true;
                 this.restoreSession();
             });
 
@@ -399,14 +283,14 @@ export function stockApp() {
             if (permission === "granted") {
                 await sendBrowserNotification("Notifications Activated! 🔔", "You will receive real-time catering allocations and low stock alerts.");
             } else {
-                alert("Permission was denied. Please allow notifications in site settings.");
+                alert("Permission was denied. Please allow notifications in your site settings.");
             }
         },
 
         notifyLowStockItems(triggerTitle = "Low Stock Alert") {
             const lowItems = this.items.filter(i => (Number(i.stock) || 0) <= (Number(i.threshold) || 0));
             if (lowItems.length > 0) {
-                const itemSummary = lowItems.slice(0, 4).map(i => `${i.name}: ${this.formatStock(i.stock, i.name)}`).join(', ');
+                const itemSummary = lowItems.slice(0, 4).map(i => `${i.name}: ${i.stock}`).join(', ');
                 const extra = lowItems.length > 4 ? ` and ${lowItems.length - 4} more` : '';
                 sendBrowserNotification(`⚠️ ${triggerTitle}`, `${lowItems.length} items reached safety limit: ${itemSummary}${extra}`);
             }
@@ -415,20 +299,19 @@ export function stockApp() {
         restoreSession() {
             try {
                 const session = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
-                if (session && session.userId) {
-                    this.currentUserId = session.userId;
-                    this.isAuthenticated = true;
-                    if (this.users && this.users.length) {
-                        const user = this.users.find((u) => u.id === session.userId);
-                        if (user) {
-                            this.currentUsername = user.username;
-                            this.currentRole = user.role;
-                        }
+                if (session) {
+                    const user = this.users.find((u) => u.id === session.userId);
+                    if (user) {
+                        this.currentUserId = user.id;
+                        this.currentUsername = user.username;
+                        this.currentRole = user.role;
+                        this.isAuthenticated = true;
                     }
                 }
             } catch (e) {
                 console.warn(e);
             }
+            this.authChecking = false;
         },
 
         async verifyLogin() {
@@ -653,7 +536,7 @@ export function stockApp() {
 
         isWithin30Minutes(createdAt) {
             if (!createdAt) return false;
-            return (new Date() - new Date(createdAt)) < 1800000;
+            return (new Date() - new Date(createdAt)) < 1800000; 
         },
 
         async triggerUndo(log) {
@@ -675,15 +558,15 @@ export function stockApp() {
 
         async addInward() {
             if (!this.formInward.itemId || !this.formInward.qty || !this.formInward.supplierName) return alert('Select missing fields.');
-            const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId));
+            const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId)); 
             if (!target) return alert('Selected item not found.');
             
             const qty = parseQuantityInput(this.formInward.qty, target.name); 
-            if (isNaN(qty) || qty <= 0) return alert('Enter a valid quantity (e.g. 1, 1.25kg, 1250g, 5kg 250g).');
+            if (isNaN(qty) || qty <= 0) return alert('Enter a valid quantity (e.g. 1.25kg, 1250g, 10).');
             
             let vendor = this.formInward.supplierName.trim();
             if (vendor === "_NEW_") {
-                let newVendorName = prompt("Enter new Supplier Name:");
+                let newVendorName = prompt("Enter new Supplier Name:"); 
                 if (!newVendorName || !newVendorName.trim()) return alert("Supplier name required.");
                 vendor = newVendorName.trim();
                 const matchEx = this.suppliers.find(s => s.name.toLowerCase() === vendor.toLowerCase());
@@ -698,33 +581,33 @@ export function stockApp() {
             try {
                 const newStock = Math.round((Number(target.stock || 0) + qty) * 1000) / 1000;
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: newStock });
-                const docRef = await addDoc(colRef('logs'), {
-                    type: 'INWARD',
-                    item_id: target.id,
+                const docRef = await addDoc(colRef('logs'), { 
+                    type: 'INWARD', 
+                    item_id: target.id, 
                     qty, 
-                    supplier_name: vendor,
-                    department: null,
-                    created_at: entryTimestamp,
-                    created_by_name: this.currentUsername
+                    supplier_name: vendor, 
+                    department: null, 
+                    created_at: entryTimestamp, 
+                    created_by_name: this.currentUsername 
                 });
                 
-                this.lastLogId = docRef.id;
+                this.lastLogId = docRef.id; 
                 this.lastLogType = 'INWARD';
                 this.formInward = { itemId: '', qty: '', supplierName: '', customDate: '' };
-                alert(`Inward recorded: +${this.formatStock(qty, target.name)} for "${target.name}".`);
+                alert(`Inward recorded: +${qty} for "${target.name}".`);
             } catch (error) { 
-                alert("Write error: " + error.message);
+                alert("Write error: " + error.message); 
             }
         },
 
         async deductOutward() {
             if (!this.formOutward.itemId || !this.formOutward.qty) return alert('Select missing fields.');
-            const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId));
+            const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId)); 
             if (!target) return alert('Item not found.');
             
             const qty = parseQuantityInput(this.formOutward.qty, target.name); 
-            if (isNaN(qty) || qty <= 0) return alert('Enter a valid quantity (e.g. 1, 0.5kg, 500g, 5).');
-            if (Number(target.stock || 0) < qty) return alert(`Insufficient stock. Current balance is ${this.formatStock(target.stock, target.name)}.`);
+            if (isNaN(qty) || qty <= 0) return alert('Enter a valid quantity (e.g. 0.5kg, 500g, 5).');
+            if (Number(target.stock || 0) < qty) return alert(`Insufficient stock. Current balance is ${target.stock}.`);
 
             let entryTimestamp = new Date().toISOString();
             if (this.currentRole === 'admin' && this.formOutward.customDate) {
@@ -733,22 +616,22 @@ export function stockApp() {
 
             try {
                 const newStock = Math.round((Number(target.stock) - qty) * 1000) / 1000;
-                const docRef = await addDoc(colRef('logs'), {
-                    type: 'OUTWARD',
-                    item_id: target.id,
+                const docRef = await addDoc(colRef('logs'), { 
+                    type: 'OUTWARD', 
+                    item_id: target.id, 
                     qty, 
-                    department: this.formOutward.department,
-                    created_at: entryTimestamp,
-                    created_by_name: this.currentUsername
+                    department: this.formOutward.department, 
+                    created_at: entryTimestamp, 
+                    created_by_name: this.currentUsername 
                 });
                 
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: newStock });
-                this.lastLogId = docRef.id;
+                this.lastLogId = docRef.id; 
                 this.lastLogType = 'OUTWARD';
                 this.formOutward = { itemId: '', department: 'Indian', qty: '', customDate: '' };
-                alert(`Outward deduction logged: -${this.formatStock(qty, target.name)} for "${target.name}".`);
+                alert(`Outward deduction logged: -${qty} for "${target.name}".`);
             } catch (error) { 
-                alert("Error: " + error.message);
+                alert("Error: " + error.message); 
             }
         },
 
@@ -852,7 +735,7 @@ export function stockApp() {
             const wb = XLSX.utils.book_new();
             const dateGroups = {};
             inwards.forEach(log => {
-                const dateKey = log.created_at.slice(0, 10);
+                const dateKey = log.created_at.slice(0, 10); 
                 if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
                 dateGroups[dateKey].push(log);
             });
@@ -862,7 +745,7 @@ export function stockApp() {
                     const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
                     const qty = parseFloat(log.qty) || 0;
                     const price = parseFloat(linkedItem.mrp) || 0;
-                    sheetMatrix.push([log.item_name || linkedItem.name, this.formatStock(qty, log.item_name || linkedItem.name), `₹${price}`, `₹${qty * price}`]);
+                    sheetMatrix.push([log.item_name || linkedItem.name, qty, `₹${price}`, `₹${qty * price}`]);
                 });
                 const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
                 XLSX.utils.book_append_sheet(wb, ws, dateStr);
@@ -876,11 +759,11 @@ export function stockApp() {
             const headerRow = ["ITEM NAME", "CURRENT STOCK", ...targetDays];
             const matrixData = [headerRow];
             this.processedItems.forEach(item => {
-                const row = [item.name, this.formatStock(item.stock, item.name)];
+                const row = [item.name, item.stock];
                 targetDays.forEach(dateStr => {
                     const inQty = this.allRawLogs.filter(l => l.created_at?.slice(0, 10) === dateStr && String(l.item_id) === String(item.id) && l.type === 'INWARD').reduce((s, l) => s + (parseFloat(l.qty) || 0), 0);
                     const outQty = this.allRawLogs.filter(l => l.created_at?.slice(0, 10) === dateStr && String(l.item_id) === String(item.id) && l.type === 'OUTWARD').reduce((s, l) => s + (parseFloat(l.qty) || 0), 0);
-                    row.push(`+${this.formatStock(inQty, item.name)} / -${this.formatStock(outQty, item.name)}`);
+                    row.push(`+${inQty} / -${outQty}`);
                 });
                 matrixData.push(row);
             });
@@ -890,14 +773,10 @@ export function stockApp() {
             XLSX.writeFile(wb, `Stock_Report_${getLocalDateString(0)}.xlsx`);
         }
     };
-}
+};
 
-// Global Alpine Registration
-window.stockApp = stockApp;
-if (window.Alpine) {
-    window.Alpine.data('stockApp', stockApp);
-} else {
+if (typeof window !== 'undefined') {
     document.addEventListener('alpine:init', () => {
-        window.Alpine.data('stockApp', stockApp);
+        window.Alpine.data('stockApp', window.stockApp);
     });
 }
