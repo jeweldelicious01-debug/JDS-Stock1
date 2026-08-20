@@ -981,7 +981,7 @@ downloadCurrentStockReport() {
             const wb = XLSX.utils.book_new(); //[cite: 8]
             XLSX.utils.book_append_sheet(wb, ws, "30-Day Ledger"); //[cite: 8]
             XLSX.writeFile(wb, `Stock_Report_${getLocalDateString(0)}.xlsx`); //[cite: 8]
-        }
+        },
     };
 }
 
