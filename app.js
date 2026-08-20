@@ -46,6 +46,19 @@ async function sendBrowserNotification(title, body) {
     }
 }
 
+// Tokenized Multi-Keyword Search (Matches "powder", "haldi", "powder haldi", etc.)
+function isFuzzyMatch(itemName = "", searchQuery = "") {
+    if (!searchQuery || !searchQuery.trim()) return true;
+    const tokens = searchQuery
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(t => t.length > 0 && !["of", "and", "the", "in", "with", "a", "an", "for"].includes(t));
+    if (tokens.length === 0) return true;
+    const target = itemName.toLowerCase();
+    // Matches if ANY or ALL search tokens are found inside the item name
+    return tokens.some(token => target.includes(token));
+}
+
 function getItemPackDetails(itemName = "") {
     if (!itemName) return { packSize: 1, unit: "", hasPack: false };
     
@@ -264,19 +277,25 @@ export function stockApp() {
         
         loginForm: { username: '', password: '' },
         loginError: '',
+        
+        // Form states with dedicated item search filters
+        inwardSearchQuery: '',
         formInward: { itemId: '', qty: '', supplierName: '', customDate: '' },
+        
+        outwardSearchQuery: '',
         formOutward: { itemId: '', department: 'Indian', qty: '', customDate: '' },
 
-        cateringForm: { partyName: '', paxCount: '', rawTextMenu: '' },
-        cateringModal: { show: false, label: '', text: '' },
-        editingEventId: null,
-        
+        orderDeskSearchQuery: '',
         orderDesk: {
             supplierId: '',
             selectedItemId: '',
             selectedQty: '',
             basket: []
         },
+
+        cateringForm: { partyName: '', paxCount: '', rawTextMenu: '' },
+        cateringModal: { show: false, label: '', text: '' },
+        editingEventId: null,
         
         lastLogId: null,
         lastLogType: '',
@@ -305,6 +324,35 @@ export function stockApp() {
 
         formatStock(stock, itemName = "") {
             return formatStockDisplay(stock, itemName);
+        },
+
+        // Dynamically filtered items based on fuzzy search queries
+        get filteredInwardItems() {
+            if (!this.formInward.supplierName) return [];
+            const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
+            return this.items.filter(i => {
+                const itemSupplier = i.supplier_name || defaultSupplier;
+                const matchesSupplier = itemSupplier === this.formInward.supplierName;
+                const matchesQuery = isFuzzyMatch(i.name, this.inwardSearchQuery);
+                return matchesSupplier && matchesQuery;
+            });
+        },
+
+        get filteredOutwardItems() {
+            return this.items.filter(i => isFuzzyMatch(i.name, this.outwardSearchQuery));
+        },
+
+        get filteredOrderDeskItems() {
+            if (!this.orderDesk.supplierId) return [];
+            const vendor = this.suppliers.find(s => String(s.id) === String(this.orderDesk.supplierId));
+            if (!vendor) return [];
+            const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
+            return this.items.filter(i => {
+                const itemSupplier = i.supplier_name || defaultSupplier;
+                const matchesSupplier = itemSupplier === vendor.name;
+                const matchesQuery = isFuzzyMatch(i.name, this.orderDeskSearchQuery);
+                return matchesSupplier && matchesQuery;
+            });
         },
 
         downloadCurrentStockReport() {
@@ -534,26 +582,6 @@ export function stockApp() {
             });
         },
 
-        get filteredInwardItems() {
-            if (!this.formInward.supplierName) return [];
-            const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
-            return this.items.filter(i => {
-                const itemSupplier = i.supplier_name || defaultSupplier;
-                return itemSupplier === this.formInward.supplierName;
-            });
-        },
-
-        get filteredOrderDeskItems() {
-            if (!this.orderDesk.supplierId) return [];
-            const vendor = this.suppliers.find(s => String(s.id) === String(this.orderDesk.supplierId));
-            if (!vendor) return [];
-            const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
-            return this.items.filter(i => {
-                const itemSupplier = i.supplier_name || defaultSupplier;
-                return itemSupplier === vendor.name;
-            });
-        },
-
         get processedPurchaseOrders() {
             const currentStatusTab = String(this.orderViewTab).toLowerCase();
             return this.purchaseOrders.filter(o => {
@@ -655,6 +683,7 @@ export function stockApp() {
             });
             this.orderDesk.selectedItemId = '';
             this.orderDesk.selectedQty = '';
+            this.orderDeskSearchQuery = '';
         },
 
         removeOrderBasketItem(index) {
@@ -772,6 +801,7 @@ export function stockApp() {
                 this.lastLogId = docRef.id;
                 this.lastLogType = 'INWARD';
                 this.formInward = { itemId: '', qty: '', supplierName: '', customDate: '' };
+                this.inwardSearchQuery = '';
                 alert(`Inward recorded: +${this.formatStock(qty, target.name)} for "${target.name}".`);
             } catch (error) { 
                 alert("Write error: " + error.message);
@@ -807,6 +837,7 @@ export function stockApp() {
                 this.lastLogId = docRef.id;
                 this.lastLogType = 'OUTWARD';
                 this.formOutward = { itemId: '', department: 'Indian', qty: '', customDate: '' };
+                this.outwardSearchQuery = '';
                 alert(`Outward deduction logged: -${this.formatStock(qty, target.name)} for "${target.name}".`);
             } catch (error) { 
                 alert("Error: " + error.message);
