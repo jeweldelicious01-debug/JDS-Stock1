@@ -1,4 +1,4 @@
-import { dbFs } from './firebase-config.js';[cite: 4]
+import { dbFs } from './firebase-config.js';[cite: 1, 4]
 import {
     collection,
     doc,
@@ -19,7 +19,7 @@ async function sha256(text) {
     return Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, '0')).join('');[cite: 4]
 }
 
-// Service Worker Registration for Mobile Push
+// Service Worker for Mobile Notifications
 let swRegistration = null;
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js').then((reg) => {
@@ -27,7 +27,7 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator && window.loca
     }).catch((err) => console.warn('Service Worker registration skipped:', err));
 }
 
-// Push & System Notification Dispatcher
+// Notification Helper
 async function sendBrowserNotification(title, body) {
     if (typeof window === 'undefined' || !("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
@@ -48,7 +48,7 @@ async function sendBrowserNotification(title, body) {
     }
 }
 
-// Extract pack size and unit details from item name (e.g. "KC haldar 5 kg" -> packSize: 5, unit: "kg")
+// Extract pack size and unit from item name
 function getItemPackDetails(itemName = "") {
     if (!itemName) return { packSize: 1, unit: "", hasPack: false };
     
@@ -73,7 +73,7 @@ function getItemPackDetails(itemName = "") {
     return { packSize: 1, unit: "", hasPack: false };
 }
 
-// Full-featured parser: handles pack multipliers (1 packet = 5kg), typed units (1.25kg, 1250g, 5kg 250g)
+// Parse inputs: 1 packet (multiplied), 1250g, 1.25kg, 5kg 250g
 function parseQuantityInput(inputStr, itemName = "") {
     if (typeof inputStr === 'number') inputStr = String(inputStr);
     if (!inputStr || !String(inputStr).trim()) return NaN;
@@ -85,7 +85,7 @@ function parseQuantityInput(inputStr, itemName = "") {
     const isGramItem = /\b(g|gm|gms|gram|grams)\b/i.test(itemUnit) && !isKgItem;
     const isLiterItem = /\b(l|ltr|liter|liters|litre)\b/i.test(itemUnit) || /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
 
-    // 1. Compound input: "5kg 250g" or "2kg 500gm"
+    // Compound input: "5kg 250g"
     const compoundKgG = str.match(/^([\d.]+)\s*(?:kg|kgs|kilo|kilograms?)\s*([\d.]+)\s*(?:g|gm|gms|gram|grams)$/);
     if (compoundKgG) {
         const k = parseFloat(compoundKgG[1]) || 0;
@@ -93,7 +93,7 @@ function parseQuantityInput(inputStr, itemName = "") {
         return Math.round((k + g / 1000) * 1000) / 1000;
     }
 
-    // 2. Explicit Grams: "1250g", "500gm", "250 gram"
+    // Grams input
     const gramMatch = str.match(/^([\d.]+)\s*(g|gm|gms|gram|grams)$/);
     if (gramMatch) {
         const grams = parseFloat(gramMatch[1]);
@@ -101,7 +101,7 @@ function parseQuantityInput(inputStr, itemName = "") {
         return grams;
     }
 
-    // 3. Explicit Kilograms: "1.25kg", "5kg"
+    // Kilograms input
     const kgMatch = str.match(/^([\d.]+)\s*(kg|kgs|kilo|kilograms)$/);
     if (kgMatch) {
         const kgs = parseFloat(kgMatch[1]);
@@ -109,7 +109,7 @@ function parseQuantityInput(inputStr, itemName = "") {
         return kgs;
     }
 
-    // 4. Explicit Milliliters: "500ml"
+    // Milliliters input
     const mlMatch = str.match(/^([\d.]+)\s*(ml|milliliters?)$/);
     if (mlMatch) {
         const ml = parseFloat(mlMatch[1]);
@@ -117,19 +117,19 @@ function parseQuantityInput(inputStr, itemName = "") {
         return ml;
     }
 
-    // 5. Explicit Liters: "1.5L"
+    // Liters input
     const literMatch = str.match(/^([\d.]+)\s*(l|ltr|liter|liters|litre)$/);
     if (literMatch) {
         return parseFloat(literMatch[1]);
     }
 
-    // 6. Direct decimal entered (e.g. "1.25" or "0.5")
+    // Decimal Number
     if (str.includes('.')) {
         const decimalNum = parseFloat(str.replace(/[^0-9.]/g, ''));
         return isNaN(decimalNum) ? NaN : Math.round(decimalNum * 1000) / 1000;
     }
 
-    // 7. Whole Pack Number (e.g. typing "1" for "KC haldar 5 kg" multiplies to 5)
+    // Bare Number (Multiplies by pack size)
     const rawNum = parseFloat(str.replace(/[^0-9.]/g, ''));
     if (isNaN(rawNum)) return NaN;
 
@@ -140,7 +140,7 @@ function parseQuantityInput(inputStr, itemName = "") {
     return rawNum;
 }
 
-// Formats stock cleanly into combined units (e.g. 5.25 -> "5 kg 250 g", 5 -> "5 kg", 0.5 -> "500 g")
+// Format stock into kg/g or L/ml
 function formatStockDisplay(stock, itemName = "") {
     const val = Number(stock) || 0;
     const pack = getItemPackDetails(itemName);
@@ -253,7 +253,7 @@ async function seedIfEmpty() {
     }
 }
 
-window.stockApp = function() {
+export function stockAppDefinition() {
     return {
         categories: [],[cite: 4]
         items: [],[cite: 4]
@@ -261,12 +261,12 @@ window.stockApp = function() {
         logs: [],[cite: 4]
         allRawLogs: [],[cite: 4]
         users: [],[cite: 4]
-        suppliers: [],  [cite: 4]
-        purchaseOrders: [], [cite: 4]
+        suppliers: [], [cite: 4]
+        purchaseOrders: [],  [cite: 4]
         
-        ready: false,[cite: 4]
+        ready: true,
         isAuthenticated: false,[cite: 4]
-        authChecking: true,[cite: 4]
+        authChecking: false,
         currentRole: 'readonly',[cite: 4]
         currentUsername: '',[cite: 4]
         currentUserId: null,[cite: 4]
@@ -320,12 +320,7 @@ window.stockApp = function() {
         },
 
         async init() {
-            setTimeout(() => {
-                if (this.authChecking) {
-                    this.authChecking = false;
-                    this.ready = true;
-                }
-            }, 2500);
+            this.restoreSession();[cite: 4]
 
             try {
                 await seedIfEmpty();[cite: 4]
@@ -342,9 +337,8 @@ window.stockApp = function() {
                     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));[cite: 4]
             });
             
-            // Real-Time High-Pax Catering Event Listener
             let isInitialEventLoad = true;
-            onSnapshot(colRef('catering_events'), (snap) => { [cite: 4]
+            onSnapshot(colRef('catering_events'), (snap) => {  [cite: 4]
                 const events = snap.docs.map((d) => ({ id: d.id, ...d.data() })); [cite: 4]
                 if (!isInitialEventLoad) {
                     snap.docChanges().forEach((change) => {
@@ -382,11 +376,9 @@ window.stockApp = function() {
                     if (!me) this.logout();[cite: 4]
                     else { this.currentRole = me.role; this.currentUsername = me.username; }[cite: 4]
                 }
-                this.ready = true;[cite: 4]
                 this.restoreSession();[cite: 4]
             });
 
-            // Start daily 11:00 AM and 10:30 PM stock alert monitor
             this.initDailyStockCheckSchedule();
         },
 
@@ -435,19 +427,20 @@ window.stockApp = function() {
         restoreSession() {
             try {
                 const session = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');[cite: 4]
-                if (session) {[cite: 4]
-                    const user = this.users.find((u) => u.id === session.userId);[cite: 4]
-                    if (user) {[cite: 4]
-                        this.currentUserId = user.id;[cite: 4]
-                        this.currentUsername = user.username;[cite: 4]
-                        this.currentRole = user.role;[cite: 4]
-                        this.isAuthenticated = true;[cite: 4]
+                if (session && session.userId) {[cite: 4]
+                    this.currentUserId = session.userId;
+                    this.isAuthenticated = true;[cite: 4]
+                    if (this.users && this.users.length) {
+                        const user = this.users.find((u) => u.id === session.userId);[cite: 4]
+                        if (user) {[cite: 4]
+                            this.currentUsername = user.username;[cite: 4]
+                            this.currentRole = user.role;[cite: 4]
+                        }
                     }
                 }
             } catch (e) {
                 console.warn(e);
             }
-            this.authChecking = false;[cite: 4]
         },
 
         async verifyLogin() {
@@ -464,7 +457,7 @@ window.stockApp = function() {
         logout() { 
             sessionStorage.removeItem(SESSION_KEY); [cite: 4]
             this.isAuthenticated = false; [cite: 4]
-            this.currentRole = 'readonly'; [cite: 4]
+            this.currentRole = 'readonly';  [cite: 4]
             this.currentUsername = ''; [cite: 4]
             this.currentUserId = null; [cite: 4]
             window.location.reload();[cite: 4]
@@ -650,7 +643,7 @@ window.stockApp = function() {
                 for (let record of order.items) {[cite: 4]
                     const arrivedQty = parseFloat(record.qty) || 0;
                     const targetItem = this.items.find(i => String(i.id) === String(record.id));[cite: 4]
-                    if (targetItem && arrivedQty > 0) {[cite: 4]
+                    if (targetItem && arrivedQty > 0) {
                         const newStock = Math.round((Number(targetItem.stock || 0) + arrivedQty) * 1000) / 1000;
                         await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: newStock });[cite: 4]
                         await addDoc(colRef('logs'), { type: 'INWARD', item_id: targetItem.id, qty: arrivedQty, supplier_name: order.supplier_name, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });[cite: 4]
@@ -702,7 +695,7 @@ window.stockApp = function() {
             
             let vendor = this.formInward.supplierName.trim();[cite: 4]
             if (vendor === "_NEW_") {[cite: 4]
-                let newVendorName = prompt("Enter new Supplier Name:"); [cite: 4]
+                let newVendorName = prompt("Enter new Supplier Name:");  [cite: 4]
                 if (!newVendorName || !newVendorName.trim()) return alert("Supplier name required.");[cite: 4]
                 vendor = newVendorName.trim();[cite: 4]
                 const matchEx = this.suppliers.find(s => s.name.toLowerCase() === vendor.toLowerCase());[cite: 4]
@@ -732,7 +725,7 @@ window.stockApp = function() {
                 this.formInward = { itemId: '', qty: '', supplierName: '', customDate: '' };[cite: 4]
                 alert(`Inward recorded: +${this.formatStock(qty, target.name)} for "${target.name}".`);
             } catch (error) { 
-                alert("Write error: " + error.message); [cite: 4]
+                alert("Write error: " + error.message);  [cite: 4]
             }
         },
 
@@ -754,7 +747,7 @@ window.stockApp = function() {
                 const newStock = Math.round((Number(target.stock) - qty) * 1000) / 1000;
                 const docRef = await addDoc(colRef('logs'), { [cite: 4]
                     type: 'OUTWARD', [cite: 4]
-                    item_id: target.id,   [cite: 4]
+                    item_id: target.id,    [cite: 4]
                     qty, 
                     department: this.formOutward.department,  [cite: 4]
                     created_at: entryTimestamp, [cite: 4]
@@ -909,10 +902,14 @@ window.stockApp = function() {
             XLSX.writeFile(wb, `Stock_Report_${getLocalDateString(0)}.xlsx`);[cite: 4]
         }
     };
-};
+}
 
-if (typeof window !== 'undefined') {
+// Direct & Robust Alpine Global Registration
+window.stockApp = stockAppDefinition;
+if (window.Alpine) {
+    window.Alpine.data('stockApp', stockAppDefinition);
+} else {
     document.addEventListener('alpine:init', () => {[cite: 4]
-        window.Alpine.data('stockApp', window.stockApp);[cite: 4]
+        window.Alpine.data('stockApp', stockAppDefinition);
     });
 }
