@@ -55,7 +55,6 @@ function isFuzzyMatch(itemName = "", searchQuery = "") {
         .filter(t => t.length > 0 && !["of", "and", "the", "in", "with", "a", "an", "for"].includes(t));
     if (tokens.length === 0) return true;
     const target = itemName.toLowerCase();
-    // Matches if ANY or ALL search tokens are found inside the item name
     return tokens.some(token => target.includes(token));
 }
 
@@ -212,6 +211,79 @@ function formatStockDisplay(stock, itemName = "") {
     return `${val}`;
 }
 
+function formatShortQty(val, itemName = "") {
+    const num = Number(val) || 0;
+    const pack = getItemPackDetails(itemName);
+    const unit = (pack.unit || "").toLowerCase();
+    const isKg = /\b(kg|kgs|kilo|kilograms?)\b/i.test(unit) || /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
+    const isLiter = /\b(l|ltr|liter|liters|litre)\b/i.test(unit) || /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
+    const isGram = /\b(g|gm|gms|gram|grams)\b/i.test(unit) && !isKg;
+
+    if (isKg) {
+        const isNegative = num < 0;
+        const absVal = Math.abs(num);
+        let wholeKg = Math.floor(absVal);
+        let remGrams = Math.round((absVal - wholeKg) * 1000);
+        if (remGrams === 1000) {
+            wholeKg += 1;
+            remGrams = 0;
+        }
+        let formatted = "";
+        if (wholeKg > 0 && remGrams > 0) {
+            formatted = `${wholeKg}kg ${remGrams}g`;
+        } else if (wholeKg > 0 && remGrams === 0) {
+            formatted = `${wholeKg}kg`;
+        } else if (wholeKg === 0 && remGrams > 0) {
+            formatted = `${remGrams}g`;
+        } else {
+            formatted = `0kg`;
+        }
+        return (isNegative ? "-" : "") + formatted;
+    }
+
+    if (isGram) {
+        if (num >= 1000) {
+            let wholeKg = Math.floor(num / 1000);
+            let remG = Math.round(num % 1000);
+            return remG > 0 ? `${wholeKg}kg ${remG}g` : `${wholeKg}kg`;
+        }
+        return `${num}g`;
+    }
+
+    if (isLiter) {
+        const isNegative = num < 0;
+        const absVal = Math.abs(num);
+        let wholeL = Math.floor(absVal);
+        let remMl = Math.round((absVal - wholeL) * 1000);
+        if (remMl === 1000) {
+            wholeL += 1;
+            remMl = 0;
+        }
+        let formatted = "";
+        if (wholeL > 0 && remMl > 0) {
+            formatted = `${wholeL}L ${remMl}ml`;
+        } else if (wholeL > 0 && remMl === 0) {
+            formatted = `${wholeL}L`;
+        } else if (wholeL === 0 && remMl > 0) {
+            formatted = `${remMl}ml`;
+        } else {
+            formatted = `0L`;
+        }
+        return (isNegative ? "-" : "") + formatted;
+    }
+
+    if (pack.unit) {
+        const cleanUnit = pack.unit
+            .replace(/^(kilograms?|kilo|kgs?)$/i, 'kg')
+            .replace(/^(grams?|gms?)$/i, 'g')
+            .replace(/^(liters?|litres?|ltrs?)$/i, 'L')
+            .replace(/^(milliliters?|millilitres?)$/i, 'ml');
+        return `${num}${cleanUnit}`;
+    }
+
+    return `${num}`;
+}
+
 async function seedIfEmpty() {
     try {
         const usersSnap = await getDocs(colRef('users'));
@@ -278,7 +350,6 @@ export function stockApp() {
         loginForm: { username: '', password: '' },
         loginError: '',
         
-        // Form states with dedicated item search filters
         inwardSearchQuery: '',
         formInward: { itemId: '', qty: '', supplierName: '', customDate: '' },
         
@@ -326,7 +397,6 @@ export function stockApp() {
             return formatStockDisplay(stock, itemName);
         },
 
-        // Dynamically filtered items based on fuzzy search queries
         get filteredInwardItems() {
             if (!this.formInward.supplierName) return [];
             const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
@@ -373,8 +443,8 @@ export function stockApp() {
             let grandTotalValuation = 0;
 
             this.processedItems.forEach(item => {
-                const stockDisplay = this.formatStock(item.stock, item.name);
-                const limitDisplay = this.formatStock(item.threshold, item.name);
+                const stockDisplay = formatShortQty(item.stock, item.name);
+                const limitDisplay = formatShortQty(item.threshold, item.name);
                 const mrp = Number(item.mrp) || 0;
                 const totalVal = Math.round((Number(item.stock) || 0) * mrp * 100) / 100;
                 grandTotalValuation += totalVal;
@@ -396,7 +466,7 @@ export function stockApp() {
             });
 
             rows.push([]);
-            rows.push(["", "", "", "", "", "GRAND TOTAL:", `₹${grandTotalValuation}`, ""]);
+            rows.push(["", "", "", "", "", "GRAND TOTAL:", `₹${grandTotalValuation.toFixed(2)}`, ""]);
 
             const ws = XLSX.utils.aoa_to_sheet(rows);
             ws['!cols'] = [
@@ -802,7 +872,7 @@ export function stockApp() {
                 this.lastLogType = 'INWARD';
                 this.formInward = { itemId: '', qty: '', supplierName: '', customDate: '' };
                 this.inwardSearchQuery = '';
-                alert(`Inward recorded: +${this.formatStock(qty, target.name)} for "${target.name}".`);
+                alert(`Inward recorded: +${formatShortQty(qty, target.name)} for "${target.name}".`);
             } catch (error) { 
                 alert("Write error: " + error.message);
             }
@@ -838,7 +908,7 @@ export function stockApp() {
                 this.lastLogType = 'OUTWARD';
                 this.formOutward = { itemId: '', department: 'Indian', qty: '', customDate: '' };
                 this.outwardSearchQuery = '';
-                alert(`Outward deduction logged: -${this.formatStock(qty, target.name)} for "${target.name}".`);
+                alert(`Outward deduction logged: -${formatShortQty(qty, target.name)} for "${target.name}".`);
             } catch (error) { 
                 alert("Error: " + error.message);
             }
@@ -864,7 +934,7 @@ export function stockApp() {
 
         async quickAdjustStock(item) {
             if (this.currentRole !== 'admin' && this.currentRole !== 'inward') return;
-            const currentFormatted = this.formatStock(item.stock, item.name);
+            const currentFormatted = formatShortQty(item.stock, item.name);
             const promptVal = prompt(`Update Total Net Stock for "${item.name}":\nCurrent Balance: ${currentFormatted}\n(Type exact net balance, e.g. 50kg, 100kg, or 50):`, currentFormatted);
             if (promptVal === null) return;
             
@@ -873,7 +943,7 @@ export function stockApp() {
 
             try {
                 await updateDoc(doc(dbFs, 'items', item.id), { stock: parsedStock });
-                alert(`Stock for "${item.name}" updated to ${this.formatStock(parsedStock, item.name)}!`);
+                alert(`Stock for "${item.name}" updated to ${formatShortQty(parsedStock, item.name)}!`);
             } catch (e) {
                 alert("Update failed: " + e.message);
             }
@@ -951,7 +1021,7 @@ export function stockApp() {
         },
 
         async modifyThreshold(item) {
-            let promptVal = prompt('Update safety limit:', this.formatStock(item.threshold, item.name));
+            let promptVal = prompt('Update safety limit:', formatShortQty(item.threshold, item.name));
             if (promptVal !== null) {
                 const parsed = parseQuantityInput(promptVal, item.name);
                 if (!isNaN(parsed)) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parsed });
@@ -980,41 +1050,100 @@ export function stockApp() {
         downloadInwardSupplierReport() {
             const inwards = this.allRawLogs.filter(l => l.type === 'INWARD' && l.created_at);
             if (!inwards.length) return alert("No inward data available.");
-            const wb = XLSX.utils.book_new();
-            const dateGroups = {};
+
+            const supplierGroups = {};
             inwards.forEach(log => {
-                const dateKey = log.created_at.slice(0, 10);
-                if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
-                dateGroups[dateKey].push(log);
+                const supName = (log.supplier_name || 'General / Unassigned').trim();
+                if (!supplierGroups[supName]) supplierGroups[supName] = [];
+                supplierGroups[supName].push(log);
             });
-            Object.keys(dateGroups).sort().forEach(dateStr => {
-                const sheetMatrix = [["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE", "TOTAL VALUATION"]];
-                dateGroups[dateStr].forEach(log => {
+
+            const sheetMatrix = [];
+            let overallGrandValuation = 0;
+
+            Object.keys(supplierGroups).sort().forEach(supName => {
+                sheetMatrix.push([`SUPPLIER: ${supName.toUpperCase()}`, "", "", "", ""]);
+                sheetMatrix.push(["Item Name", "Date Received", "Quantity Received", "Unit Price", "Total Valuation (₹)"]);
+
+                let supplierTotalValuation = 0;
+
+                supplierGroups[supName].forEach(log => {
                     const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
+                    const itemName = log.item_name || linkedItem.name || 'Unknown Item';
                     const qty = parseFloat(log.qty) || 0;
                     const price = parseFloat(linkedItem.mrp) || 0;
-                    sheetMatrix.push([log.item_name || linkedItem.name, this.formatStock(qty, log.item_name || linkedItem.name), `₹${price}`, `₹${qty * price}`]);
+                    const val = Math.round(qty * price * 100) / 100;
+                    const dateStr = log.created_at ? log.created_at.slice(0, 10) : '';
+
+                    supplierTotalValuation += val;
+
+                    sheetMatrix.push([
+                        itemName,
+                        dateStr,
+                        formatShortQty(qty, itemName),
+                        `₹${price}`,
+                        `₹${val}`
+                    ]);
                 });
-                const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
-                XLSX.utils.book_append_sheet(wb, ws, dateStr);
+
+                sheetMatrix.push(["", "", "", "SUBTOTAL:", `₹${supplierTotalValuation.toFixed(2)}`]);
+                sheetMatrix.push([]);
+
+                overallGrandValuation += supplierTotalValuation;
             });
-            XLSX.writeFile(wb, `Inward_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+
+            sheetMatrix.push(["====================", "====================", "====================", "====================", "===================="]);
+            sheetMatrix.push(["GRAND TOTAL (ALL INWARDS):", "", "", "", `₹${overallGrandValuation.toFixed(2)}`]);
+
+            const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
+            ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 20 }, { wch: 14 }, { wch: 22 }];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Supplier Inward Report");
+            XLSX.writeFile(wb, `Inward_Supplier_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
         },
 
         downloadExcelReport() {
-            const getLocalDateString = (offsetDays) => { const d = new Date(); d.setDate(d.getDate() - offsetDays); return d.toISOString().slice(0, 10); };
+            const getLocalDateString = (offsetDays) => { 
+                const d = new Date(); 
+                d.setDate(d.getDate() - offsetDays); 
+                return d.toISOString().slice(0, 10); 
+            };
+            
             const targetDays = Array.from({length: 30}, (_, i) => getLocalDateString(i));
             const headerRow = ["ITEM NAME", "CURRENT STOCK", ...targetDays];
             const matrixData = [headerRow];
+
+            const dailyInwardTotals = {};
+            targetDays.forEach(day => dailyInwardTotals[day] = 0);
+            let allTimeGrandInward = 0;
+
             this.processedItems.forEach(item => {
-                const row = [item.name, this.formatStock(item.stock, item.name)];
+                const row = [item.name, formatShortQty(item.stock, item.name)];
                 targetDays.forEach(dateStr => {
-                    const inQty = this.allRawLogs.filter(l => l.created_at?.slice(0, 10) === dateStr && String(l.item_id) === String(item.id) && l.type === 'INWARD').reduce((s, l) => s + (parseFloat(l.qty) || 0), 0);
-                    const outQty = this.allRawLogs.filter(l => l.created_at?.slice(0, 10) === dateStr && String(l.item_id) === String(item.id) && l.type === 'OUTWARD').reduce((s, l) => s + (parseFloat(l.qty) || 0), 0);
-                    row.push(`+${this.formatStock(inQty, item.name)} / -${this.formatStock(outQty, item.name)}`);
+                    const inQty = this.allRawLogs
+                        .filter(l => l.created_at?.slice(0, 10) === dateStr && String(l.item_id) === String(item.id) && l.type === 'INWARD')
+                        .reduce((s, l) => s + (parseFloat(l.qty) || 0), 0);
+
+                    const outQty = this.allRawLogs
+                        .filter(l => l.created_at?.slice(0, 10) === dateStr && String(l.item_id) === String(item.id) && l.type === 'OUTWARD')
+                        .reduce((s, l) => s + (parseFloat(l.qty) || 0), 0);
+
+                    dailyInwardTotals[dateStr] += inQty;
+                    allTimeGrandInward += inQty;
+
+                    row.push(`+${formatShortQty(inQty, item.name)} / -${formatShortQty(outQty, item.name)}`);
                 });
                 matrixData.push(row);
             });
+
+            matrixData.push([]);
+            const grandTotalRow = ["GRAND TOTAL INWARD", `${allTimeGrandInward}`];
+            targetDays.forEach(dateStr => {
+                grandTotalRow.push(`+${dailyInwardTotals[dateStr]}`);
+            });
+            matrixData.push(grandTotalRow);
+
             const ws = XLSX.utils.aoa_to_sheet(matrixData);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "30-Day Ledger");
