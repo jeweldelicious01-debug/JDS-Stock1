@@ -87,11 +87,9 @@ function parseQuantityInput(inputStr, itemName = "") {
     if (!inputStr || !String(inputStr).trim()) return NaN;
 
     const str = String(inputStr).trim().toLowerCase();
-    const pack = getItemPackDetails(itemName);
-    const itemUnit = (pack.unit || "").toLowerCase();
-    const isKgItem = /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemUnit) || /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
-    const isGramItem = /\b(g|gm|gms|gram|grams)\b/i.test(itemUnit) && !isKgItem;
-    const isLiterItem = /\b(l|ltr|liter|liters|litre)\b/i.test(itemUnit) || /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
+    const isKgItem = /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
+    const isGramItem = /\b(g|gm|gms|gram|grams)\b/i.test(itemName) && !isKgItem;
+    const isLiterItem = /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
 
     const compoundKgG = str.match(/^([\d.]+)\s*(?:kg|kgs|kilo|kilograms?)\s*([\d.]+)\s*(?:g|gm|gms|gram|grams)$/);
     if (compoundKgG) {
@@ -126,19 +124,9 @@ function parseQuantityInput(inputStr, itemName = "") {
         return parseFloat(literMatch[1]);
     }
 
-    if (str.includes('.')) {
-        const decimalNum = parseFloat(str.replace(/[^0-9.]/g, ''));
-        return isNaN(decimalNum) ? NaN : Math.round(decimalNum * 1000) / 1000;
-    }
-
     const rawNum = parseFloat(str.replace(/[^0-9.]/g, ''));
     if (isNaN(rawNum)) return NaN;
-
-    if (pack.hasPack && pack.packSize > 0) {
-        return Math.round(rawNum * pack.packSize * 1000) / 1000;
-    }
-
-    return rawNum;
+    return Math.round(rawNum * 1000) / 1000;
 }
 
 function formatStockDisplay(stock, itemName = "") {
@@ -204,14 +192,9 @@ function formatStockDisplay(stock, itemName = "") {
         return (isNegative ? "-" : "") + formatted;
     }
 
-    if (pack.unit) {
-        return `${val} ${pack.unit}`;
-    }
-
     return `${val}`;
 }
 
-// Compact Excel short quantity formatting (e.g. 150g, 1.25kg, 500ml)
 function formatShortQty(val, itemName = "") {
     const num = Number(val) || 0;
     const pack = getItemPackDetails(itemName);
@@ -259,19 +242,9 @@ function formatShortQty(val, itemName = "") {
         return `0L`;
     }
 
-    if (pack.unit) {
-        const cleanUnit = pack.unit
-            .replace(/^(kilograms?|kilo|kgs?)$/i, 'kg')
-            .replace(/^(grams?|gms?)$/i, 'g')
-            .replace(/^(liters?|litres?|ltrs?)$/i, 'L')
-            .replace(/^(milliliters?|millilitres?)$/i, 'ml');
-        return `${num}${cleanUnit}`;
-    }
-
     return `${num}`;
 }
 
-// Converts date string to Sheet Tab Title (e.g. 2026-08-21 -> '21Aug', 2026-07-06 -> '6Jul')
 function formatSheetDate(dateStr) {
     if (!dateStr) return "Report";
     const parts = dateStr.split('-');
@@ -282,7 +255,6 @@ function formatSheetDate(dateStr) {
     return `${day}${month}`;
 }
 
-// Converts timestamps/ISO strings to YYYY-MM-DD local calendar key
 function extractLocalDateKey(dateVal) {
     if (!dateVal) return null;
     if (typeof dateVal === 'string') {
@@ -447,8 +419,8 @@ export function stockApp() {
                 "Primary Supplier",
                 "Current Stock",
                 "Safety Limit",
-                "Unit Price (MRP)",
-                "Total Valuation (₹)",
+                "Unit Price",
+                "Total Valuation",
                 "Stock Status"
             ];
 
@@ -472,14 +444,14 @@ export function stockApp() {
                     item.supplier_name || 'General Vendor',
                     stockDisplay,
                     limitDisplay,
-                    `₹${mrp}`,
-                    `₹${totalVal}`,
+                    mrp,
+                    totalVal,
                     status
                 ]);
             });
 
             rows.push([]);
-            rows.push(["", "", "", "", "", "GRAND TOTAL:", `₹${grandTotalValuation.toFixed(2)}`, ""]);
+            rows.push(["", "", "", "", "", "GRAND TOTAL:", grandTotalValuation, ""]);
 
             const ws = XLSX.utils.aoa_to_sheet(rows);
             ws['!cols'] = [
@@ -1038,12 +1010,12 @@ export function stockApp() {
             let updatedName = prompt(`[1/3] Update Name:`, item.name);
             if (!updatedName || !updatedName.trim()) return;
 
-            let promptPrice = prompt(`[2/3] Unit Price (MRP):`, item.mrp || 0);
+            let promptPrice = prompt(`[2/3] Unit Price:`, item.mrp || 0);
             let finalPrice = Number(promptPrice) || 0;
 
             try {
                 await updateDoc(doc(dbFs, 'items', item.id), { name: updatedName.trim(), mrp: finalPrice });
-                alert(`Updated "${updatedName.trim()}" at ₹${finalPrice} successfully.`);
+                alert(`Updated "${updatedName.trim()}" at ${finalPrice} successfully.`);
             } catch (e) { alert("Update failed: " + e.message); }
         },
 
@@ -1074,7 +1046,7 @@ export function stockApp() {
             this.showNewItemModal = false;
         },
 
-        // Inward Report: Date as individual sheets (e.g. 21Aug, 22Aug), separated supplier tables, correct item names, prices, short quantities & grand totals
+        // Inward Report: Date as individual sheets, separated supplier tables, numbers without rupee symbol
         downloadInwardSupplierReport() {
             const inwards = this.allRawLogs.filter(l => l.type === 'INWARD' && l.created_at);
             if (!inwards.length) return alert("No inward data available.");
@@ -1127,12 +1099,12 @@ export function stockApp() {
                         sheetMatrix.push([
                             itemName,
                             formatShortQty(qty, itemName),
-                            `₹${price}`,
-                            `₹${val}`
+                            price,
+                            val
                         ]);
                     });
 
-                    sheetMatrix.push([null, null, "GRAND TOTAL:", `₹${supplierTotalValuation}`]);
+                    sheetMatrix.push([null, null, "GRAND TOTAL:", supplierTotalValuation]);
                 });
 
                 const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
@@ -1151,7 +1123,7 @@ export function stockApp() {
             XLSX.writeFile(wb, `Monthly_Inward_Breakdown_Report_${monthYear}.xlsx`);
         },
 
-        // Daily Inward & Outward Report: Date as individual sheets (e.g. 21Aug, 22Aug)
+        // Daily Inward & Outward Report: Date as individual sheets, numbers without rupee symbol
         downloadExcelReport() {
             if (!this.allRawLogs || !this.allRawLogs.length) return alert("No transaction logs available.");
 
@@ -1210,13 +1182,13 @@ export function stockApp() {
                             sheetMatrix.push([
                                 itemName,
                                 formatShortQty(qty, itemName),
-                                `₹${price}`,
-                                `₹${val}`,
+                                price,
+                                val,
                                 log.created_by_name || 'System'
                             ]);
                         });
 
-                        sheetMatrix.push([null, null, "GRAND TOTAL:", `₹${subtotal}`, null]);
+                        sheetMatrix.push([null, null, "GRAND TOTAL:", subtotal, null]);
                     });
                 }
 
@@ -1256,13 +1228,13 @@ export function stockApp() {
                             sheetMatrix.push([
                                 itemName,
                                 formatShortQty(qty, itemName),
-                                `₹${price}`,
-                                `₹${val}`,
+                                price,
+                                val,
                                 log.created_by_name || 'System'
                             ]);
                         });
 
-                        sheetMatrix.push([null, null, "GRAND TOTAL:", `₹${subtotal}`, null]);
+                        sheetMatrix.push([null, null, "GRAND TOTAL:", subtotal, null]);
                     });
                 }
 
