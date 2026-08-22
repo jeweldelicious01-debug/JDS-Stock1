@@ -88,6 +88,7 @@ function parseQuantityInput(inputStr, itemName = "", categoryName = "") {
 
     const str = String(inputStr).trim().toLowerCase();
     const isKirana = String(categoryName || "").toLowerCase().trim() === 'kirana';
+    const pack = getItemPackDetails(itemName);
 
     if (isKirana) {
         const isKgItem = /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
@@ -128,9 +129,36 @@ function parseQuantityInput(inputStr, itemName = "", categoryName = "") {
         }
     }
 
+    // Packet weight conversion (e.g. entering "60kg" for a 30kg pack converts to 2 packets)
+    if (pack.hasPack && pack.packSize > 0) {
+        if (/kg|kgs|kilo/i.test(str) && /kg|kgs|kilo/i.test(pack.unit)) {
+            const rawKg = parseFloat(str.replace(/[^0-9.]/g, ''));
+            if (!isNaN(rawKg)) return Math.round((rawKg / pack.packSize) * 1000) / 1000;
+        }
+        if (/g|gm|gms|gram/i.test(str) && /g|gm|gms|gram/i.test(pack.unit)) {
+            const rawG = parseFloat(str.replace(/[^0-9.]/g, ''));
+            if (!isNaN(rawG)) return Math.round((rawG / pack.packSize) * 1000) / 1000;
+        }
+        if (/l|ltr|liter/i.test(str) && /l|ltr|liter/i.test(pack.unit)) {
+            const rawL = parseFloat(str.replace(/[^0-9.]/g, ''));
+            if (!isNaN(rawL)) return Math.round((rawL / pack.packSize) * 1000) / 1000;
+        }
+    }
+
     const rawNum = parseFloat(str.replace(/[^0-9.]/g, ''));
     if (isNaN(rawNum)) return NaN;
     return Math.round(rawNum * 1000) / 1000;
+}
+
+function calculatePacketCount(val, itemName = "") {
+    const num = Number(val) || 0;
+    const pack = getItemPackDetails(itemName);
+
+    // If total weight was entered (e.g., 60kg for a 30kg pack), derive packet count
+    if (pack.hasPack && pack.packSize > 0 && num > pack.packSize && (num % pack.packSize === 0 || num / pack.packSize > 1)) {
+        return Math.round((num / pack.packSize) * 100) / 100;
+    }
+    return num;
 }
 
 function formatStockDisplay(stock, itemName = "", categoryName = "") {
@@ -138,7 +166,8 @@ function formatStockDisplay(stock, itemName = "", categoryName = "") {
     const isKirana = String(categoryName || "").toLowerCase().trim() === 'kirana';
 
     if (!isKirana) {
-        return `${val} pkt`;
+        const pkts = calculatePacketCount(val, itemName);
+        return `${pkts} pkt`;
     }
 
     const pack = getItemPackDetails(itemName);
@@ -210,7 +239,8 @@ function formatShortQty(val, itemName = "", categoryName = "") {
     const isKirana = String(categoryName || "").toLowerCase().trim() === 'kirana';
 
     if (!isKirana) {
-        return `${num} pkt`;
+        const pkts = calculatePacketCount(num, itemName);
+        return `${pkts} pkt`;
     }
 
     const pack = getItemPackDetails(itemName);
@@ -373,6 +403,9 @@ export function stockApp() {
         lastLogType: '',
         
         showNewItemModal: false,
+        showEditItemModal: false,
+        editItemForm: { id: '', name: '', mrp: 0, supplierName: '', categoryId: '' },
+
         showAccountModal: false,
         showUserAdminModal: false,
         
@@ -395,7 +428,7 @@ export function stockApp() {
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         getCategoryNameForItem(itemOrId) {
-            const it = typeof itemOrId === 'object' ? itemOrId : this.items.find(i => String(i.id) === String(itemOrId));
+            const it = typeof itemOrId === 'object' && itemOrId ? itemOrId : this.items.find(i => String(i.id) === String(itemOrId));
             if (!it || !it.category_id) return '';
             const cat = this.categories.find(c => String(c.id) === String(it.category_id));
             return cat ? cat.name : '';
@@ -456,7 +489,8 @@ export function stockApp() {
                 const stockDisplay = formatShortQty(item.stock, item.name, catName);
                 const limitDisplay = formatShortQty(item.threshold, item.name, catName);
                 const mrp = Number(item.mrp) || 0;
-                const totalVal = Math.round((Number(item.stock) || 0) * mrp * 100) / 100;
+                const pkts = calculatePacketCount(item.stock, item.name);
+                const totalVal = Math.round(pkts * mrp * 100) / 100;
                 grandTotalValuation += totalVal;
 
                 let status = "Healthy";
@@ -807,22 +841,25 @@ export function stockApp() {
 
             try {
                 for (let record of order.items) {
-                    const arrivedQty = parseFloat(record.qty) || 0;
                     const targetItem = this.items.find(i => String(i.id) === String(record.id));
-                    if (targetItem && arrivedQty > 0) {
-                        const newStock = Math.round((Number(targetItem.stock || 0) + arrivedQty) * 1000) / 1000;
-                        await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: newStock });
-                        await addDoc(colRef('logs'), {
-                            type: 'INWARD',
-                            item_id: targetItem.id,
-                            item_name: targetItem.name,
-                            unit_price: parseFloat(targetItem.mrp) || 0,
-                            qty: arrivedQty,
-                            supplier_name: order.supplier_name,
-                            department: null,
-                            created_at: new Date().toISOString(),
-                            created_by_name: this.currentUsername
-                        });
+                    if (targetItem) {
+                        const catName = this.getCategoryNameForItem(targetItem);
+                        const arrivedQty = parseQuantityInput(record.qty, targetItem.name, catName) || 0;
+                        if (arrivedQty > 0) {
+                            const newStock = Math.round((Number(targetItem.stock || 0) + arrivedQty) * 1000) / 1000;
+                            await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: newStock });
+                            await addDoc(colRef('logs'), {
+                                type: 'INWARD',
+                                item_id: targetItem.id,
+                                item_name: targetItem.name,
+                                unit_price: parseFloat(targetItem.mrp) || 0,
+                                qty: arrivedQty,
+                                supplier_name: order.supplier_name,
+                                department: null,
+                                created_at: new Date().toISOString(),
+                                created_by_name: this.currentUsername
+                            });
+                        }
                     }
                 }
                 await updateDoc(doc(dbFs, 'purchase_orders', order.id), { status: 'RECEIVED', items: order.items, resolved_at: new Date().toISOString(), resolved_by: this.currentUsername });
@@ -1042,46 +1079,33 @@ export function stockApp() {
             } catch (error) { alert(error.message); }
         },
 
-        // Item edit with Step 1 (Name), Step 2 (Price), and Step 3 (Supplier Name)
-        async changeItemName(item) {
-            let updatedName = prompt(`[1/3] Update Name:`, item.name);
-            if (updatedName === null) return;
-            if (!updatedName.trim()) updatedName = item.name;
+        changeItemName(item) {
+            this.editItemForm = {
+                id: item.id,
+                name: item.name,
+                mrp: Number(item.mrp || 0),
+                supplierName: item.supplier_name || (this.suppliers[0] ? this.suppliers[0].name : ''),
+                categoryId: item.category_id || (this.categories[0] ? this.categories[0].id : '')
+            };
+            this.showEditItemModal = true;
+        },
 
-            let promptPrice = prompt(`[2/3] Unit Price / Packet MRP:`, item.mrp || 0);
-            if (promptPrice === null) return;
-            let finalPrice = Number(promptPrice) || 0;
-
-            const existingSupplier = item.supplier_name || (this.suppliers[0] ? this.suppliers[0].name : 'General Vendor');
-            const supList = this.suppliers.map((s, idx) => `${idx + 1}. ${s.name}`).join('\n');
-            let promptSup = prompt(
-                `[3/3] Change Supplier/Vendor:\n(Current: ${existingSupplier})\n\nEnter Supplier Name OR Choose Number:\n${supList}`,
-                existingSupplier
-            );
-            if (promptSup === null) return;
-
-            let finalSupplier = promptSup.trim();
-            const supNum = parseInt(finalSupplier, 10);
-            if (!isNaN(supNum) && supNum > 0 && supNum <= this.suppliers.length) {
-                finalSupplier = this.suppliers[supNum - 1].name;
-            } else if (!finalSupplier) {
-                finalSupplier = existingSupplier;
-            }
-
-            const matchEx = this.suppliers.find(s => s.name.toLowerCase() === finalSupplier.toLowerCase());
-            if (!matchEx && finalSupplier) {
-                await addDoc(colRef('suppliers'), { name: finalSupplier, phone: '' });
+        async saveEditedItem() {
+            if (!this.editItemForm.id || !this.editItemForm.name.trim()) {
+                return alert("Item name is required.");
             }
 
             try {
-                await updateDoc(doc(dbFs, 'items', item.id), { 
-                    name: updatedName.trim(), 
-                    mrp: finalPrice,
-                    supplier_name: finalSupplier 
+                await updateDoc(doc(dbFs, 'items', this.editItemForm.id), {
+                    name: this.editItemForm.name.trim(),
+                    mrp: Number(this.editItemForm.mrp) || 0,
+                    supplier_name: this.editItemForm.supplierName || 'General',
+                    category_id: this.editItemForm.categoryId
                 });
-                alert(`Updated "${updatedName.trim()}" | Price: ${finalPrice} | Supplier: ${finalSupplier}`);
-            } catch (e) { 
-                alert("Update failed: " + e.message); 
+                this.showEditItemModal = false;
+                alert(`Saved changes for "${this.editItemForm.name.trim()}".`);
+            } catch (e) {
+                alert("Update failed: " + e.message);
             }
         },
 
@@ -1158,10 +1182,11 @@ export function stockApp() {
                         const catName = this.getCategoryNameForItem(linkedItem);
                         const itemName = linkedItem.name || log.item_name || 'Unknown Item';
                         const qty = parseFloat(log.qty) || 0;
+                        const pkts = calculatePacketCount(qty, itemName);
                         const price = (log.unit_price !== undefined && log.unit_price !== null && log.unit_price !== '') 
                             ? parseFloat(log.unit_price) 
                             : (parseFloat(linkedItem.mrp) || 0);
-                        const val = Math.round(qty * price * 100) / 100;
+                        const val = Math.round(pkts * price * 100) / 100;
 
                         supplierTotalValuation += val;
 
@@ -1242,10 +1267,11 @@ export function stockApp() {
                             const catName = this.getCategoryNameForItem(linkedItem);
                             const itemName = linkedItem.name || log.item_name || 'Unknown Item';
                             const qty = parseFloat(log.qty) || 0;
+                            const pkts = calculatePacketCount(qty, itemName);
                             const price = (log.unit_price !== undefined && log.unit_price !== null && log.unit_price !== '') 
                                 ? parseFloat(log.unit_price) 
                                 : (parseFloat(linkedItem.mrp) || 0);
-                            const val = Math.round(qty * price * 100) / 100;
+                            const val = Math.round(pkts * price * 100) / 100;
                             subtotal += val;
 
                             sheetMatrix.push([
@@ -1289,10 +1315,11 @@ export function stockApp() {
                             const catName = this.getCategoryNameForItem(linkedItem);
                             const itemName = linkedItem.name || log.item_name || 'Unknown Item';
                             const qty = parseFloat(log.qty) || 0;
+                            const pkts = calculatePacketCount(qty, itemName);
                             const price = (log.unit_price !== undefined && log.unit_price !== null && log.unit_price !== '') 
                                 ? parseFloat(log.unit_price) 
                                 : (parseFloat(linkedItem.mrp) || 0);
-                            const val = Math.round(qty * price * 100) / 100;
+                            const val = Math.round(pkts * price * 100) / 100;
                             subtotal += val;
 
                             sheetMatrix.push([
