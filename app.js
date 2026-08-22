@@ -82,94 +82,63 @@ function getItemPackDetails(itemName = "") {
     return { packSize: 1, unit: "", hasPack: false };
 }
 
-function parseQuantityInput(inputStr, itemName = "", categoryName = "") {
+function parseQuantityInput(inputStr, itemName = "") {
     if (typeof inputStr === 'number') inputStr = String(inputStr);
     if (!inputStr || !String(inputStr).trim()) return NaN;
 
     const str = String(inputStr).trim().toLowerCase();
-    const isKirana = String(categoryName || "").toLowerCase().trim() === 'kirana';
     const pack = getItemPackDetails(itemName);
+    const itemUnit = (pack.unit || "").toLowerCase();
+    const isKgItem = /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemUnit) || /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
+    const isGramItem = /\b(g|gm|gms|gram|grams)\b/i.test(itemUnit) && !isKgItem;
+    const isLiterItem = /\b(l|ltr|liter|liters|litre)\b/i.test(itemUnit) || /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
 
-    if (isKirana) {
-        const isKgItem = /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
-        const isGramItem = /\b(g|gm|gms|gram|grams)\b/i.test(itemName) && !isKgItem;
-        const isLiterItem = /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
-
-        const compoundKgG = str.match(/^([\d.]+)\s*(?:kg|kgs|kilo|kilograms?)\s*([\d.]+)\s*(?:g|gm|gms|gram|grams)$/);
-        if (compoundKgG) {
-            const k = parseFloat(compoundKgG[1]) || 0;
-            const g = parseFloat(compoundKgG[2]) || 0;
-            return Math.round((k + g / 1000) * 1000) / 1000;
-        }
-
-        const gramMatch = str.match(/^([\d.]+)\s*(g|gm|gms|gram|grams)$/);
-        if (gramMatch) {
-            const grams = parseFloat(gramMatch[1]);
-            if (isKgItem) return Math.round((grams / 1000) * 1000) / 1000;
-            return grams;
-        }
-
-        const kgMatch = str.match(/^([\d.]+)\s*(kg|kgs|kilo|kilograms)$/);
-        if (kgMatch) {
-            const kgs = parseFloat(kgMatch[1]);
-            if (isGramItem) return Math.round(kgs * 1000);
-            return kgs;
-        }
-
-        const mlMatch = str.match(/^([\d.]+)\s*(ml|milliliters?)$/);
-        if (mlMatch) {
-            const ml = parseFloat(mlMatch[1]);
-            if (isLiterItem) return Math.round((ml / 1000) * 1000) / 1000;
-            return ml;
-        }
-
-        const literMatch = str.match(/^([\d.]+)\s*(l|ltr|liter|liters|litre)$/);
-        if (literMatch) {
-            return parseFloat(literMatch[1]);
-        }
+    const compoundKgG = str.match(/^([\d.]+)\s*(?:kg|kgs|kilo|kilograms?)\s*([\d.]+)\s*(?:g|gm|gms|gram|grams)$/);
+    if (compoundKgG) {
+        const k = parseFloat(compoundKgG[1]) || 0;
+        const g = parseFloat(compoundKgG[2]) || 0;
+        return Math.round((k + g / 1000) * 1000) / 1000;
     }
 
-    // Packet weight conversion (e.g. entering "60kg" for a 30kg pack converts to 2 packets)
-    if (pack.hasPack && pack.packSize > 0) {
-        if (/kg|kgs|kilo/i.test(str) && /kg|kgs|kilo/i.test(pack.unit)) {
-            const rawKg = parseFloat(str.replace(/[^0-9.]/g, ''));
-            if (!isNaN(rawKg)) return Math.round((rawKg / pack.packSize) * 1000) / 1000;
-        }
-        if (/g|gm|gms|gram/i.test(str) && /g|gm|gms|gram/i.test(pack.unit)) {
-            const rawG = parseFloat(str.replace(/[^0-9.]/g, ''));
-            if (!isNaN(rawG)) return Math.round((rawG / pack.packSize) * 1000) / 1000;
-        }
-        if (/l|ltr|liter/i.test(str) && /l|ltr|liter/i.test(pack.unit)) {
-            const rawL = parseFloat(str.replace(/[^0-9.]/g, ''));
-            if (!isNaN(rawL)) return Math.round((rawL / pack.packSize) * 1000) / 1000;
-        }
+    const gramMatch = str.match(/^([\d.]+)\s*(g|gm|gms|gram|grams)$/);
+    if (gramMatch) {
+        const grams = parseFloat(gramMatch[1]);
+        if (isKgItem) return Math.round((grams / 1000) * 1000) / 1000;
+        return grams;
+    }
+
+    const kgMatch = str.match(/^([\d.]+)\s*(kg|kgs|kilo|kilograms)$/);
+    if (kgMatch) {
+        const kgs = parseFloat(kgMatch[1]);
+        if (isGramItem) return Math.round(kgs * 1000);
+        return kgs;
+    }
+
+    const mlMatch = str.match(/^([\d.]+)\s*(ml|milliliters?)$/);
+    if (mlMatch) {
+        const ml = parseFloat(mlMatch[1]);
+        if (isLiterItem) return Math.round((ml / 1000) * 1000) / 1000;
+        return ml;
+    }
+
+    const literMatch = str.match(/^([\d.]+)\s*(l|ltr|liter|liters|litre)$/);
+    if (literMatch) {
+        return parseFloat(literMatch[1]);
+    }
+
+    if (str.includes('.')) {
+        const decimalNum = parseFloat(str.replace(/[^0-9.]/g, ''));
+        return isNaN(decimalNum) ? NaN : Math.round(decimalNum * 1000) / 1000;
     }
 
     const rawNum = parseFloat(str.replace(/[^0-9.]/g, ''));
     if (isNaN(rawNum)) return NaN;
-    return Math.round(rawNum * 1000) / 1000;
+
+    return rawNum;
 }
 
-function calculatePacketCount(val, itemName = "") {
-    const num = Number(val) || 0;
-    const pack = getItemPackDetails(itemName);
-
-    // If total weight was entered (e.g., 60kg for a 30kg pack), derive packet count
-    if (pack.hasPack && pack.packSize > 0 && num > pack.packSize && (num % pack.packSize === 0 || num / pack.packSize > 1)) {
-        return Math.round((num / pack.packSize) * 100) / 100;
-    }
-    return num;
-}
-
-function formatStockDisplay(stock, itemName = "", categoryName = "") {
+function formatStockDisplay(stock, itemName = "") {
     const val = Number(stock) || 0;
-    const isKirana = String(categoryName || "").toLowerCase().trim() === 'kirana';
-
-    if (!isKirana) {
-        const pkts = calculatePacketCount(val, itemName);
-        return `${pkts} pkt`;
-    }
-
     const pack = getItemPackDetails(itemName);
     const unit = (pack.unit || "").toLowerCase();
     const isKg = /\b(kg|kgs|kilo|kilograms?)\b/i.test(unit) || /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
@@ -231,18 +200,16 @@ function formatStockDisplay(stock, itemName = "", categoryName = "") {
         return (isNegative ? "-" : "") + formatted;
     }
 
+    if (pack.unit) {
+        return `${val} ${pack.unit}`;
+    }
+
     return `${val}`;
 }
 
-function formatShortQty(val, itemName = "", categoryName = "") {
+// Short Quantity formatting for Excel (e.g. 150g, 1.25kg, 500ml)
+function formatShortQty(val, itemName = "") {
     const num = Number(val) || 0;
-    const isKirana = String(categoryName || "").toLowerCase().trim() === 'kirana';
-
-    if (!isKirana) {
-        const pkts = calculatePacketCount(num, itemName);
-        return `${pkts} pkt`;
-    }
-
     const pack = getItemPackDetails(itemName);
     const unit = (pack.unit || "").toLowerCase();
     const isKg = /\b(kg|kgs|kilo|kilograms?)\b/i.test(unit) || /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
@@ -288,9 +255,19 @@ function formatShortQty(val, itemName = "", categoryName = "") {
         return `0L`;
     }
 
+    if (pack.unit) {
+        const cleanUnit = pack.unit
+            .replace(/^(kilograms?|kilo|kgs?)$/i, 'kg')
+            .replace(/^(grams?|gms?)$/i, 'g')
+            .replace(/^(liters?|litres?|ltrs?)$/i, 'L')
+            .replace(/^(milliliters?|millilitres?)$/i, 'ml');
+        return `${num}${cleanUnit}`;
+    }
+
     return `${num}`;
 }
 
+// Converts date string to Sheet Tab Title (e.g. 2026-08-21 -> '21Aug', 2026-07-06 -> '6Jul')
 function formatSheetDate(dateStr) {
     if (!dateStr) return "Report";
     const parts = dateStr.split('-');
@@ -301,6 +278,7 @@ function formatSheetDate(dateStr) {
     return `${day}${month}`;
 }
 
+// Extracts YYYY-MM-DD local calendar date
 function extractLocalDateKey(dateVal) {
     if (!dateVal) return null;
     if (typeof dateVal === 'string') {
@@ -427,16 +405,8 @@ export function stockApp() {
         newUserError: '',
         departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
-        getCategoryNameForItem(itemOrId) {
-            const it = typeof itemOrId === 'object' && itemOrId ? itemOrId : this.items.find(i => String(i.id) === String(itemOrId));
-            if (!it || !it.category_id) return '';
-            const cat = this.categories.find(c => String(c.id) === String(it.category_id));
-            return cat ? cat.name : '';
-        },
-
-        formatStock(stock, itemName = "", categoryName = "") {
-            const catName = categoryName || this.getCategoryNameForItem(this.items.find(i => i.name === itemName));
-            return formatStockDisplay(stock, itemName, catName);
+        formatStock(stock, itemName = "") {
+            return formatStockDisplay(stock, itemName);
         },
 
         get filteredInwardItems() {
@@ -485,12 +455,10 @@ export function stockApp() {
             let grandTotalValuation = 0;
 
             this.processedItems.forEach(item => {
-                const catName = item.category_name || '';
-                const stockDisplay = formatShortQty(item.stock, item.name, catName);
-                const limitDisplay = formatShortQty(item.threshold, item.name, catName);
+                const stockDisplay = formatShortQty(item.stock, item.name);
+                const limitDisplay = formatShortQty(item.threshold, item.name);
                 const mrp = Number(item.mrp) || 0;
-                const pkts = calculatePacketCount(item.stock, item.name);
-                const totalVal = Math.round(pkts * mrp * 100) / 100;
+                const totalVal = Math.round((Number(item.stock) || 0) * mrp * 100) / 100;
                 grandTotalValuation += totalVal;
 
                 let status = "Healthy";
@@ -499,7 +467,7 @@ export function stockApp() {
 
                 rows.push([
                     item.name,
-                    catName,
+                    item.category_name,
                     item.supplier_name || 'General Vendor',
                     stockDisplay,
                     limitDisplay,
@@ -578,8 +546,7 @@ export function stockApp() {
                         const matchedItem = this.items.find((i) => String(i.id) === String(l.item_id));
                         return { 
                             ...l, 
-                            item_name: matchedItem ? matchedItem.name : (l.item_name || 'Unknown'),
-                            category_id: matchedItem ? matchedItem.category_id : null
+                            item_name: matchedItem ? matchedItem.name : (l.item_name || 'Unknown')
                         };
                     });
             });
@@ -633,10 +600,7 @@ export function stockApp() {
         notifyLowStockItems(triggerTitle = "Low Stock Alert") {
             const lowItems = this.items.filter(i => (Number(i.stock) || 0) <= (Number(i.threshold) || 0));
             if (lowItems.length > 0) {
-                const itemSummary = lowItems.slice(0, 4).map(i => {
-                    const catName = this.getCategoryNameForItem(i);
-                    return `${i.name}: ${this.formatStock(i.stock, i.name, catName)}`;
-                }).join(', ');
+                const itemSummary = lowItems.slice(0, 4).map(i => `${i.name}: ${this.formatStock(i.stock, i.name)}`).join(', ');
                 const extra = lowItems.length > 4 ? ` and ${lowItems.length - 4} more` : '';
                 sendBrowserNotification(`⚠️ ${triggerTitle}`, `${lowItems.length} items reached safety limit: ${itemSummary}${extra}`);
             }
@@ -828,8 +792,7 @@ export function stockApp() {
             ];
 
             this.orderDesk.basket.forEach((item, index) => {
-                const catName = this.getCategoryNameForItem(item.id);
-                messageLines.push(`${index + 1}. *${item.name} - Qty: ${formatShortQty(item.qty, item.name, catName)}*`);
+                messageLines.push(`${index + 1}. *${item.name} - Qty: ${formatShortQty(item.qty, item.name)}*`);
             });
 
             window.open(`https://wa.me/?text=${encodeURIComponent(messageLines.join('\n'))}`, '_blank');
@@ -843,8 +806,7 @@ export function stockApp() {
                 for (let record of order.items) {
                     const targetItem = this.items.find(i => String(i.id) === String(record.id));
                     if (targetItem) {
-                        const catName = this.getCategoryNameForItem(targetItem);
-                        const arrivedQty = parseQuantityInput(record.qty, targetItem.name, catName) || 0;
+                        const arrivedQty = parseQuantityInput(record.qty, targetItem.name) || 0;
                         if (arrivedQty > 0) {
                             const newStock = Math.round((Number(targetItem.stock || 0) + arrivedQty) * 1000) / 1000;
                             await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: newStock });
@@ -903,8 +865,7 @@ export function stockApp() {
             const target = this.items.find((i) => String(i.id) === String(this.formInward.itemId));
             if (!target) return alert('Selected item not found.');
             
-            const catName = this.getCategoryNameForItem(target);
-            const qty = parseQuantityInput(this.formInward.qty, target.name, catName); 
+            const qty = parseQuantityInput(this.formInward.qty, target.name); 
             if (isNaN(qty) || qty <= 0) return alert('Enter a valid quantity.');
             
             let vendor = this.formInward.supplierName.trim();
@@ -940,7 +901,7 @@ export function stockApp() {
                 this.lastLogType = 'INWARD';
                 this.formInward = { itemId: '', qty: '', supplierName: '', customDate: '' };
                 this.inwardSearchQuery = '';
-                alert(`Inward recorded: +${formatShortQty(qty, target.name, catName)} for "${target.name}".`);
+                alert(`Inward recorded: +${formatShortQty(qty, target.name)} for "${target.name}".`);
             } catch (error) { 
                 alert("Write error: " + error.message);
             }
@@ -951,10 +912,9 @@ export function stockApp() {
             const target = this.items.find((i) => String(i.id) === String(this.formOutward.itemId));
             if (!target) return alert('Item not found.');
             
-            const catName = this.getCategoryNameForItem(target);
-            const qty = parseQuantityInput(this.formOutward.qty, target.name, catName); 
+            const qty = parseQuantityInput(this.formOutward.qty, target.name); 
             if (isNaN(qty) || qty <= 0) return alert('Enter a valid quantity.');
-            if (Number(target.stock || 0) < qty) return alert(`Insufficient stock. Current balance is ${this.formatStock(target.stock, target.name, catName)}.`);
+            if (Number(target.stock || 0) < qty) return alert(`Insufficient stock. Current balance is ${this.formatStock(target.stock, target.name)}.`);
 
             let entryTimestamp = new Date().toISOString();
             if (this.currentRole === 'admin' && this.formOutward.customDate) {
@@ -979,7 +939,7 @@ export function stockApp() {
                 this.lastLogType = 'OUTWARD';
                 this.formOutward = { itemId: '', department: 'Indian', qty: '', customDate: '' };
                 this.outwardSearchQuery = '';
-                alert(`Outward deduction logged: -${formatShortQty(qty, target.name, catName)} for "${target.name}".`);
+                alert(`Outward deduction logged: -${formatShortQty(qty, target.name)} for "${target.name}".`);
             } catch (error) { 
                 alert("Error: " + error.message);
             }
@@ -1005,17 +965,16 @@ export function stockApp() {
 
         async quickAdjustStock(item) {
             if (this.currentRole !== 'admin' && this.currentRole !== 'inward') return;
-            const catName = this.getCategoryNameForItem(item);
-            const currentFormatted = formatShortQty(item.stock, item.name, catName);
+            const currentFormatted = formatShortQty(item.stock, item.name);
             const promptVal = prompt(`Update Total Net Stock for "${item.name}":\nCurrent Balance: ${currentFormatted}\n(Type exact count / net quantity):`, currentFormatted);
             if (promptVal === null) return;
             
-            const parsedStock = parseQuantityInput(promptVal, item.name, catName);
+            const parsedStock = parseQuantityInput(promptVal, item.name);
             if (isNaN(parsedStock) || parsedStock < 0) return alert("Enter a valid numerical stock quantity.");
 
             try {
                 await updateDoc(doc(dbFs, 'items', item.id), { stock: parsedStock });
-                alert(`Stock for "${item.name}" updated to ${formatShortQty(parsedStock, item.name, catName)}!`);
+                alert(`Stock for "${item.name}" updated to ${formatShortQty(parsedStock, item.name)}!`);
             } catch (e) {
                 alert("Update failed: " + e.message);
             }
@@ -1110,10 +1069,9 @@ export function stockApp() {
         },
 
         async modifyThreshold(item) {
-            const catName = this.getCategoryNameForItem(item);
-            let promptVal = prompt('Update safety limit:', formatShortQty(item.threshold, item.name, catName));
+            let promptVal = prompt('Update safety limit:', formatShortQty(item.threshold, item.name));
             if (promptVal !== null) {
-                const parsed = parseQuantityInput(promptVal, item.name, catName);
+                const parsed = parseQuantityInput(promptVal, item.name);
                 if (!isNaN(parsed)) await updateDoc(doc(dbFs, 'items', item.id), { threshold: parsed });
             }
         },
@@ -1131,14 +1089,13 @@ export function stockApp() {
         async submitNewItem() {
             if (!this.newItemForm.name.trim() || !this.newItemForm.categoryId || !this.newItemForm.supplierName) return alert("Please map all fields.");
             const maxOrder = this.items.reduce((m, i) => Math.max(m, i.order_index || 0), 0);
-            const catObj = this.categories.find(c => String(c.id) === String(this.newItemForm.categoryId));
-            const catName = catObj ? catObj.name : '';
-            const parsedThreshold = parseQuantityInput(this.newItemForm.threshold, this.newItemForm.name, catName) || 0;
+            const parsedThreshold = parseQuantityInput(this.newItemForm.threshold, this.newItemForm.name) || 0;
             await addDoc(colRef('items'), { name: this.newItemForm.name.trim(), category_id: this.newItemForm.categoryId, supplier_name: this.newItemForm.supplierName, stock: 0, threshold: parsedThreshold, mrp: Number(this.newItemForm.mrp || 0), order_index: maxOrder + 1 });
             this.newItemForm = { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' };
             this.showNewItemModal = false;
         },
 
+        // Inward Report: Date-wise sheet tabs, separated supplier tables, compact units (g, kg, ml, L) without rupee symbols
         downloadInwardSupplierReport() {
             const inwards = this.allRawLogs.filter(l => l.type === 'INWARD' && l.created_at);
             if (!inwards.length) return alert("No inward data available.");
@@ -1179,20 +1136,18 @@ export function stockApp() {
 
                     supplierGroups[supName].forEach(log => {
                         const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                        const catName = this.getCategoryNameForItem(linkedItem);
                         const itemName = linkedItem.name || log.item_name || 'Unknown Item';
                         const qty = parseFloat(log.qty) || 0;
-                        const pkts = calculatePacketCount(qty, itemName);
                         const price = (log.unit_price !== undefined && log.unit_price !== null && log.unit_price !== '') 
                             ? parseFloat(log.unit_price) 
                             : (parseFloat(linkedItem.mrp) || 0);
-                        const val = Math.round(pkts * price * 100) / 100;
+                        const val = Math.round(qty * price * 100) / 100;
 
                         supplierTotalValuation += val;
 
                         sheetMatrix.push([
                             itemName,
-                            formatShortQty(qty, itemName, catName),
+                            formatShortQty(qty, itemName),
                             price,
                             val
                         ]);
@@ -1217,6 +1172,7 @@ export function stockApp() {
             XLSX.writeFile(wb, `Monthly_Inward_Breakdown_Report_${monthYear}.xlsx`);
         },
 
+        // Daily Inward & Outward Report: Date-wise sheet tabs, compact units (g, kg, ml, L) without rupee symbols
         downloadExcelReport() {
             if (!this.allRawLogs || !this.allRawLogs.length) return alert("No transaction logs available.");
 
@@ -1264,19 +1220,17 @@ export function stockApp() {
                         let subtotal = 0;
                         supplierGroups[supName].forEach(log => {
                             const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                            const catName = this.getCategoryNameForItem(linkedItem);
                             const itemName = linkedItem.name || log.item_name || 'Unknown Item';
                             const qty = parseFloat(log.qty) || 0;
-                            const pkts = calculatePacketCount(qty, itemName);
                             const price = (log.unit_price !== undefined && log.unit_price !== null && log.unit_price !== '') 
                                 ? parseFloat(log.unit_price) 
                                 : (parseFloat(linkedItem.mrp) || 0);
-                            const val = Math.round(pkts * price * 100) / 100;
+                            const val = Math.round(qty * price * 100) / 100;
                             subtotal += val;
 
                             sheetMatrix.push([
                                 itemName,
-                                formatShortQty(qty, itemName, catName),
+                                formatShortQty(qty, itemName),
                                 price,
                                 val,
                                 log.created_by_name || 'System'
@@ -1312,19 +1266,17 @@ export function stockApp() {
                         let subtotal = 0;
                         deptGroups[deptName].forEach(log => {
                             const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                            const catName = this.getCategoryNameForItem(linkedItem);
                             const itemName = linkedItem.name || log.item_name || 'Unknown Item';
                             const qty = parseFloat(log.qty) || 0;
-                            const pkts = calculatePacketCount(qty, itemName);
                             const price = (log.unit_price !== undefined && log.unit_price !== null && log.unit_price !== '') 
                                 ? parseFloat(log.unit_price) 
                                 : (parseFloat(linkedItem.mrp) || 0);
-                            const val = Math.round(pkts * price * 100) / 100;
+                            const val = Math.round(qty * price * 100) / 100;
                             subtotal += val;
 
                             sheetMatrix.push([
                                 itemName,
-                                formatShortQty(qty, itemName, catName),
+                                formatShortQty(qty, itemName),
                                 price,
                                 val,
                                 log.created_by_name || 'System'
