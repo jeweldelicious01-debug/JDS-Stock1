@@ -46,7 +46,7 @@ async function sendBrowserNotification(title, body) {
     }
 }
 
-// Tokenized Multi-Keyword Search (Matches "powder", "haldi", "powder haldi", etc.)
+// Tokenized Multi-Keyword Search
 function isFuzzyMatch(itemName = "", searchQuery = "") {
     if (!searchQuery || !searchQuery.trim()) return true;
     const tokens = searchQuery
@@ -211,6 +211,7 @@ function formatStockDisplay(stock, itemName = "") {
     return `${val}`;
 }
 
+// Short Quantity Formatter (e.g. 150g, 1.25kg, 500ml)
 function formatShortQty(val, itemName = "") {
     const num = Number(val) || 0;
     const pack = getItemPackDetails(itemName);
@@ -228,17 +229,10 @@ function formatShortQty(val, itemName = "") {
             wholeKg += 1;
             remGrams = 0;
         }
-        let formatted = "";
-        if (wholeKg > 0 && remGrams > 0) {
-            formatted = `${wholeKg}kg ${remGrams}g`;
-        } else if (wholeKg > 0 && remGrams === 0) {
-            formatted = `${wholeKg}kg`;
-        } else if (wholeKg === 0 && remGrams > 0) {
-            formatted = `${remGrams}g`;
-        } else {
-            formatted = `0kg`;
-        }
-        return (isNegative ? "-" : "") + formatted;
+        if (wholeKg > 0 && remGrams > 0) return `${isNegative ? '-' : ''}${wholeKg}kg ${remGrams}g`;
+        if (wholeKg > 0) return `${isNegative ? '-' : ''}${wholeKg}kg`;
+        if (remGrams > 0) return `${isNegative ? '-' : ''}${remGrams}g`;
+        return `0kg`;
     }
 
     if (isGram) {
@@ -259,17 +253,10 @@ function formatShortQty(val, itemName = "") {
             wholeL += 1;
             remMl = 0;
         }
-        let formatted = "";
-        if (wholeL > 0 && remMl > 0) {
-            formatted = `${wholeL}L ${remMl}ml`;
-        } else if (wholeL > 0 && remMl === 0) {
-            formatted = `${wholeL}L`;
-        } else if (wholeL === 0 && remMl > 0) {
-            formatted = `${remMl}ml`;
-        } else {
-            formatted = `0L`;
-        }
-        return (isNegative ? "-" : "") + formatted;
+        if (wholeL > 0 && remMl > 0) return `${isNegative ? '-' : ''}${wholeL}L ${remMl}ml`;
+        if (wholeL > 0) return `${isNegative ? '-' : ''}${wholeL}L`;
+        if (remMl > 0) return `${isNegative ? '-' : ''}${remMl}ml`;
+        return `0L`;
     }
 
     if (pack.unit) {
@@ -282,6 +269,17 @@ function formatShortQty(val, itemName = "") {
     }
 
     return `${num}`;
+}
+
+// Convert YYYY-MM-DD to Sheet Tab Title (e.g. 2026-07-08 -> 8Jul)
+function formatSheetDate(dateStr) {
+    if (!dateStr) return "Report";
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    const day = d.getDate();
+    const month = d.toLocaleString('en-US', { month: 'short' });
+    return `${day}${month}`;
 }
 
 async function seedIfEmpty() {
@@ -1047,107 +1045,203 @@ export function stockApp() {
             this.showNewItemModal = false;
         },
 
+        // Inward Report: Date as separate sheet tabs, separate supplier tables, short quantities & grand totals[cite: 5]
         downloadInwardSupplierReport() {
             const inwards = this.allRawLogs.filter(l => l.type === 'INWARD' && l.created_at);
             if (!inwards.length) return alert("No inward data available.");
 
-            const supplierGroups = {};
+            const dateGroups = {};
             inwards.forEach(log => {
-                const supName = (log.supplier_name || 'General / Unassigned').trim();
-                if (!supplierGroups[supName]) supplierGroups[supName] = [];
-                supplierGroups[supName].push(log);
+                const dateKey = log.created_at.slice(0, 10);
+                if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
+                dateGroups[dateKey].push(log);
             });
-
-            const sheetMatrix = [];
-            let overallGrandValuation = 0;
-
-            Object.keys(supplierGroups).sort().forEach(supName => {
-                sheetMatrix.push([`SUPPLIER: ${supName.toUpperCase()}`, "", "", "", ""]);
-                sheetMatrix.push(["Item Name", "Date Received", "Quantity Received", "Unit Price", "Total Valuation (₹)"]);
-
-                let supplierTotalValuation = 0;
-
-                supplierGroups[supName].forEach(log => {
-                    const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                    const itemName = log.item_name || linkedItem.name || 'Unknown Item';
-                    const qty = parseFloat(log.qty) || 0;
-                    const price = parseFloat(linkedItem.mrp) || 0;
-                    const val = Math.round(qty * price * 100) / 100;
-                    const dateStr = log.created_at ? log.created_at.slice(0, 10) : '';
-
-                    supplierTotalValuation += val;
-
-                    sheetMatrix.push([
-                        itemName,
-                        dateStr,
-                        formatShortQty(qty, itemName),
-                        `₹${price}`,
-                        `₹${val}`
-                    ]);
-                });
-
-                sheetMatrix.push(["", "", "", "SUBTOTAL:", `₹${supplierTotalValuation.toFixed(2)}`]);
-                sheetMatrix.push([]);
-
-                overallGrandValuation += supplierTotalValuation;
-            });
-
-            sheetMatrix.push(["====================", "====================", "====================", "====================", "===================="]);
-            sheetMatrix.push(["GRAND TOTAL (ALL INWARDS):", "", "", "", `₹${overallGrandValuation.toFixed(2)}`]);
-
-            const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
-            ws['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 20 }, { wch: 14 }, { wch: 22 }];
 
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Supplier Inward Report");
-            XLSX.writeFile(wb, `Inward_Supplier_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+            Object.keys(dateGroups).sort().forEach(dateKey => {
+                const dayLogs = dateGroups[dateKey];
+                const sheetName = formatSheetDate(dateKey);
+
+                const supplierGroups = {};
+                dayLogs.forEach(log => {
+                    const supName = (log.supplier_name || 'General Vendor').trim();
+                    if (!supplierGroups[supName]) supplierGroups[supName] = [];
+                    supplierGroups[supName].push(log);
+                });
+
+                const sheetMatrix = [];
+
+                Object.keys(supplierGroups).sort().forEach((supName, supIdx) => {
+                    if (supIdx > 0) sheetMatrix.push([]);
+
+                    sheetMatrix.push([`Supplier: ${supName.toUpperCase()}`, null, null, null]);
+                    sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE", "TOTAL VALUATION"]);
+
+                    let supplierTotalValuation = 0;
+
+                    supplierGroups[supName].forEach(log => {
+                        const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
+                        const itemName = log.item_name || linkedItem.name || 'Unknown Item';
+                        const qty = parseFloat(log.qty) || 0;
+                        const price = parseFloat(linkedItem.mrp) || 0;
+                        const val = Math.round(qty * price * 100) / 100;
+
+                        supplierTotalValuation += val;
+
+                        sheetMatrix.push([
+                            itemName,
+                            formatShortQty(qty, itemName),
+                            `₹${price}`,
+                            `₹${val}`
+                        ]);
+                    });
+
+                    sheetMatrix.push([null, null, "GRAND TOTAL:", `₹${supplierTotalValuation}`]);
+                });
+
+                const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
+                ws['!cols'] = [
+                    { wch: 32 },
+                    { wch: 20 },
+                    { wch: 15 },
+                    { wch: 20 }
+                ];
+
+                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            });
+
+            const now = new Date();
+            const monthYear = now.toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '_');
+            XLSX.writeFile(wb, `Monthly_Inward_Breakdown_Report_${monthYear}.xlsx`);
         },
 
+        // Daily Inward & Outward Report: Date as separate sheet tabs[cite: 5]
         downloadExcelReport() {
-            const getLocalDateString = (offsetDays) => { 
-                const d = new Date(); 
-                d.setDate(d.getDate() - offsetDays); 
-                return d.toISOString().slice(0, 10); 
-            };
-            
-            const targetDays = Array.from({length: 30}, (_, i) => getLocalDateString(i));
-            const headerRow = ["ITEM NAME", "CURRENT STOCK", ...targetDays];
-            const matrixData = [headerRow];
+            if (!this.allRawLogs || !this.allRawLogs.length) return alert("No transaction logs available.");
 
-            const dailyInwardTotals = {};
-            targetDays.forEach(day => dailyInwardTotals[day] = 0);
-            let allTimeGrandInward = 0;
-
-            this.processedItems.forEach(item => {
-                const row = [item.name, formatShortQty(item.stock, item.name)];
-                targetDays.forEach(dateStr => {
-                    const inQty = this.allRawLogs
-                        .filter(l => l.created_at?.slice(0, 10) === dateStr && String(l.item_id) === String(item.id) && l.type === 'INWARD')
-                        .reduce((s, l) => s + (parseFloat(l.qty) || 0), 0);
-
-                    const outQty = this.allRawLogs
-                        .filter(l => l.created_at?.slice(0, 10) === dateStr && String(l.item_id) === String(item.id) && l.type === 'OUTWARD')
-                        .reduce((s, l) => s + (parseFloat(l.qty) || 0), 0);
-
-                    dailyInwardTotals[dateStr] += inQty;
-                    allTimeGrandInward += inQty;
-
-                    row.push(`+${formatShortQty(inQty, item.name)} / -${formatShortQty(outQty, item.name)}`);
-                });
-                matrixData.push(row);
+            const dateGroups = {};
+            this.allRawLogs.forEach(log => {
+                if (!log.created_at) return;
+                const dateKey = log.created_at.slice(0, 10);
+                if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
+                dateGroups[dateKey].push(log);
             });
 
-            matrixData.push([]);
-            const grandTotalRow = ["GRAND TOTAL INWARD", `${allTimeGrandInward}`];
-            targetDays.forEach(dateStr => {
-                grandTotalRow.push(`+${dailyInwardTotals[dateStr]}`);
-            });
-            matrixData.push(grandTotalRow);
+            const sortedDates = Object.keys(dateGroups).sort().reverse();
+            if (!sortedDates.length) return alert("No date-based activity found to export.");
 
-            const ws = XLSX.utils.aoa_to_sheet(matrixData);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "30-Day Ledger");
-            XLSX.writeFile(wb, `Stock_Report_${getLocalDateString(0)}.xlsx`);
+
+            sortedDates.forEach(dateKey => {
+                const logsOnDate = dateGroups[dateKey];
+                const sheetName = formatSheetDate(dateKey);
+
+                const inwardLogs = logsOnDate.filter(l => l.type === 'INWARD');
+                const outwardLogs = logsOnDate.filter(l => l.type === 'OUTWARD');
+
+                const sheetMatrix = [];
+
+                // 1. Inward Section per Supplier
+                sheetMatrix.push([`=== INWARD TRANSACTIONS (${dateKey}) ===`, null, null, null, null]);
+                
+                const supplierGroups = {};
+                inwardLogs.forEach(log => {
+                    const sup = (log.supplier_name || 'General Vendor').trim();
+                    if (!supplierGroups[sup]) supplierGroups[sup] = [];
+                    supplierGroups[sup].push(log);
+                });
+
+                const supKeys = Object.keys(supplierGroups).sort();
+                if (supKeys.length === 0) {
+                    sheetMatrix.push(["No inward entries recorded for this date.", null, null, null, null]);
+                } else {
+                    supKeys.forEach((supName, idx) => {
+                        if (idx > 0) sheetMatrix.push([]);
+                        sheetMatrix.push([`Supplier: ${supName.toUpperCase()}`, null, null, null, null]);
+                        sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE", "TOTAL VALUATION", "LOGGED BY"]);
+
+                        let subtotal = 0;
+                        supplierGroups[supName].forEach(log => {
+                            const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
+                            const itemName = log.item_name || linkedItem.name || 'Unknown Item';
+                            const qty = parseFloat(log.qty) || 0;
+                            const price = parseFloat(linkedItem.mrp) || 0;
+                            const val = Math.round(qty * price * 100) / 100;
+                            subtotal += val;
+
+                            sheetMatrix.push([
+                                itemName,
+                                formatShortQty(qty, itemName),
+                                `₹${price}`,
+                                `₹${val}`,
+                                log.created_by_name || 'System'
+                            ]);
+                        });
+
+                        sheetMatrix.push([null, null, "GRAND TOTAL:", `₹${subtotal}`, null]);
+                    });
+                }
+
+                sheetMatrix.push([]);
+                sheetMatrix.push([]);
+
+                // 2. Outward Section per Department
+                sheetMatrix.push([`=== OUTWARD TRANSACTIONS (${dateKey}) ===`, null, null, null, null]);
+                
+                const deptGroups = {};
+                outwardLogs.forEach(log => {
+                    const dept = (log.department || 'General Kitchen').trim();
+                    if (!deptGroups[dept]) deptGroups[dept] = [];
+                    deptGroups[dept].push(log);
+                });
+
+                const deptKeys = Object.keys(deptGroups).sort();
+                if (deptKeys.length === 0) {
+                    sheetMatrix.push(["No outward entries recorded for this date.", null, null, null, null]);
+                } else {
+                    deptKeys.forEach((deptName, idx) => {
+                        if (idx > 0) sheetMatrix.push([]);
+                        sheetMatrix.push([`Department: ${deptName.toUpperCase()}`, null, null, null, null]);
+                        sheetMatrix.push(["ITEM NAME", "QUANTITY ISSUED", "UNIT PRICE", "TOTAL VALUATION", "ISSUED BY"]);
+
+                        let subtotal = 0;
+                        deptGroups[deptName].forEach(log => {
+                            const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
+                            const itemName = log.item_name || linkedItem.name || 'Unknown Item';
+                            const qty = parseFloat(log.qty) || 0;
+                            const price = parseFloat(linkedItem.mrp) || 0;
+                            const val = Math.round(qty * price * 100) / 100;
+                            subtotal += val;
+
+                            sheetMatrix.push([
+                                itemName,
+                                formatShortQty(qty, itemName),
+                                `₹${price}`,
+                                `₹${val}`,
+                                log.created_by_name || 'System'
+                            ]);
+                        });
+
+                        sheetMatrix.push([null, null, "GRAND TOTAL:", `₹${subtotal}`, null]);
+                    });
+                }
+
+                const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
+                ws['!cols'] = [
+                    { wch: 32 },
+                    { wch: 20 },
+                    { wch: 15 },
+                    { wch: 20 },
+                    { wch: 18 }
+                ];
+
+                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            });
+
+            const now = new Date();
+            const monthYear = now.toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '_');
+            XLSX.writeFile(wb, `Daily_Stock_Transactions_Report_${monthYear}.xlsx`);
         }
     };
 }
