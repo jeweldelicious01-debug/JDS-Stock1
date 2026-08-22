@@ -58,28 +58,36 @@ function isFuzzyMatch(itemName = "", searchQuery = "") {
     return tokens.some(token => target.includes(token));
 }
 
-function getItemPackDetails(itemName = "") {
-    if (!itemName) return { packSize: 1, unit: "", hasPack: false };
+// Keyword-based Unit Detection directly from Item Name
+function detectItemUnitType(itemName = "") {
+    const name = " " + String(itemName || "").trim().toLowerCase() + " ";
+
+    // 1. Packet / Pkt / Pouch
+    if (/\b(packets?|pkts?|pouch|pouches)\b/i.test(name)) return 'pkt';
     
-    const match = itemName.match(/(\d+(?:\.\d+)?)\s*(kg|kgs|kilo|kilograms?|gm|gms|g|grams?|l|ltr|liters?|litres?|ml|pkts?|packets?|pcs?|pieces?|box|boxes|tins?|bottles?|cans?)\b/i);
-    if (match) {
-        return {
-            packSize: parseFloat(match[1]),
-            unit: match[2].toLowerCase(),
-            hasPack: true
-        };
-    }
+    // 2. Bottle
+    if (/\b(bottles?|btls?)\b/i.test(name)) return 'bottle';
+    
+    // 3. N / Nos / Number / Pcs / Piece
+    if (/\d+\s*n\b/i.test(name) || /\b(nos?|numbers?|pcs?|pieces?|\bn\b)\b/i.test(name)) return 'N';
+    
+    // 4. Tin / Can
+    if (/\b(tins?|cans?)\b/i.test(name)) return 'tin';
+    
+    // 5. Box
+    if (/\b(box|boxes)\b/i.test(name)) return 'box';
+    
+    // 6. Liquid (Liter / L / ml)
+    if (/\d+(?:\.\d+)?\s*(?:ml|milliliters?|millilitres?)/i.test(name) || /\b(ml|milliliters?|millilitres?)\b/i.test(name)) return 'ml';
+    if (/\d+(?:\.\d+)?\s*(?:l|ltr|liters?|litres?)/i.test(name) || /\b(l|ltr|liters?|litres?)\b/i.test(name)) return 'L';
+    
+    // 7. Weight (kg / kilo)
+    if (/\d+(?:\.\d+)?\s*(?:kg|kgs|kilo|kilograms?)/i.test(name) || /\b(kg|kgs|kilo|kilograms?)\b/i.test(name)) return 'kg';
+    
+    // 8. Weight (gram / gm / g)
+    if (/\d+(?:\.\d+)?\s*(?:gm|gms|g|grams?)/i.test(name) || /\b(gm|gms|grams?)\b/i.test(name)) return 'g';
 
-    const unitOnlyMatch = itemName.match(/\b(kg|kgs|kilo|kilograms?|gm|gms|g|grams?|l|ltr|liters?|litres?|ml|pkts?|packets?|pcs?|pieces?|box|boxes|tins?|bottles?|cans?)\b/i);
-    if (unitOnlyMatch) {
-        return {
-            packSize: 1,
-            unit: unitOnlyMatch[1].toLowerCase(),
-            hasPack: false
-        };
-    }
-
-    return { packSize: 1, unit: "", hasPack: false };
+    return 'default';
 }
 
 function parseQuantityInput(inputStr, itemName = "") {
@@ -87,88 +95,66 @@ function parseQuantityInput(inputStr, itemName = "") {
     if (!inputStr || !String(inputStr).trim()) return NaN;
 
     const str = String(inputStr).trim().toLowerCase();
-    const pack = getItemPackDetails(itemName);
-    const itemUnit = (pack.unit || "").toLowerCase();
-    const isKgItem = /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemUnit) || /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
-    const isGramItem = /\b(g|gm|gms|gram|grams)\b/i.test(itemUnit) && !isKgItem;
-    const isLiterItem = /\b(l|ltr|liter|liters|litre)\b/i.test(itemUnit) || /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
+    const unitType = detectItemUnitType(itemName);
 
-    const compoundKgG = str.match(/^([\d.]+)\s*(?:kg|kgs|kilo|kilograms?)\s*([\d.]+)\s*(?:g|gm|gms|gram|grams)$/);
-    if (compoundKgG) {
-        const k = parseFloat(compoundKgG[1]) || 0;
-        const g = parseFloat(compoundKgG[2]) || 0;
-        return Math.round((k + g / 1000) * 1000) / 1000;
+    if (unitType === 'kg') {
+        const compoundKgG = str.match(/^([\d.]+)\s*(?:kg|kgs|kilo|kilograms?)\s*([\d.]+)\s*(?:g|gm|gms|gram|grams)$/);
+        if (compoundKgG) {
+            const k = parseFloat(compoundKgG[1]) || 0;
+            const g = parseFloat(compoundKgG[2]) || 0;
+            return Math.round((k + g / 1000) * 1000) / 1000;
+        }
+        const gramMatch = str.match(/^([\d.]+)\s*(g|gm|gms|gram|grams)$/);
+        if (gramMatch) {
+            return Math.round((parseFloat(gramMatch[1]) / 1000) * 1000) / 1000;
+        }
+        const kgMatch = str.match(/^([\d.]+)\s*(kg|kgs|kilo|kilograms)$/);
+        if (kgMatch) return parseFloat(kgMatch[1]);
     }
 
-    const gramMatch = str.match(/^([\d.]+)\s*(g|gm|gms|gram|grams)$/);
-    if (gramMatch) {
-        const grams = parseFloat(gramMatch[1]);
-        if (isKgItem) return Math.round((grams / 1000) * 1000) / 1000;
-        return grams;
+    if (unitType === 'g') {
+        const kgMatch = str.match(/^([\d.]+)\s*(kg|kgs|kilo|kilograms)$/);
+        if (kgMatch) return Math.round(parseFloat(kgMatch[1]) * 1000);
+        const gramMatch = str.match(/^([\d.]+)\s*(g|gm|gms|gram|grams)$/);
+        if (gramMatch) return parseFloat(gramMatch[1]);
     }
 
-    const kgMatch = str.match(/^([\d.]+)\s*(kg|kgs|kilo|kilograms)$/);
-    if (kgMatch) {
-        const kgs = parseFloat(kgMatch[1]);
-        if (isGramItem) return Math.round(kgs * 1000);
-        return kgs;
+    if (unitType === 'L') {
+        const mlMatch = str.match(/^([\d.]+)\s*(ml|milliliters?)$/);
+        if (mlMatch) return Math.round((parseFloat(mlMatch[1]) / 1000) * 1000) / 1000;
+        const literMatch = str.match(/^([\d.]+)\s*(l|ltr|liter|liters|litre)$/);
+        if (literMatch) return parseFloat(literMatch[1]);
     }
 
-    const mlMatch = str.match(/^([\d.]+)\s*(ml|milliliters?)$/);
-    if (mlMatch) {
-        const ml = parseFloat(mlMatch[1]);
-        if (isLiterItem) return Math.round((ml / 1000) * 1000) / 1000;
-        return ml;
-    }
-
-    const literMatch = str.match(/^([\d.]+)\s*(l|ltr|liter|liters|litre)$/);
-    if (literMatch) {
-        return parseFloat(literMatch[1]);
-    }
-
-    if (str.includes('.')) {
-        const decimalNum = parseFloat(str.replace(/[^0-9.]/g, ''));
-        return isNaN(decimalNum) ? NaN : Math.round(decimalNum * 1000) / 1000;
+    if (unitType === 'ml') {
+        const literMatch = str.match(/^([\d.]+)\s*(l|ltr|liter|liters|litre)$/);
+        if (literMatch) return Math.round(parseFloat(literMatch[1]) * 1000);
+        const mlMatch = str.match(/^([\d.]+)\s*(ml|milliliters?)$/);
+        if (mlMatch) return parseFloat(mlMatch[1]);
     }
 
     const rawNum = parseFloat(str.replace(/[^0-9.]/g, ''));
     if (isNaN(rawNum)) return NaN;
-
-    return rawNum;
+    return Math.round(rawNum * 1000) / 1000;
 }
 
 function formatStockDisplay(stock, itemName = "") {
     const val = Number(stock) || 0;
-    const pack = getItemPackDetails(itemName);
-    const unit = (pack.unit || "").toLowerCase();
-    const isKg = /\b(kg|kgs|kilo|kilograms?)\b/i.test(unit) || /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
-    const isLiter = /\b(l|ltr|liter|liters|litre)\b/i.test(unit) || /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
-    const isGram = /\b(g|gm|gms|gram|grams)\b/i.test(unit) && !isKg;
+    const unitType = detectItemUnitType(itemName);
 
-    if (isKg) {
+    if (unitType === 'kg') {
         const isNegative = val < 0;
         const absVal = Math.abs(val);
         let wholeKg = Math.floor(absVal);
         let remGrams = Math.round((absVal - wholeKg) * 1000);
-        if (remGrams === 1000) {
-            wholeKg += 1;
-            remGrams = 0;
-        }
-
-        let formatted = "";
-        if (wholeKg > 0 && remGrams > 0) {
-            formatted = `${wholeKg} kg ${remGrams} g`;
-        } else if (wholeKg > 0 && remGrams === 0) {
-            formatted = `${wholeKg} kg`;
-        } else if (wholeKg === 0 && remGrams > 0) {
-            formatted = `${remGrams} g`;
-        } else {
-            formatted = `0 kg`;
-        }
-        return (isNegative ? "-" : "") + formatted;
+        if (remGrams === 1000) { wholeKg += 1; remGrams = 0; }
+        if (wholeKg > 0 && remGrams > 0) return (isNegative ? "-" : "") + `${wholeKg} kg ${remGrams} g`;
+        if (wholeKg > 0) return (isNegative ? "-" : "") + `${wholeKg} kg`;
+        if (remGrams > 0) return (isNegative ? "-" : "") + `${remGrams} g`;
+        return `0 kg`;
     }
 
-    if (isGram) {
+    if (unitType === 'g') {
         if (val >= 1000) {
             let wholeKg = Math.floor(val / 1000);
             let remG = Math.round(val % 1000);
@@ -177,61 +163,53 @@ function formatStockDisplay(stock, itemName = "") {
         return `${val} g`;
     }
 
-    if (isLiter) {
+    if (unitType === 'L') {
         const isNegative = val < 0;
         const absVal = Math.abs(val);
         let wholeL = Math.floor(absVal);
         let remMl = Math.round((absVal - wholeL) * 1000);
-        if (remMl === 1000) {
-            wholeL += 1;
-            remMl = 0;
-        }
-
-        let formatted = "";
-        if (wholeL > 0 && remMl > 0) {
-            formatted = `${wholeL} L ${remMl} ml`;
-        } else if (wholeL > 0 && remMl === 0) {
-            formatted = `${wholeL} L`;
-        } else if (wholeL === 0 && remMl > 0) {
-            formatted = `${remMl} ml`;
-        } else {
-            formatted = `0 L`;
-        }
-        return (isNegative ? "-" : "") + formatted;
+        if (remMl === 1000) { wholeL += 1; remMl = 0; }
+        if (wholeL > 0 && remMl > 0) return (isNegative ? "-" : "") + `${wholeL} L ${remMl} ml`;
+        if (wholeL > 0) return (isNegative ? "-" : "") + `${wholeL} L`;
+        if (remMl > 0) return (isNegative ? "-" : "") + `${remMl} ml`;
+        return `0 L`;
     }
 
-    if (pack.unit) {
-        return `${val} ${pack.unit}`;
+    if (unitType === 'ml') {
+        if (val >= 1000) {
+            let wholeL = Math.floor(val / 1000);
+            let remMl = Math.round(val % 1000);
+            return remMl > 0 ? `${wholeL} L ${remMl} ml` : `${wholeL} L`;
+        }
+        return `${val} ml`;
     }
+
+    if (unitType === 'pkt') return `${val} pkt`;
+    if (unitType === 'bottle') return `${val} bottle`;
+    if (unitType === 'N') return `${val} N`;
+    if (unitType === 'tin') return `${val} tin`;
+    if (unitType === 'box') return `${val} box`;
 
     return `${val}`;
 }
 
-// Short Quantity formatting for Excel (e.g. 150g, 1.25kg, 500ml)
 function formatShortQty(val, itemName = "") {
     const num = Number(val) || 0;
-    const pack = getItemPackDetails(itemName);
-    const unit = (pack.unit || "").toLowerCase();
-    const isKg = /\b(kg|kgs|kilo|kilograms?)\b/i.test(unit) || /\b(kg|kgs|kilo|kilograms?)\b/i.test(itemName);
-    const isLiter = /\b(l|ltr|liter|liters|litre)\b/i.test(unit) || /\b(l|ltr|liter|liters|litre)\b/i.test(itemName);
-    const isGram = /\b(g|gm|gms|gram|grams)\b/i.test(unit) && !isKg;
+    const unitType = detectItemUnitType(itemName);
 
-    if (isKg) {
+    if (unitType === 'kg') {
         const isNegative = num < 0;
         const absVal = Math.abs(num);
         let wholeKg = Math.floor(absVal);
         let remGrams = Math.round((absVal - wholeKg) * 1000);
-        if (remGrams === 1000) {
-            wholeKg += 1;
-            remGrams = 0;
-        }
+        if (remGrams === 1000) { wholeKg += 1; remGrams = 0; }
         if (wholeKg > 0 && remGrams > 0) return `${isNegative ? '-' : ''}${wholeKg}kg ${remGrams}g`;
         if (wholeKg > 0) return `${isNegative ? '-' : ''}${wholeKg}kg`;
         if (remGrams > 0) return `${isNegative ? '-' : ''}${remGrams}g`;
         return `0kg`;
     }
 
-    if (isGram) {
+    if (unitType === 'g') {
         if (num >= 1000) {
             let wholeKg = Math.floor(num / 1000);
             let remG = Math.round(num % 1000);
@@ -240,34 +218,36 @@ function formatShortQty(val, itemName = "") {
         return `${num}g`;
     }
 
-    if (isLiter) {
+    if (unitType === 'L') {
         const isNegative = num < 0;
         const absVal = Math.abs(num);
         let wholeL = Math.floor(absVal);
         let remMl = Math.round((absVal - wholeL) * 1000);
-        if (remMl === 1000) {
-            wholeL += 1;
-            remMl = 0;
-        }
+        if (remMl === 1000) { wholeL += 1; remMl = 0; }
         if (wholeL > 0 && remMl > 0) return `${isNegative ? '-' : ''}${wholeL}L ${remMl}ml`;
         if (wholeL > 0) return `${isNegative ? '-' : ''}${wholeL}L`;
         if (remMl > 0) return `${isNegative ? '-' : ''}${remMl}ml`;
         return `0L`;
     }
 
-    if (pack.unit) {
-        const cleanUnit = pack.unit
-            .replace(/^(kilograms?|kilo|kgs?)$/i, 'kg')
-            .replace(/^(grams?|gms?)$/i, 'g')
-            .replace(/^(liters?|litres?|ltrs?)$/i, 'L')
-            .replace(/^(milliliters?|millilitres?)$/i, 'ml');
-        return `${num}${cleanUnit}`;
+    if (unitType === 'ml') {
+        if (num >= 1000) {
+            let wholeL = Math.floor(num / 1000);
+            let remMl = Math.round(num % 1000);
+            return remMl > 0 ? `${wholeL}L ${remMl}ml` : `${wholeL}L`;
+        }
+        return `${num}ml`;
     }
+
+    if (unitType === 'pkt') return `${num} pkt`;
+    if (unitType === 'bottle') return `${num} bottle`;
+    if (unitType === 'N') return `${num} N`;
+    if (unitType === 'tin') return `${num} tin`;
+    if (unitType === 'box') return `${num} box`;
 
     return `${num}`;
 }
 
-// Converts date string to Sheet Tab Title (e.g. 2026-08-21 -> '21Aug', 2026-07-06 -> '6Jul')
 function formatSheetDate(dateStr) {
     if (!dateStr) return "Report";
     const parts = dateStr.split('-');
@@ -278,7 +258,6 @@ function formatSheetDate(dateStr) {
     return `${day}${month}`;
 }
 
-// Extracts YYYY-MM-DD local calendar date
 function extractLocalDateKey(dateVal) {
     if (!dateVal) return null;
     if (typeof dateVal === 'string') {
@@ -1095,7 +1074,6 @@ export function stockApp() {
             this.showNewItemModal = false;
         },
 
-        // Inward Report: Date-wise sheet tabs, separated supplier tables, compact units (g, kg, ml, L) without rupee symbols
         downloadInwardSupplierReport() {
             const inwards = this.allRawLogs.filter(l => l.type === 'INWARD' && l.created_at);
             if (!inwards.length) return alert("No inward data available.");
@@ -1172,7 +1150,6 @@ export function stockApp() {
             XLSX.writeFile(wb, `Monthly_Inward_Breakdown_Report_${monthYear}.xlsx`);
         },
 
-        // Daily Inward & Outward Report: Date-wise sheet tabs, compact units (g, kg, ml, L) without rupee symbols
         downloadExcelReport() {
             if (!this.allRawLogs || !this.allRawLogs.length) return alert("No transaction logs available.");
 
