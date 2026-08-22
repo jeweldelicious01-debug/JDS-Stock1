@@ -34,6 +34,8 @@
                 lastLogId: null,
                 lastLogType: '',
                 showNewItemModal: false,
+                showEditItemModal: false,
+                editItemForm: { id: '', name: '', mrp: 0, supplierName: '', categoryId: '' },
                 showAccountModal: false,
                 showUserAdminModal: false,
                 newItemForm: { name: '', categoryId: '', supplierName: '', threshold: 0, mrp: '' },
@@ -340,8 +342,8 @@
                                 </select>
                             </div>
                             <div :class="currentRole === 'admin' ? 'col-span-2' : 'col-span-4'">
-                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity (e.g. 1, 1.25kg, 1250g, 50kg)</label>
-                                <input type="text" x-model="formInward.qty" placeholder="e.g. 1, 1.25kg, 1250g, 50kg" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity (e.g. 10, 50, 1.25kg)</label>
+                                <input type="text" x-model="formInward.qty" placeholder="Quantity count / amount" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
                             </div>
                             
                             <div class="col-span-2" x-show="currentRole === 'admin'">
@@ -386,7 +388,7 @@
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity</label>
-                                <input type="text" x-model="formOutward.qty" placeholder="Qty (e.g. 1, 0.5kg, 500g)" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
+                                <input type="text" x-model="formOutward.qty" placeholder="Quantity count / amount" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
                             </div>
                             
                             <div class="col-span-3" x-show="currentRole === 'admin'">
@@ -416,7 +418,7 @@
                     </div>
                 </div>
 
-                <!-- Main Inventory Table Ledger (Mobile Card Stack + Desktop Screen-Fit Table) -->
+                <!-- Main Inventory Table Ledger -->
                 <section class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden w-full">
                     <div class="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-2">
                         <div class="space-y-0.5">
@@ -457,7 +459,7 @@
                                         </div>
                                     </div>
                                     <div class="text-right shrink-0">
-                                        <div @click="quickAdjustStock(item)" title="Click to manually update stock" class="font-mono font-black text-sm cursor-pointer hover:underline" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="formatStock(item.stock, item.name)"></div>
+                                        <div @click="quickAdjustStock(item)" title="Click to manually update stock" class="font-mono font-black text-sm cursor-pointer hover:underline" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="formatStock(item.stock, item.name, item.category_name)"></div>
                                         <template x-if="item.stock === 0"><span class="bg-rose-100 text-rose-800 text-[8px] px-1 rounded font-bold uppercase">Out</span></template>
                                         <template x-if="item.stock > 0 && item.stock <= item.threshold"><span class="bg-amber-100 text-amber-800 text-[8px] px-1 rounded font-bold uppercase">Low</span></template>
                                         <template x-if="item.stock > item.threshold"><span class="bg-emerald-100 text-emerald-800 text-[8px] px-1 rounded font-bold uppercase">OK</span></template>
@@ -465,7 +467,7 @@
                                 </div>
 
                                 <div class="flex justify-between items-center text-[10px] text-slate-500 border-t pt-1.5 border-slate-100">
-                                    <div>Limit: <span class="font-mono font-bold text-slate-700" x-text="formatStock(item.threshold, item.name)"></span> | Price: <span class="font-mono font-bold text-slate-700" x-text="'₹' + (item.mrp || 0)"></span></div>
+                                    <div>Limit: <span class="font-mono font-bold text-slate-700" x-text="formatStock(item.threshold, item.name, item.category_name)"></span> | Price: <span class="font-mono font-bold text-slate-700" x-text="(item.mrp || 0)"></span></div>
                                     <div class="space-x-2" x-show="currentRole === 'admin' || currentRole === 'inward'">
                                         <button @click="quickAdjustStock(item)" class="text-indigo-600 font-bold hover:underline">📦 Set Stock</button>
                                         <button @click="changeItemName(item)" class="text-slate-700 font-bold hover:underline">✏️ Edit</button>
@@ -501,7 +503,7 @@
                                             <button @click="shiftOrder(item.id, 'down')" class="text-slate-400 hover:text-slate-800 font-bold text-[9px]">▼</button>
                                         </td>
                                         <td class="py-2 px-2 font-extrabold text-slate-900 tracking-tight truncate" :title="item.name" x-text="item.name"></td>
-                                        <td @click="quickAdjustStock(item)" title="Click to edit stock" class="py-2 px-1 text-center font-mono font-black truncate cursor-pointer hover:underline" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="formatStock(item.stock, item.name)"></td>
+                                        <td @click="quickAdjustStock(item)" title="Click to edit stock" class="py-2 px-1 text-center font-mono font-black truncate cursor-pointer hover:underline" :class="item.stock <= item.threshold ? 'text-rose-600' : 'text-slate-800'" x-text="formatStock(item.stock, item.name, item.category_name)"></td>
                                         <td class="py-2 px-1 text-center truncate">
                                             <template x-if="item.stock === 0"><span class="bg-rose-100 text-rose-800 border border-rose-200 text-[8px] px-1 py-0.5 rounded font-bold uppercase">Out</span></template>
                                             <template x-if="item.stock > 0 && item.stock <= item.threshold"><span class="bg-amber-100 text-amber-800 border border-amber-200 text-[8px] px-1 py-0.5 rounded font-bold uppercase">Low</span></template>
@@ -510,11 +512,11 @@
                                         <td class="py-2 px-2 font-medium text-slate-600 truncate" :title="item.supplier_name">
                                             <span class="bg-slate-50 px-1 py-0.5 rounded border border-slate-200 text-[9px] truncate inline-block max-w-full" x-text="item.supplier_name || 'General'"></span>
                                         </td>
-                                        <td class="py-2 px-1 text-center font-mono font-bold text-slate-700 truncate" x-show="currentRole !== 'readonly'" x-text="'₹' + (item.mrp || 0)"></td>
+                                        <td class="py-2 px-1 text-center font-mono font-bold text-slate-700 truncate" x-show="currentRole !== 'readonly'" x-text="(item.mrp || 0)"></td>
                                         <td class="py-2 px-1 text-center truncate">
                                             <span :style="'background-color: ' + item.bg + '; color: ' + item.text_color + '; border-color: ' + item.border" class="px-1 py-0.5 rounded text-[8px] uppercase font-black border inline-block max-w-full truncate" x-text="item.emoji + ' ' + item.category_name"></span>
                                         </td>
-                                        <td class="py-2 px-1 text-center font-mono text-slate-400 font-bold truncate" x-text="formatStock(item.threshold, item.name)"></td>
+                                        <td class="py-2 px-1 text-center font-mono text-slate-400 font-bold truncate" x-text="formatStock(item.threshold, item.name, item.category_name)"></td>
                                         <td class="py-2 px-2 text-right space-x-1 whitespace-nowrap" x-show="currentRole === 'admin' || currentRole === 'inward'">
                                             <button @click="quickAdjustStock(item)" class="text-indigo-600 font-bold text-[9px] hover:underline" title="Set Stock">📦</button>
                                             <button @click="changeItemName(item)" class="text-slate-600 font-bold text-[9px] hover:underline" title="Edit">✏️</button>
@@ -631,12 +633,49 @@
                             </div>
                             <div class="grid grid-cols-2 gap-2">
                                 <div><label class="block font-bold text-slate-600 mb-1">Safety Limit</label><input type="text" x-model="newItemForm.threshold" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="10"></div>
-                                <div x-show="currentRole !== 'readonly'"><label class="block font-bold text-slate-600 mb-1">Unit Price (MRP)</label><input type="number" step="any" x-model.number="newItemForm.mrp" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="0"></div>
+                                <div x-show="currentRole !== 'readonly'"><label class="block font-bold text-slate-600 mb-1">Unit Price / MRP</label><input type="number" step="any" x-model.number="newItemForm.mrp" class="border border-slate-300 p-2 w-full rounded-md text-center" placeholder="0"></div>
                             </div>
                         </div>
                         <div class="flex gap-2 pt-2">
                             <button @click="showNewItemModal = false" class="flex-1 bg-slate-100 border text-xs font-bold py-2 rounded-lg">Dismiss</button>
                             <button @click="submitNewItem()" class="flex-1 bg-slate-800 text-white text-xs font-bold py-2 rounded-lg">Commit Axis</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dedicated Edit Item Modal (Clean 1-Screen Editor) -->
+                <div x-show="showEditItemModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
+                    <div class="bg-white p-6 rounded-xl max-w-sm w-full shadow-2xl space-y-4 border border-slate-200">
+                        <h3 class="text-sm font-black uppercase text-slate-800 tracking-wide border-b pb-1">✏️ Edit Inventory Item</h3>
+                        <div class="space-y-3 text-xs">
+                            <div>
+                                <label class="block font-bold text-slate-600 mb-1">1. Item Name</label>
+                                <input type="text" x-model="editItemForm.name" class="border border-slate-300 p-2 w-full rounded-md font-bold text-slate-800" placeholder="Item Name">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-slate-600 mb-1">2. Unit Price / Packet MRP</label>
+                                <input type="number" step="any" x-model.number="editItemForm.mrp" class="border border-slate-300 p-2 w-full rounded-md font-bold text-slate-800 font-mono" placeholder="0">
+                            </div>
+                            <div>
+                                <label class="block font-bold text-slate-600 mb-1">3. Supplier / Vendor</label>
+                                <select x-model="editItemForm.supplierName" class="border border-slate-300 p-2 w-full rounded-md bg-white font-bold text-slate-700">
+                                    <template x-for="sup in suppliers" :key="sup.id">
+                                        <option :value="sup.name" :selected="sup.name === editItemForm.supplierName" x-text="sup.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block font-bold text-slate-600 mb-1">4. Category</label>
+                                <select x-model="editItemForm.categoryId" class="border border-slate-300 p-2 w-full rounded-md bg-white font-bold text-slate-700">
+                                    <template x-for="cat in categories" :key="cat.id">
+                                        <option :value="cat.id" :selected="cat.id === editItemForm.categoryId" x-text="cat.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 pt-2">
+                            <button type="button" @click="showEditItemModal = false" class="flex-1 bg-slate-100 border text-xs font-bold py-2 rounded-lg">Cancel</button>
+                            <button type="button" @click="saveEditedItem()" class="flex-1 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold py-2 rounded-lg transition">Save Changes</button>
                         </div>
                     </div>
                 </div>
