@@ -211,7 +211,7 @@ function formatStockDisplay(stock, itemName = "") {
     return `${val}`;
 }
 
-// Compact formatting for Excel (e.g. 150g, 1.25kg, 500ml)
+// Compact Excel short quantity formatting (e.g. 150g, 1.25kg, 500ml)
 function formatShortQty(val, itemName = "") {
     const num = Number(val) || 0;
     const pack = getItemPackDetails(itemName);
@@ -271,7 +271,7 @@ function formatShortQty(val, itemName = "") {
     return `${num}`;
 }
 
-// Converts date string to Excel tab name (e.g., 2026-08-21 -> '21Aug', 2026-07-06 -> '6Jul')
+// Converts date string to Sheet Tab Title (e.g. 2026-08-21 -> '21Aug', 2026-07-06 -> '6Jul')
 function formatSheetDate(dateStr) {
     if (!dateStr) return "Report";
     const parts = dateStr.split('-');
@@ -282,7 +282,7 @@ function formatSheetDate(dateStr) {
     return `${day}${month}`;
 }
 
-// Converts date/timestamps from Firestore into strict YYYY-MM-DD local calendar date
+// Converts timestamps/ISO strings to YYYY-MM-DD local calendar key
 function extractLocalDateKey(dateVal) {
     if (!dateVal) return null;
     if (typeof dateVal === 'string') {
@@ -545,7 +545,7 @@ export function stockApp() {
                     .slice(0, 50)
                     .map((l) => {
                         const matchedItem = this.items.find((i) => String(i.id) === String(l.item_id));
-                        return { ...l, item_name: matchedItem ? matchedItem.name : 'Unknown' };
+                        return { ...l, item_name: matchedItem ? matchedItem.name : (l.item_name || 'Unknown') };
                     });
             });
 
@@ -807,7 +807,17 @@ export function stockApp() {
                     if (targetItem && arrivedQty > 0) {
                         const newStock = Math.round((Number(targetItem.stock || 0) + arrivedQty) * 1000) / 1000;
                         await updateDoc(doc(dbFs, 'items', targetItem.id), { stock: newStock });
-                        await addDoc(colRef('logs'), { type: 'INWARD', item_id: targetItem.id, qty: arrivedQty, supplier_name: order.supplier_name, department: null, created_at: new Date().toISOString(), created_by_name: this.currentUsername });
+                        await addDoc(colRef('logs'), {
+                            type: 'INWARD',
+                            item_id: targetItem.id,
+                            item_name: targetItem.name,
+                            unit_price: parseFloat(targetItem.mrp) || 0,
+                            qty: arrivedQty,
+                            supplier_name: order.supplier_name,
+                            department: null,
+                            created_at: new Date().toISOString(),
+                            created_by_name: this.currentUsername
+                        });
                     }
                 }
                 await updateDoc(doc(dbFs, 'purchase_orders', order.id), { status: 'RECEIVED', items: order.items, resolved_at: new Date().toISOString(), resolved_by: this.currentUsername });
@@ -874,6 +884,8 @@ export function stockApp() {
                 const docRef = await addDoc(colRef('logs'), {
                     type: 'INWARD',
                     item_id: target.id,
+                    item_name: target.name,
+                    unit_price: parseFloat(target.mrp) || 0,
                     qty, 
                     supplier_name: vendor,
                     department: null,
@@ -910,6 +922,8 @@ export function stockApp() {
                 const docRef = await addDoc(colRef('logs'), {
                     type: 'OUTWARD',
                     item_id: target.id,
+                    item_name: target.name,
+                    unit_price: parseFloat(target.mrp) || 0,
                     qty, 
                     department: this.formOutward.department,
                     created_at: entryTimestamp,
@@ -1029,8 +1043,8 @@ export function stockApp() {
 
             try {
                 await updateDoc(doc(dbFs, 'items', item.id), { name: updatedName.trim(), mrp: finalPrice });
-                alert("Updated cleanly.");
-            } catch (e) { alert(e.message); }
+                alert(`Updated "${updatedName.trim()}" at ₹${finalPrice} successfully.`);
+            } catch (e) { alert("Update failed: " + e.message); }
         },
 
         async modifyThreshold(item) {
@@ -1060,7 +1074,7 @@ export function stockApp() {
             this.showNewItemModal = false;
         },
 
-        // Inward Report: Date as separate sheet tabs (e.g., '21Aug', '22Aug'), separate tables per supplier, short quantities & grand totals
+        // Inward Report: Date as individual sheets (e.g. 21Aug, 22Aug), separated supplier tables, correct item names, prices, short quantities & grand totals
         downloadInwardSupplierReport() {
             const inwards = this.allRawLogs.filter(l => l.type === 'INWARD' && l.created_at);
             if (!inwards.length) return alert("No inward data available.");
@@ -1074,7 +1088,7 @@ export function stockApp() {
             });
 
             const sortedDates = Object.keys(dateGroups).sort();
-            if (!sortedDates.length) return alert("No valid dated inward records found.");
+            if (!sortedDates.length) return alert("No dated inward records found.");
 
             const wb = XLSX.utils.book_new();
 
@@ -1101,9 +1115,11 @@ export function stockApp() {
 
                     supplierGroups[supName].forEach(log => {
                         const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                        const itemName = log.item_name || linkedItem.name || 'Unknown Item';
+                        const itemName = linkedItem.name || log.item_name || 'Unknown Item';
                         const qty = parseFloat(log.qty) || 0;
-                        const price = parseFloat(linkedItem.mrp) || 0;
+                        const price = (log.unit_price !== undefined && log.unit_price !== null && log.unit_price !== '') 
+                            ? parseFloat(log.unit_price) 
+                            : (parseFloat(linkedItem.mrp) || 0);
                         const val = Math.round(qty * price * 100) / 100;
 
                         supplierTotalValuation += val;
@@ -1135,7 +1151,7 @@ export function stockApp() {
             XLSX.writeFile(wb, `Monthly_Inward_Breakdown_Report_${monthYear}.xlsx`);
         },
 
-        // Daily Inward & Outward Report: Date as separate sheet tabs (e.g. '21Aug', '22Aug')
+        // Daily Inward & Outward Report: Date as individual sheets (e.g. 21Aug, 22Aug)
         downloadExcelReport() {
             if (!this.allRawLogs || !this.allRawLogs.length) return alert("No transaction logs available.");
 
@@ -1183,9 +1199,11 @@ export function stockApp() {
                         let subtotal = 0;
                         supplierGroups[supName].forEach(log => {
                             const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                            const itemName = log.item_name || linkedItem.name || 'Unknown Item';
+                            const itemName = linkedItem.name || log.item_name || 'Unknown Item';
                             const qty = parseFloat(log.qty) || 0;
-                            const price = parseFloat(linkedItem.mrp) || 0;
+                            const price = (log.unit_price !== undefined && log.unit_price !== null && log.unit_price !== '') 
+                                ? parseFloat(log.unit_price) 
+                                : (parseFloat(linkedItem.mrp) || 0);
                             const val = Math.round(qty * price * 100) / 100;
                             subtotal += val;
 
@@ -1227,9 +1245,11 @@ export function stockApp() {
                         let subtotal = 0;
                         deptGroups[deptName].forEach(log => {
                             const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                            const itemName = log.item_name || linkedItem.name || 'Unknown Item';
+                            const itemName = linkedItem.name || log.item_name || 'Unknown Item';
                             const qty = parseFloat(log.qty) || 0;
-                            const price = parseFloat(linkedItem.mrp) || 0;
+                            const price = (log.unit_price !== undefined && log.unit_price !== null && log.unit_price !== '') 
+                                ? parseFloat(log.unit_price) 
+                                : (parseFloat(linkedItem.mrp) || 0);
                             const val = Math.round(qty * price * 100) / 100;
                             subtotal += val;
 
