@@ -211,7 +211,7 @@ function formatStockDisplay(stock, itemName = "") {
     return `${val}`;
 }
 
-// Short Quantity Formatter (e.g. 150g, 1.25kg, 500ml)
+// Compact formatting for Excel (e.g. 150g, 1.25kg, 500ml)
 function formatShortQty(val, itemName = "") {
     const num = Number(val) || 0;
     const pack = getItemPackDetails(itemName);
@@ -271,15 +271,30 @@ function formatShortQty(val, itemName = "") {
     return `${num}`;
 }
 
-// Convert YYYY-MM-DD to Sheet Tab Title (e.g. 2026-07-08 -> 8Jul)
+// Converts date string to Excel tab name (e.g., 2026-08-21 -> '21Aug', 2026-07-06 -> '6Jul')
 function formatSheetDate(dateStr) {
     if (!dateStr) return "Report";
     const parts = dateStr.split('-');
     if (parts.length !== 3) return dateStr;
-    const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
     const day = d.getDate();
     const month = d.toLocaleString('en-US', { month: 'short' });
     return `${day}${month}`;
+}
+
+// Converts date/timestamps from Firestore into strict YYYY-MM-DD local calendar date
+function extractLocalDateKey(dateVal) {
+    if (!dateVal) return null;
+    if (typeof dateVal === 'string') {
+        const match = dateVal.match(/^(\d{4}-\d{2}-\d{2})/);
+        if (match) return match[1];
+    }
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return null;
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 async function seedIfEmpty() {
@@ -522,10 +537,10 @@ export function stockApp() {
 
             onSnapshot(colRef('logs'), (snap) => {
                 this.allRawLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-                const todayStr = new Date().toISOString().slice(0, 10);
+                const todayStr = extractLocalDateKey(new Date());
                 
                 this.logs = [...this.allRawLogs]
-                    .filter((l) => l.created_at && l.created_at.slice(0, 10) === todayStr)
+                    .filter((l) => extractLocalDateKey(l.created_at) === todayStr)
                     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
                     .slice(0, 50)
                     .map((l) => {
@@ -553,7 +568,7 @@ export function stockApp() {
                 const now = new Date();
                 const hours = now.getHours();
                 const minutes = now.getMinutes();
-                const todayStr = now.toISOString().slice(0, 10);
+                const todayStr = extractLocalDateKey(now);
 
                 if (hours === 11 && minutes === 0 && lastTrigger !== `${todayStr}_1100`) {
                     lastTrigger = `${todayStr}_1100`;
@@ -1045,21 +1060,25 @@ export function stockApp() {
             this.showNewItemModal = false;
         },
 
-        // Inward Report: Date as separate sheet tabs, separate supplier tables, short quantities & grand totals[cite: 5]
+        // Inward Report: Date as separate sheet tabs (e.g., '21Aug', '22Aug'), separate tables per supplier, short quantities & grand totals
         downloadInwardSupplierReport() {
             const inwards = this.allRawLogs.filter(l => l.type === 'INWARD' && l.created_at);
             if (!inwards.length) return alert("No inward data available.");
 
             const dateGroups = {};
             inwards.forEach(log => {
-                const dateKey = log.created_at.slice(0, 10);
+                const dateKey = extractLocalDateKey(log.created_at);
+                if (!dateKey) return;
                 if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
                 dateGroups[dateKey].push(log);
             });
 
+            const sortedDates = Object.keys(dateGroups).sort();
+            if (!sortedDates.length) return alert("No valid dated inward records found.");
+
             const wb = XLSX.utils.book_new();
 
-            Object.keys(dateGroups).sort().forEach(dateKey => {
+            sortedDates.forEach(dateKey => {
                 const dayLogs = dateGroups[dateKey];
                 const sheetName = formatSheetDate(dateKey);
 
@@ -1116,19 +1135,19 @@ export function stockApp() {
             XLSX.writeFile(wb, `Monthly_Inward_Breakdown_Report_${monthYear}.xlsx`);
         },
 
-        // Daily Inward & Outward Report: Date as separate sheet tabs[cite: 5]
+        // Daily Inward & Outward Report: Date as separate sheet tabs (e.g. '21Aug', '22Aug')
         downloadExcelReport() {
             if (!this.allRawLogs || !this.allRawLogs.length) return alert("No transaction logs available.");
 
             const dateGroups = {};
             this.allRawLogs.forEach(log => {
-                if (!log.created_at) return;
-                const dateKey = log.created_at.slice(0, 10);
+                const dateKey = extractLocalDateKey(log.created_at);
+                if (!dateKey) return;
                 if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
                 dateGroups[dateKey].push(log);
             });
 
-            const sortedDates = Object.keys(dateGroups).sort().reverse();
+            const sortedDates = Object.keys(dateGroups).sort();
             if (!sortedDates.length) return alert("No date-based activity found to export.");
 
             const wb = XLSX.utils.book_new();
