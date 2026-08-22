@@ -1042,17 +1042,47 @@ export function stockApp() {
             } catch (error) { alert(error.message); }
         },
 
+        // Item edit with Step 1 (Name), Step 2 (Price), and Step 3 (Supplier Name)
         async changeItemName(item) {
             let updatedName = prompt(`[1/3] Update Name:`, item.name);
-            if (!updatedName || !updatedName.trim()) return;
+            if (updatedName === null) return;
+            if (!updatedName.trim()) updatedName = item.name;
 
-            let promptPrice = prompt(`[2/3] Unit Price:`, item.mrp || 0);
+            let promptPrice = prompt(`[2/3] Unit Price / Packet MRP:`, item.mrp || 0);
+            if (promptPrice === null) return;
             let finalPrice = Number(promptPrice) || 0;
 
+            const existingSupplier = item.supplier_name || (this.suppliers[0] ? this.suppliers[0].name : 'General Vendor');
+            const supList = this.suppliers.map((s, idx) => `${idx + 1}. ${s.name}`).join('\n');
+            let promptSup = prompt(
+                `[3/3] Change Supplier/Vendor:\n(Current: ${existingSupplier})\n\nEnter Supplier Name OR Choose Number:\n${supList}`,
+                existingSupplier
+            );
+            if (promptSup === null) return;
+
+            let finalSupplier = promptSup.trim();
+            const supNum = parseInt(finalSupplier, 10);
+            if (!isNaN(supNum) && supNum > 0 && supNum <= this.suppliers.length) {
+                finalSupplier = this.suppliers[supNum - 1].name;
+            } else if (!finalSupplier) {
+                finalSupplier = existingSupplier;
+            }
+
+            const matchEx = this.suppliers.find(s => s.name.toLowerCase() === finalSupplier.toLowerCase());
+            if (!matchEx && finalSupplier) {
+                await addDoc(colRef('suppliers'), { name: finalSupplier, phone: '' });
+            }
+
             try {
-                await updateDoc(doc(dbFs, 'items', item.id), { name: updatedName.trim(), mrp: finalPrice });
-                alert(`Updated "${updatedName.trim()}" at ${finalPrice} successfully.`);
-            } catch (e) { alert("Update failed: " + e.message); }
+                await updateDoc(doc(dbFs, 'items', item.id), { 
+                    name: updatedName.trim(), 
+                    mrp: finalPrice,
+                    supplier_name: finalSupplier 
+                });
+                alert(`Updated "${updatedName.trim()}" | Price: ${finalPrice} | Supplier: ${finalSupplier}`);
+            } catch (e) { 
+                alert("Update failed: " + e.message); 
+            }
         },
 
         async modifyThreshold(item) {
