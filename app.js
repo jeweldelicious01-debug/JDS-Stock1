@@ -71,7 +71,6 @@ function normalizeUnit(unitStr = "") {
     return u;
 }
 
-// Parses pack specs and explicit Target Units inside () brackets
 function getItemUnitProfile(itemName = "") {
     const name = String(itemName || "");
     const bracketMatch = name.match(/\(([^)]+)\)/);
@@ -90,12 +89,10 @@ function getItemUnitProfile(itemName = "") {
         }
     }
 
-    // Secondary pack size search across full name (e.g. 1.2KG, 30KG, 500GM)
     const packMatch = name.match(/(\d+(?:\.\d+)?)\s*(kg|kgs|kilo|kilograms?|gm|gms|g|grams?|l|ltr|liters?|litres?|ml|pkts?|packets?|pcs?|pieces?|box|boxes|tins?|bottles?|bottels?|btls?|cans?|n)\b/i);
     const packSize = packMatch ? parseFloat(packMatch[1]) : 1;
     const packUnit = packMatch ? normalizeUnit(packMatch[2]) : "";
 
-    // If no brackets provided, fallback to keyword detection
     if (!targetUnit) {
         if (/\b(bottles?|bottels?|btls?)\b/i.test(name)) targetUnit = 'bottle';
         else if (/\b(packets?|pkts?|pouch|pouches)\b/i.test(name)) targetUnit = 'pkt';
@@ -125,7 +122,6 @@ function parseQuantityInput(inputStr, itemName = "") {
     const packSize = profile.packSize;
     const isCountUnit = ['bottle', 'pkt', 'tin', 'box', 'N'].includes(target);
 
-    // 1. Compound conversions e.g. "1kg 200g"
     const compoundKgG = str.match(/^([\d.]+)\s*(?:kg|kgs|kilo|kilograms?)\s*([\d.]+)\s*(?:g|gm|gms|gram|grams)$/);
     if (compoundKgG) {
         const totalKg = (parseFloat(compoundKgG[1]) || 0) + ((parseFloat(compoundKgG[2]) || 0) / 1000);
@@ -135,9 +131,7 @@ function parseQuantityInput(inputStr, itemName = "") {
         if (isCountUnit && profile.packUnit === 'g') return Math.round(((totalKg * 1000) / packSize) * 1000) / 1000;
     }
 
-    // 2. Specific unit tagged input conversions (e.g. user types "60kg", "500g", "2 bottle", "10 pkt")
     if (isCountUnit) {
-        // Target is bottles/pkts but user typed kg/g
         if (/kg|kgs|kilo/i.test(str) && profile.packUnit === 'kg') {
             const rawKg = parseFloat(str.replace(/[^0-9.]/g, ''));
             if (!isNaN(rawKg)) return Math.round((rawKg / packSize) * 1000) / 1000;
@@ -439,6 +433,17 @@ export function stockApp() {
 
         formatStock(stock, itemName = "") {
             return formatStockDisplay(stock, itemName);
+        },
+
+        selectItemForForms(item) {
+            if (!item) return;
+            const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
+            this.formInward.supplierName = item.supplier_name || defaultSupplier;
+            this.inwardSearchQuery = item.name;
+            this.formInward.itemId = item.id;
+
+            this.outwardSearchQuery = item.name;
+            this.formOutward.itemId = item.id;
         },
 
         get filteredInwardItems() {
@@ -1228,7 +1233,6 @@ export function stockApp() {
 
                 const sheetMatrix = [];
 
-                // 1. Inward Section per Supplier
                 sheetMatrix.push([`=== INWARD TRANSACTIONS (${dateKey}) ===`, null, null, null, null]);
                 
                 const supplierGroups = {};
@@ -1274,7 +1278,6 @@ export function stockApp() {
                 sheetMatrix.push([]);
                 sheetMatrix.push([]);
 
-                // 2. Outward Section per Department
                 sheetMatrix.push([`=== OUTWARD TRANSACTIONS (${dateKey}) ===`, null, null, null, null]);
                 
                 const deptGroups = {};
