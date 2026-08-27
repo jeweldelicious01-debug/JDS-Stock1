@@ -329,28 +329,37 @@ async function seedIfEmpty() {
             await setDoc(doc(dbFs, 'users', 'inward-seed'), { username: 'inward', passwordHash: await sha256('Inward123!'), role: 'inward' });
         }
 
+        const requiredCategories = [
+            { id: 'gujarati', name: 'ગુજરાતી', emoji: '🍆', bg_color: '#fef2f2', border_color: '#ef4444', text_color: '#991b1b' },
+            { id: 'restaurant', name: 'restaurant', emoji: '🍽️', bg_color: '#f8fafc', border_color: '#475569', text_color: '#1e293b' },
+            { id: 'ice_cream', name: 'ice cream', emoji: '🍨', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#155e75' },
+            { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334151' },
+            { id: 'frozen', name: 'Frozen', emoji: '❄️', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#083344' },
+            { id: 'masala', name: 'Masala', emoji: '🍛', bg_color: '#fff7ed', border_color: '#f97316', text_color: '#7c2d12' },
+            { id: 'grain', name: 'Grain', emoji: '🌾', bg_color: '#fefce8', border_color: '#eab308', text_color: '#713f12' },
+            { id: 'vegetables', name: 'Vegetables', emoji: '🥦', bg_color: '#f0fdf4', border_color: '#22c55e', text_color: '#14532d' },
+            { id: 'bottle', name: 'Bottle', emoji: '🍾', bg_color: '#f5f5f4', border_color: '#737367', text_color: '#1c1917' },
+            { id: 'pasta', name: 'Pasta', emoji: '🍝', bg_color: '#fffbeb', border_color: '#f59e0b', text_color: '#78350f' },
+            { id: 'dairy', name: 'Dairy', emoji: '🥛', bg_color: '#eff6ff', border_color: '#3b82f6', text_color: '#1e40af' },
+            { id: 'disposables', name: 'Disposables', emoji: '🥤', bg_color: '#fafafa', border_color: '#a3a3a3', text_color: '#171717' },
+            { id: 'flour', name: 'Flour', emoji: '🥡', bg_color: '#fdf6f0', border_color: '#cca47c', text_color: '#4a3319' },
+            { id: 'tin', name: 'Tin', emoji: '🥫', bg_color: '#f0fdfa', border_color: '#14b8a6', text_color: '#115e59' },
+            { id: 'khademasala', name: 'KhadeMasala', emoji: '🌶️', bg_color: '#fff1f2', border_color: '#f43f5e', text_color: '#4c0519' },
+            { id: 'beverages', name: 'Beverages', emoji: '🧃', bg_color: '#fdf2f8', border_color: '#ec4899', text_color: '#701a75' }
+        ];
+
         const catSnap = await getDocs(colRef('categories'));
-        if (catSnap.size < 16) {
-            const defaultCategories = [
-                { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334151' },
-                { id: 'frozen', name: 'Frozen', emoji: '❄️', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#083344' },
-                { id: 'masala', name: 'Masala', emoji: '🍛', bg_color: '#fff7ed', border_color: '#f97316', text_color: '#7c2d12' },
-                { id: 'grain', name: 'Grain', emoji: '🌾', bg_color: '#fefce8', border_color: '#eab308', text_color: '#713f12' },
-                { id: 'vegetables', name: 'Vegetables', emoji: '🥦', bg_color: '#f0fdf4', border_color: '#22c55e', text_color: '#14532d' },
-                { id: 'bottle', name: 'Bottle', emoji: '🍾', bg_color: '#f5f5f4', border_color: '#737367', text_color: '#1c1917' },
-                { id: 'pasta', name: 'Pasta', emoji: '🍝', bg_color: '#fffbeb', border_color: '#f59e0b', text_color: '#78350f' },
-                { id: 'dairy', name: 'Dairy', emoji: '🥛', bg_color: '#eff6ff', border_color: '#3b82f6', text_color: '#1e40af' },
-                { id: 'disposables', name: 'Disposables', emoji: '🥤', bg_color: '#fafafa', border_color: '#a3a3a3', text_color: '#171717' },
-                { id: 'flour', name: 'Flour', emoji: '🥡', bg_color: '#fdf6f0', border_color: '#cca47c', text_color: '#4a3319' },
-                { id: 'tin', name: 'Tin', emoji: '🥫', bg_color: '#f0fdfa', border_color: '#14b8a6', text_color: '#115e59' },
-                { id: 'khademasala', name: 'KhadeMasala', emoji: '🌶️', bg_color: '#fff1f2', border_color: '#f43f5e', text_color: '#4c0519' },
-                { id: 'beverages', name: 'Beverages', emoji: '🧃', bg_color: '#fdf2f8', border_color: '#ec4899', text_color: '#701a75' },
-                { id: 'gujarati', name: 'ગુજરાતી', emoji: '🍆', bg_color: '#fef2f2', border_color: '#ef4444', text_color: '#991b1b' },
-                { id: 'restaurant', name: 'restaurant', emoji: '🍽️', bg_color: '#f8fafc', border_color: '#475569', text_color: '#1e293b' },
-                { id: 'ice_cream', name: 'ice cream', emoji: '🍨', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#155e75' }
-            ];
-            for (const cat of defaultCategories) {
-                await setDoc(doc(dbFs, 'categories', cat.id), { name: cat.name, emoji: cat.emoji, bg_color: cat.bg_color, border_color: cat.border_color, text_color: cat.text_color }, { merge: true });
+        const existingCatIds = new Set(catSnap.docs.map(d => d.id));
+
+        for (const cat of requiredCategories) {
+            if (!existingCatIds.has(cat.id)) {
+                await setDoc(doc(dbFs, 'categories', cat.id), {
+                    name: cat.name,
+                    emoji: cat.emoji,
+                    bg_color: cat.bg_color,
+                    border_color: cat.border_color,
+                    text_color: cat.text_color
+                });
             }
         }
 
@@ -360,7 +369,7 @@ async function seedIfEmpty() {
             await addDoc(colRef('suppliers'), { name: 'Balaji Food Products', phone: '918888888888' });
         }
     } catch (e) {
-        console.warn("Seeding bypassed: ", e);
+        console.warn("Seeding error: ", e);
     }
 }
 
