@@ -330,7 +330,7 @@ async function seedIfEmpty() {
         }
 
         const catSnap = await getDocs(colRef('categories'));
-        if (catSnap.size < 13) {
+        if (catSnap.size < 16) {
             const defaultCategories = [
                 { id: 'kirana', name: 'Kirana', emoji: '🛒', bg_color: '#f8fafc', border_color: '#64748b', text_color: '#334151' },
                 { id: 'frozen', name: 'Frozen', emoji: '❄️', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#083344' },
@@ -344,10 +344,13 @@ async function seedIfEmpty() {
                 { id: 'flour', name: 'Flour', emoji: '🥡', bg_color: '#fdf6f0', border_color: '#cca47c', text_color: '#4a3319' },
                 { id: 'tin', name: 'Tin', emoji: '🥫', bg_color: '#f0fdfa', border_color: '#14b8a6', text_color: '#115e59' },
                 { id: 'khademasala', name: 'KhadeMasala', emoji: '🌶️', bg_color: '#fff1f2', border_color: '#f43f5e', text_color: '#4c0519' },
-                { id: 'beverages', name: 'Beverages', emoji: '🧃', bg_color: '#fdf2f8', border_color: '#ec4899', text_color: '#701a75' }
+                { id: 'beverages', name: 'Beverages', emoji: '🧃', bg_color: '#fdf2f8', border_color: '#ec4899', text_color: '#701a75' },
+                { id: 'gujarati', name: 'ગુજરાતી', emoji: '🍆', bg_color: '#fef2f2', border_color: '#ef4444', text_color: '#991b1b' },
+                { id: 'restaurant', name: 'restaurant', emoji: '🍽️', bg_color: '#f8fafc', border_color: '#475569', text_color: '#1e293b' },
+                { id: 'ice_cream', name: 'ice cream', emoji: '🍨', bg_color: '#ecfeff', border_color: '#06b6d4', text_color: '#155e75' }
             ];
             for (const cat of defaultCategories) {
-                await setDoc(doc(dbFs, 'categories', cat.id), { name: cat.name, emoji: cat.emoji, bg_color: cat.bg_color, border_color: cat.border_color, text_color: cat.text_color });
+                await setDoc(doc(dbFs, 'categories', cat.id), { name: cat.name, emoji: cat.emoji, bg_color: cat.bg_color, border_color: cat.border_color, text_color: cat.text_color }, { merge: true });
             }
         }
 
@@ -389,7 +392,7 @@ export function stockApp() {
         formInward: { itemId: '', qty: '', supplierName: '', customDate: '' },
         
         outwardSearchQuery: '',
-        formOutward: { itemId: '', department: 'Indian', qty: '', customDate: '' },
+        formOutward: { itemId: '', department: 'restaurant', qty: '', customDate: '' },
 
         orderDeskSearchQuery: '',
         orderDesk: {
@@ -429,7 +432,7 @@ export function stockApp() {
         accountSuccess: '',
         newUserForm: { username: '', password: '', role: 'inward' },
         newUserError: '',
-        departments: ['Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
+        departments: ['all', 'f&b', 'restaurant', 'Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         formatStock(stock, itemName = "") {
             return formatStockDisplay(stock, itemName);
@@ -790,6 +793,31 @@ export function stockApp() {
             }
         },
 
+        async submitNewCategory() {
+            if (!this.newCategoryForm.name || !this.newCategoryForm.name.trim()) {
+                return alert("Category name is required.");
+            }
+
+            const name = this.newCategoryForm.name.trim();
+            const emoji = this.newCategoryForm.emoji.trim() || '📦';
+            const palette = this.paletteOptions[this.newCategoryForm.paletteIndex] || this.paletteOptions[0];
+            const catId = name.toLowerCase().replace(/[^a-z0-9]/g, '_') || `cat_${Date.now()}`;
+
+            try {
+                await setDoc(doc(dbFs, 'categories', catId), {
+                    name,
+                    emoji,
+                    bg_color: palette.bg,
+                    border_color: palette.border,
+                    text_color: palette.text
+                });
+                this.newCategoryForm = { name: '', emoji: '📦', paletteIndex: 0 };
+                alert(`Category "${name}" deployed successfully!`);
+            } catch (e) {
+                alert("Failed to create category: " + e.message);
+            }
+        },
+
         addItemToOrder() {
             if (!this.orderDesk.selectedItemId || !this.orderDesk.selectedQty || this.orderDesk.selectedQty <= 0) {
                 alert("Select product and enter valid quantity.");
@@ -974,7 +1002,7 @@ export function stockApp() {
                 await updateDoc(doc(dbFs, 'items', target.id), { stock: newStock });
                 this.lastLogId = docRef.id;
                 this.lastLogType = 'OUTWARD';
-                this.formOutward = { itemId: '', department: 'Indian', qty: '', customDate: '' };
+                this.formOutward = { itemId: '', department: 'restaurant', qty: '', customDate: '' };
                 this.outwardSearchQuery = '';
                 alert(`Outward deduction logged: -${formatShortQty(qty, target.name)} for "${target.name}".`);
             } catch (error) { 
