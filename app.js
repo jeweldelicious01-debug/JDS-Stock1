@@ -1248,130 +1248,86 @@ export function stockApp() {
         downloadExcelReport() {
             if (!this.allRawLogs || !this.allRawLogs.length) return alert("No transaction logs available.");
 
-            const dateGroups = {};
+            const monthGroups = {};
             this.allRawLogs.forEach(log => {
                 const dateKey = extractLocalDateKey(log.created_at);
                 if (!dateKey) return;
-                if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
-                dateGroups[dateKey].push(log);
+                const monthKey = dateKey.slice(0, 7);
+                if (!monthGroups[monthKey]) monthGroups[monthKey] = [];
+                monthGroups[monthKey].push({ ...log, dateKey });
             });
 
-            const sortedDates = Object.keys(dateGroups).sort();
-            if (!sortedDates.length) return alert("No date-based activity found to export.");
+            const sortedMonths = Object.keys(monthGroups).sort();
+            if (!sortedMonths.length) return alert("No dated logs available to export.");
 
             const wb = XLSX.utils.book_new();
 
-            sortedDates.forEach(dateKey => {
-                const logsOnDate = dateGroups[dateKey];
-                const sheetName = formatSheetDate(dateKey);
+            sortedMonths.forEach(monthKey => {
+                const logsInMonth = monthGroups[monthKey];
+                const [year, month] = monthKey.split('-');
+                const monthName = new Date(parseInt(year), parseInt(month) - 1, 1).toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '_');
 
-                const inwardLogs = logsOnDate.filter(l => l.type === 'INWARD');
-                const outwardLogs = logsOnDate.filter(l => l.type === 'OUTWARD');
+                const dayItemMap = {};
+                logsInMonth.forEach(log => {
+                    const day = log.dateKey;
+                    const itemId = String(log.item_id || log.item_name);
+
+                    if (!dayItemMap[day]) dayItemMap[day] = {};
+                    if (!dayItemMap[day][itemId]) {
+                        const linkedItem = this.items.find(i => String(i.id) === String(log.item_id));
+                        dayItemMap[day][itemId] = {
+                            name: linkedItem ? linkedItem.name : (log.item_name || 'Unknown Item'),
+                            inwardTotal: 0,
+                            deptOutward: {}
+                        };
+                    }
+
+                    const qty = parseFloat(log.qty) || 0;
+                    if (log.type === 'INWARD') {
+                        dayItemMap[day][itemId].inwardTotal += qty;
+                    } else if (log.type === 'OUTWARD') {
+                        const dept = (log.department || 'General').trim();
+                        dayItemMap[day][itemId].deptOutward[dept] = (dayItemMap[day][itemId].deptOutward[dept] || 0) + qty;
+                    }
+                });
 
                 const sheetMatrix = [];
+                const sortedDays = Object.keys(dayItemMap).sort();
 
-                sheetMatrix.push([`=== INWARD TRANSACTIONS (${dateKey}) ===`, null, null, null, null]);
-                
-                const supplierGroups = {};
-                inwardLogs.forEach(log => {
-                    const sup = (log.supplier_name || 'General Vendor').trim();
-                    if (!supplierGroups[sup]) supplierGroups[sup] = [];
-                    supplierGroups[sup].push(log);
-                });
+                sortedDays.forEach((dayKey, idx) => {
+                    if (idx > 0) sheetMatrix.push([]);
 
-                const supKeys = Object.keys(supplierGroups).sort();
-                if (supKeys.length === 0) {
-                    sheetMatrix.push(["No inward entries recorded for this date.", null, null, null, null]);
-                } else {
-                    supKeys.forEach((supName, idx) => {
-                        if (idx > 0) sheetMatrix.push([]);
-                        sheetMatrix.push([`Supplier: ${supName.toUpperCase()}`, null, null, null, null]);
-                        sheetMatrix.push(["ITEM NAME", "QUANTITY RECEIVED", "UNIT PRICE", "TOTAL VALUATION", "LOGGED BY"]);
+                    sheetMatrix.push([`=== DATE: ${dayKey} (${formatSheetDate(dayKey)}) ===`, null, null]);
+                    sheetMatrix.push(["ITEM NAME", "INWARD", "OUTWARD (BY DEPARTMENT)"]);
 
-                        let subtotal = 0;
-                        supplierGroups[supName].forEach(log => {
-                            const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                            const itemName = linkedItem.name || log.item_name || 'Unknown Item';
-                            const qty = parseFloat(log.qty) || 0;
-                            const price = (log.unit_price !== undefined && log.unit_price !== null && log.unit_price !== '') 
-                                ? parseFloat(log.unit_price) 
-                                : (parseFloat(linkedItem.mrp) || 0);
-                            const val = Math.round(qty * price * 100) / 100;
-                            subtotal += val;
+                    const itemsOnDay = Object.values(dayItemMap[dayKey]).sort((a, b) => a.name.localeCompare(b.name));
 
-                            sheetMatrix.push([
-                                itemName,
-                                formatShortQty(qty, itemName),
-                                price,
-                                val,
-                                log.created_by_name || 'System'
-                            ]);
+                    itemsOnDay.forEach(entry => {
+                        const inwardStr = entry.inwardTotal > 0 ? `+${formatShortQty(entry.inwardTotal, entry.name)}` : '-';
+                        const deptParts = Object.entries(entry.deptOutward).map(([dept, qty]) => {
+                            return `-${formatShortQty(qty, entry.name)} (${dept})`;
                         });
+                        const outwardStr = deptParts.length > 0 ? deptParts.join(', ') : '-';
 
-                        sheetMatrix.push([null, null, "GRAND TOTAL:", subtotal, null]);
+                        sheetMatrix.push([
+                            entry.name,
+                            inwardStr,
+                            outwardStr
+                        ]);
                     });
-                }
-
-                sheetMatrix.push([]);
-                sheetMatrix.push([]);
-
-                sheetMatrix.push([`=== OUTWARD TRANSACTIONS (${dateKey}) ===`, null, null, null, null]);
-                
-                const deptGroups = {};
-                outwardLogs.forEach(log => {
-                    const dept = (log.department || 'General Kitchen').trim();
-                    if (!deptGroups[dept]) deptGroups[dept] = [];
-                    deptGroups[dept].push(log);
                 });
-
-                const deptKeys = Object.keys(deptGroups).sort();
-                if (deptKeys.length === 0) {
-                    sheetMatrix.push(["No outward entries recorded for this date.", null, null, null, null]);
-                } else {
-                    deptKeys.forEach((deptName, idx) => {
-                        if (idx > 0) sheetMatrix.push([]);
-                        sheetMatrix.push([`Department: ${deptName.toUpperCase()}`, null, null, null, null]);
-                        sheetMatrix.push(["ITEM NAME", "QUANTITY ISSUED", "UNIT PRICE", "TOTAL VALUATION", "ISSUED BY"]);
-
-                        let subtotal = 0;
-                        deptGroups[deptName].forEach(log => {
-                            const linkedItem = this.items.find(i => String(i.id) === String(log.item_id)) || {};
-                            const itemName = linkedItem.name || log.item_name || 'Unknown Item';
-                            const qty = parseFloat(log.qty) || 0;
-                            const price = (log.unit_price !== undefined && log.unit_price !== null && log.unit_price !== '') 
-                                ? parseFloat(log.unit_price) 
-                                : (parseFloat(linkedItem.mrp) || 0);
-                            const val = Math.round(qty * price * 100) / 100;
-                            subtotal += val;
-
-                            sheetMatrix.push([
-                                itemName,
-                                formatShortQty(qty, itemName),
-                                price,
-                                val,
-                                log.created_by_name || 'System'
-                            ]);
-                        });
-
-                        sheetMatrix.push([null, null, "GRAND TOTAL:", subtotal, null]);
-                    });
-                }
 
                 const ws = XLSX.utils.aoa_to_sheet(sheetMatrix);
                 ws['!cols'] = [
-                    { wch: 32 },
-                    { wch: 20 },
-                    { wch: 15 },
-                    { wch: 20 },
-                    { wch: 18 }
+                    { wch: 30 },
+                    { wch: 18 },
+                    { wch: 45 }
                 ];
 
-                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+                XLSX.utils.book_append_sheet(wb, ws, monthName.slice(0, 31));
             });
 
-            const now = new Date();
-            const monthYear = now.toLocaleString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '_');
-            XLSX.writeFile(wb, `Daily_Stock_Transactions_Report_${monthYear}.xlsx`);
+            XLSX.writeFile(wb, `Stock_Movement_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
         }
     };
 }
