@@ -411,6 +411,10 @@ export function stockApp() {
             basket: []
         },
 
+        activeReconciliationOrder: null,
+        reconcileExtraItemId: '',
+        reconcileExtraQty: '',
+
         cateringForm: { partyName: '', paxCount: '', rawTextMenu: '' },
         cateringModal: { show: false, label: '', text: '' },
         editingEventId: null,
@@ -486,6 +490,13 @@ export function stockApp() {
             });
         },
 
+        get reconcileVendorItems() {
+            if (!this.activeReconciliationOrder) return [];
+            const vendorName = this.activeReconciliationOrder.supplier_name;
+            const defaultSupplier = this.suppliers[0] ? this.suppliers[0].name : '';
+            return this.items.filter(i => (i.supplier_name || defaultSupplier) === vendorName);
+        },
+
         downloadCurrentStockReport() {
             if (!this.processedItems.length) return alert("No inventory items found to export.");
 
@@ -511,8 +522,8 @@ export function stockApp() {
                 grandTotalValuation += totalVal;
 
                 let status = "Healthy";
-                if (item.stock === 0) status = "Out of Stock";
-                else if (item.stock <= item.threshold) status = "Low Stock";
+                if (Number(item.stock) === 0) status = "Out of Stock";
+                else if (Number(item.stock) <= Number(item.threshold)) status = "Low Stock";
 
                 rows.push([
                     item.name,
@@ -695,9 +706,48 @@ export function stockApp() {
         },
 
         get processedItems() {
+            const now = Date.now();
+            const oneDayMs = 24 * 60 * 60 * 1000;
+
+            const recentInwardMap = new Map();
+            if (this.allRawLogs && this.allRawLogs.length) {
+                this.allRawLogs.forEach(log => {
+                    if (log.type === 'INWARD' && log.created_at) {
+                        const time = new Date(log.created_at).getTime();
+                        if (now - time <= oneDayMs) {
+                            const prev = recentInwardMap.get(String(log.item_id)) || 0;
+                            if (time > prev) recentInwardMap.set(String(log.item_id), time);
+                        }
+                    }
+                });
+            }
+
             let dataset = this.items.map((i) => {
                 const cat = this.categories.find((c) => c.id === i.category_id) || {};
-                return { ...i, category_name: cat.name || 'Unassigned', emoji: cat.emoji || '📦', bg: cat.bg_color || '#f3f4f6', border: cat.border_color || '#9ca3af', text_color: cat.text_color || '#374151' };
+                const stockVal = Number(i.stock) || 0;
+                const threshVal = Number(i.threshold) || 0;
+                const isRecentlyInwarded = recentInwardMap.has(String(i.id));
+
+                let statusGroup = 2; // 0: OUT, 1: LOW, 2: HEALTHY, 3: HEALTHY & RECENTLY INWARDED
+                if (stockVal === 0) {
+                    statusGroup = 0;
+                } else if (stockVal <= threshVal) {
+                    statusGroup = 1;
+                } else if (isRecentlyInwarded) {
+                    statusGroup = 3;
+                } else {
+                    statusGroup = 2;
+                }
+
+                return { 
+                    ...i, 
+                    category_name: cat.name || 'Unassigned', 
+                    emoji: cat.emoji || '📦', 
+                    bg: cat.bg_color || '#f3f4f6', 
+                    border: cat.border_color || '#9ca3af', 
+                    text_color: cat.text_color || '#374151',
+                    statusGroup
+                };
             });
 
             if (this.filterCat !== 'all') {
@@ -710,9 +760,10 @@ export function stockApp() {
             }
 
             return dataset.sort((a, b) => {
-                let aAlert = a.stock <= a.threshold ? 1 : 0; let bAlert = b.stock <= b.threshold ? 1 : 0;
-                if (aAlert !== bAlert) return bAlert - aAlert;
-                return (a.order_index || 0) - (b.order_index || 0);
+                if (a.statusGroup !== b.statusGroup) {
+                    return a.statusGroup - b.statusGroup;
+                }
+                return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
             });
         },
 
@@ -849,7 +900,7 @@ export function stockApp() {
             this.orderDesk.basket.splice(index, 1);
         },
 
-        sendWhatsAppOrder() {
+        async sendWhatsAppOrder() {
             if (!this.orderDesk.supplierId || this.orderDesk.basket.length === 0) {
                 alert("Select supplier and add items to purchase basket.");
                 return;
@@ -870,11 +921,58 @@ export function stockApp() {
             });
 
             window.open(`https://wa.me/?text=${encodeURIComponent(messageLines.join('\n'))}`, '_blank');
+
+            // Automatically register purchase order document and open reconciliation modal
+            try {
+                const orderPayload = {
+                    supplier_id: supplierObj ? supplierObj.id : '',
+                    supplier_name: supplierName,
+                    items: JSON.parse(JSON.stringify(this.orderDesk.basket)),
+                    status: 'PENDING',
+                    created_at: new Date().toISOString(),
+                    created_by: this.currentUsername
+                };
+                const docRef = await addDoc(colRef('purchase_orders'), orderPayload);
+                orderPayload.id = docRef.id;
+                this.activeReconciliationOrder = JSON.parse(JSON.stringify(orderPayload));
+                this.orderDesk.basket = [];
+            } catch (err) {
+                console.error("Order creation fallback error:", err);
+            }
         },
 
-        async approveIncomingOrder(order) {
-            if (order.status !== 'PENDING') return;
-            if (!confirm(`Confirm stock ingestion from ${order.supplier_name}?`)) return;
+        openReconciliationModal(order) {
+            this.activeReconciliationOrder = JSON.parse(JSON.stringify(order));
+            this.reconcileExtraItemId = '';
+            this.reconcileExtraQty = '';
+        },
+
+        removeReconciliationItem(index) {
+            if (!this.activeReconciliationOrder) return;
+            this.activeReconciliationOrder.items.splice(index, 1);
+        },
+
+        addReconcileExtraItem() {
+            if (!this.activeReconciliationOrder) return;
+            if (!this.reconcileExtraItemId || !this.reconcileExtraQty) {
+                return alert("Select product and specify quantity.");
+            }
+            const target = this.items.find(i => String(i.id) === String(this.reconcileExtraItemId));
+            if (!target) return;
+
+            this.activeReconciliationOrder.items.push({
+                id: target.id,
+                name: target.name,
+                qty: this.reconcileExtraQty
+            });
+
+            this.reconcileExtraItemId = '';
+            this.reconcileExtraQty = '';
+        },
+
+        async commitReconciliation() {
+            if (!this.activeReconciliationOrder) return;
+            const order = this.activeReconciliationOrder;
 
             try {
                 for (let record of order.items) {
@@ -898,9 +996,23 @@ export function stockApp() {
                         }
                     }
                 }
-                await updateDoc(doc(dbFs, 'purchase_orders', order.id), { status: 'RECEIVED', items: order.items, resolved_at: new Date().toISOString(), resolved_by: this.currentUsername });
-                alert("Order approved and balances synchronized.");
-            } catch (error) { alert("Error: " + error.message); }
+
+                await updateDoc(doc(dbFs, 'purchase_orders', order.id), {
+                    status: 'RECEIVED',
+                    items: order.items,
+                    resolved_at: new Date().toISOString(),
+                    resolved_by: this.currentUsername
+                });
+
+                this.activeReconciliationOrder = null;
+                alert("Inward reconciliation completed! Items added to live inventory.");
+            } catch (err) {
+                alert("Reconciliation failed: " + err.message);
+            }
+        },
+
+        async approveIncomingOrder(order) {
+            this.openReconciliationModal(order);
         },
 
         async declineIncomingOrder(order) {
