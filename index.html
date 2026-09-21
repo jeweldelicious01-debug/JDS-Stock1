@@ -403,7 +403,7 @@
                                 <span class="font-bold font-sans text-slate-800" x-text="log.item_name"></span>
                                 <span x-show="log.supplier_name" class="text-[10px] bg-emerald-50 border border-emerald-200 text-emerald-800 px-1.5 py-0.5 rounded font-bold" x-text="'Vendor: ' + log.supplier_name"></span>
                                 <span x-show="log.department" class="text-[10px] bg-slate-200 text-slate-700 border border-slate-300 px-1.5 py-0.5 rounded font-bold" x-text="log.department"></span>
-                                <button x-show="(currentRole === 'admin' || currentRole === 'inward') && isWithin30Minutes(log.created_at)" @click="triggerUndo(log)" class="text-[10px] bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 px-2 py-0.5 rounded-md font-extrabold font-sans transition">↩ Revert</button>
+                                <button x-show="(currentRole === 'admin' || currentRole === 'inward' || currentRole === 'outward') && isWithin30Minutes(log.created_at)" @click="triggerUndo(log)" class="text-[10px] bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 px-2 py-0.5 rounded-md font-extrabold font-sans transition">↩ Revert</button>
                             </div>
                         </template>
                     </div>
