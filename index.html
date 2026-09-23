@@ -119,6 +119,7 @@
                     </div>
                 </header>
 
+                <!-- Incoming Procurement Desk: inward users review orders dispatched by order users -->
                 <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" 
                          x-show="currentRole === 'admin' || currentRole === 'inward' || currentRole === 'order'" 
                          x-cloak>
@@ -159,7 +160,7 @@
                                     </template>
                                 </div>
 
-                                <div class="flex gap-2 pt-1" x-show="order.status === 'PENDING' && (currentRole === 'admin' || currentRole === 'inward')">
+                                <div class="flex gap-2 pt-1" x-show="order.status === 'PENDING' && (currentRole === 'admin' || (currentRole === 'inward' && users.find(u => u.username === order.created_by)?.role === 'order'))">
                                     <button type="button" @click="declineIncomingOrder(order)" class="flex-1 bg-white hover:bg-rose-50 border border-slate-200 text-rose-600 font-bold py-1.5 rounded-lg text-xs transition uppercase tracking-wide">Decline</button>
                                     <button type="button" @click="openReconciliationModal(order)" class="flex-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-1.5 rounded-lg text-xs shadow-sm transition uppercase tracking-wide">Reconcile Inward</button>
                                 </div>
@@ -303,7 +304,7 @@
                                 </template>
                             </div>
                             <button @click="sendWhatsAppOrder()" x-show="orderDesk.basket.length > 0 && orderDesk.supplierId" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-center uppercase tracking-wider transition shadow-sm">
-                                📱 Send Thread to Supplier WhatsApp & Reconcile Inward
+                                📱 Send Order to WhatsApp & Submit for Inward Approval
                             </button>
                         </div>
                     </div>
@@ -391,7 +392,7 @@
                     </div>
                 </div>
 
-                <!-- Real-time Transaction Ledger Streams (Visible to ALL roles) -->
+                <!-- Real-time Transaction Ledger Streams (Visible to ALL roles, Revert enabled for admin/inward/outward within 30 min) -->
                 <div x-show="logs.length > 0" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
                     <div class="text-[11px] font-bold uppercase text-slate-500 tracking-wider">⏱️ Real-time Transaction Ledger Streams (LIFO Buffer Timeline):</div>
                     <div class="flex flex-wrap gap-2">
@@ -532,7 +533,7 @@
                     </div>
                 </section>
                 
-                <!-- Inward Reconciliation Modal (Opened after placing WhatsApp PO or clicking Reconcile) -->
+                <!-- Inward Reconciliation Modal (For inward/admin to verify arrived quantities and extra items) -->
                 <div x-show="activeReconciliationOrder" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-2xl w-full shadow-2xl space-y-4 border border-slate-200 max-h-[90vh] overflow-y-auto">
                         <div class="flex justify-between items-center border-b pb-2">
