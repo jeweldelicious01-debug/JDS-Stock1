@@ -49,7 +49,7 @@
                 accountSuccess: '',
                 newUserForm: { username: '', password: '', role: 'inward' },
                 newUserError: '',
-                departments: ['all', 'HK', 'restaurant', 'Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
+                departments: ['all', 'f&b', 'restaurant', 'Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor', 'Housekeeping'],
                 categories: [],
                 items: [],
                 suppliers: [],
@@ -155,7 +155,7 @@
                                     <template x-for="it in order.items" :key="it.id">
                                         <div class="py-1.5 flex justify-between items-center gap-2">
                                             <span class="font-sans text-slate-700" x-text="it.name"></span>
-                                            <span class="text-slate-900 font-bold" x-text="it.qty"></span>
+                                            <span class="text-slate-900 font-bold" x-text="formatStock(it.qty, it.name)"></span>
                                         </div>
                                     </template>
                                 </div>
@@ -285,20 +285,22 @@
                                     <select x-model="orderDesk.selectedItemId" :disabled="!orderDesk.supplierId" class="border p-2 rounded-md w-full bg-white font-medium text-slate-700 disabled:opacity-50">
                                         <option value="">-- Choose Product --</option>
                                         <template x-for="item in filteredOrderDeskItems" :key="item.id">
-                                            <option :value="item.id" x-text="item.name"></option>
+                                            <option :value="item.id" 
+                                                    x-text="(Number(item.stock) === 0 ? '🔴 [OUT] ' : (Number(item.stock) <= Number(item.threshold) ? '🟡 [LOW] ' : '🟢 [OK] ')) + item.name + ' (Bal: ' + formatStock(item.stock, item.name) + ')'">
+                                            </option>
                                         </template>
                                     </select>
                                 </div>
-                                <div class="w-24">
-                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Qty</label>
-                                    <input type="text" x-model="orderDesk.selectedQty" placeholder="10" class="border p-2 rounded-md w-full text-center bg-white font-mono font-bold">
+                                <div class="w-32">
+                                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Qty (12=kg, 500=g)</label>
+                                    <input type="text" x-model="orderDesk.selectedQty" placeholder="10 or 500" class="border p-2 rounded-md w-full text-center bg-white font-mono font-bold">
                                 </div>
                                 <button @click="addItemToOrder()" class="bg-indigo-700 text-white font-bold px-4 py-2 rounded-md transition uppercase text-[11px]">Add Item</button>
                             </div>
                             <div class="border rounded-md bg-white p-2.5 space-y-1.5" x-show="orderDesk.basket.length > 0">
                                 <template x-for="(b, idx) in orderDesk.basket" :key="idx">
                                     <div class="flex justify-between items-center text-xs bg-slate-50 border p-1 rounded font-mono">
-                                        <span>📌 <span class="font-sans" x-text="b.name"></span> — Qty: <span class="font-bold text-indigo-600" x-text="b.qty"></span></span>
+                                        <span>📌 <span class="font-sans" x-text="b.name"></span> — Qty: <span class="font-bold text-indigo-600" x-text="formatStock(b.qty, b.name)"></span></span>
                                         <button @click="removeOrderBasketItem(idx)" class="text-rose-600 font-bold px-1 text-[11px]">Remove</button>
                                     </div>
                                 </template>
@@ -335,7 +337,7 @@
                                 </select>
                             </div>
                             <div :class="currentRole === 'admin' ? 'col-span-2' : 'col-span-4'">
-                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity (e.g. 10, 50, 1.25kg)</label>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity (e.g. 10=kg, 500=g)</label>
                                 <input type="text" x-model="formInward.qty" placeholder="Quantity count / amount" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
                             </div>
                             
@@ -379,7 +381,7 @@
                                 </select>
                             </div>
                             <div class="col-span-2">
-                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity</label>
+                                <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity (e.g. 10=kg, 500=g)</label>
                                 <input type="text" x-model="formOutward.qty" placeholder="Quantity count / amount" class="border border-slate-300 p-2.5 rounded-lg text-center font-mono bg-slate-50 w-full font-bold">
                             </div>
                             
@@ -533,7 +535,7 @@
                     </div>
                 </section>
                 
-                <!-- Inward Reconciliation Modal (For inward/admin to verify arrived quantities and extra items) -->
+                <!-- Inward Reconciliation Modal -->
                 <div x-show="activeReconciliationOrder" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-2xl w-full shadow-2xl space-y-4 border border-slate-200 max-h-[90vh] overflow-y-auto">
                         <div class="flex justify-between items-center border-b pb-2">
@@ -547,14 +549,14 @@
                         <div class="border rounded-lg overflow-hidden divide-y divide-slate-100">
                             <div class="bg-slate-100 p-2 text-[10px] font-black uppercase text-slate-600 grid grid-cols-12 gap-2">
                                 <span class="col-span-6">Item Description</span>
-                                <span class="col-span-4 text-center">Delivered Qty</span>
+                                <span class="col-span-4 text-center">Delivered Qty (12=kg, 500=g)</span>
                                 <span class="col-span-2 text-right">Action</span>
                             </div>
                             <template x-for="(item, idx) in activeReconciliationOrder?.items || []" :key="idx">
                                 <div class="p-2.5 bg-white grid grid-cols-12 gap-2 items-center text-xs">
                                     <span class="col-span-6 font-bold text-slate-800" x-text="item.name"></span>
                                     <div class="col-span-4 flex justify-center">
-                                        <input type="text" x-model="item.qty" class="border border-slate-300 rounded p-1.5 w-24 text-center font-mono font-bold bg-slate-50 focus:ring-1 focus:ring-indigo-500 text-xs">
+                                        <input type="text" x-model="item.qty" class="border border-slate-300 rounded p-1.5 w-28 text-center font-mono font-bold bg-slate-50 focus:ring-1 focus:ring-indigo-500 text-xs">
                                     </div>
                                     <div class="col-span-2 text-right">
                                         <button type="button" @click="removeReconciliationItem(idx)" class="text-rose-600 hover:text-rose-800 font-bold text-[11px]">Remove</button>
