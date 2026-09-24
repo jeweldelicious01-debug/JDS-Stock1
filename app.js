@@ -445,7 +445,7 @@ export function stockApp() {
         accountSuccess: '',
         newUserForm: { username: '', password: '', role: 'inward' },
         newUserError: '',
-        departments: ['all', 'f&b', 'restaurant', 'Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
+        departments: ['all', 'HK', 'restaurant', 'Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor'],
 
         formatStock(stock, itemName = "") {
             return formatStockDisplay(stock, itemName);
