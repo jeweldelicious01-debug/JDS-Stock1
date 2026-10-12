@@ -125,23 +125,18 @@ function parseQuantityInput(inputStr, itemName = "") {
     const nameHasKgOrG = /\b(kg|kgs|kilo|kilograms?|g|gm|gms|grams?)\b/i.test(itemName) || ['kg', 'g'].includes(target);
     const nameHasLOrMl = /\b(l|ltr|liters?|litres?|ml|milliliters?|millilitres?)\b/i.test(itemName) || ['L', 'ml'].includes(target);
 
-    // Rule: Plain integer inputs with 2 digits -> kg / L; 3 or more digits -> g / ml
     if (/^\d+$/.test(str)) {
         const val = parseInt(str, 10);
         if (nameHasKgOrG) {
             if (str.length <= 2) {
-                // 1 or 2 digits = KG
                 return target === 'g' ? val * 1000 : val;
             } else {
-                // 3 or more digits = Grams
                 return target === 'kg' ? Math.round((val / 1000) * 1000) / 1000 : val;
             }
         } else if (nameHasLOrMl) {
             if (str.length <= 2) {
-                // 1 or 2 digits = Litres
                 return target === 'ml' ? val * 1000 : val;
             } else {
-                // 3 or more digits = ML
                 return target === 'L' ? Math.round((val / 1000) * 1000) / 1000 : val;
             }
         }
@@ -417,6 +412,8 @@ export function stockApp() {
         currentUserId: null,
         filterCat: 'all',
         filterSupplier: 'all',
+        pinnedCategory: '',
+        pinnedPosition: 'first',
         orderViewTab: 'pending',
         
         loginForm: { username: '', password: '' },
@@ -801,6 +798,17 @@ export function stockApp() {
             }
 
             return dataset.sort((a, b) => {
+                // Pin Category check
+                if (this.pinnedCategory) {
+                    const aMatches = (a.category_name === this.pinnedCategory || a.category_id === this.pinnedCategory);
+                    const bMatches = (b.category_name === this.pinnedCategory || b.category_id === this.pinnedCategory);
+                    if (aMatches !== bMatches) {
+                        return this.pinnedPosition === 'first' 
+                            ? (aMatches ? -1 : 1) 
+                            : (aMatches ? 1 : -1);
+                    }
+                }
+
                 if (a.statusGroup !== b.statusGroup) {
                     return a.statusGroup - b.statusGroup;
                 }
