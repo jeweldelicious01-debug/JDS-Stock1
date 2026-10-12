@@ -412,8 +412,8 @@ export function stockApp() {
         currentUserId: null,
         filterCat: 'all',
         filterSupplier: 'all',
-        pinnedCategory: '',
-        pinnedPosition: 'first',
+        pinnedCategory: localStorage.getItem('stock_pinned_cat') || '',
+        pinnedPosition: localStorage.getItem('stock_pinned_pos') || 'first',
         orderViewTab: 'pending',
         
         loginForm: { username: '', password: '' },
@@ -468,6 +468,20 @@ export function stockApp() {
         newUserForm: { username: '', password: '', role: 'inward' },
         newUserError: '',
         departments: ['all', 'f&b', 'restaurant', 'Chinese', 'Indian', 'South Indian', 'Gujarati', 'Continental', 'Tandoor', 'Housekeeping'],
+
+        setPinnedCategory(cat) {
+            this.pinnedCategory = cat;
+            if (cat) {
+                localStorage.setItem('stock_pinned_cat', cat);
+            } else {
+                localStorage.removeItem('stock_pinned_cat');
+            }
+        },
+
+        setPinnedPosition(pos) {
+            this.pinnedPosition = pos;
+            localStorage.setItem('stock_pinned_pos', pos);
+        },
 
         formatStock(stock, itemName = "") {
             return formatStockDisplay(stock, itemName);
@@ -798,7 +812,7 @@ export function stockApp() {
             }
 
             return dataset.sort((a, b) => {
-                // Pin Category check
+                // Persistent Category Pin logic
                 if (this.pinnedCategory) {
                     const aMatches = (a.category_name === this.pinnedCategory || a.category_id === this.pinnedCategory);
                     const bMatches = (b.category_name === this.pinnedCategory || b.category_id === this.pinnedCategory);
@@ -1359,7 +1373,8 @@ export function stockApp() {
                 dateGroups[dateKey].push(log);
             });
 
-            const sortedDates = Object.keys(dateGroups).sort();
+            // LIFO order: most recent dates first
+            const sortedDates = Object.keys(dateGroups).sort((a, b) => b.localeCompare(a));
             if (!sortedDates.length) return alert("No dated inward records found.");
 
             const wb = XLSX.utils.book_new();
@@ -1435,7 +1450,8 @@ export function stockApp() {
                 monthGroups[monthKey].push({ ...log, dateKey });
             });
 
-            const sortedMonths = Object.keys(monthGroups).sort();
+            // LIFO order: latest month first
+            const sortedMonths = Object.keys(monthGroups).sort((a, b) => b.localeCompare(a));
             if (!sortedMonths.length) return alert("No dated logs available to export.");
 
             const wb = XLSX.utils.book_new();
@@ -1470,7 +1486,8 @@ export function stockApp() {
                 });
 
                 const sheetMatrix = [];
-                const sortedDays = Object.keys(dayItemMap).sort();
+                // LIFO order inside sheet: latest date first
+                const sortedDays = Object.keys(dayItemMap).sort((a, b) => b.localeCompare(a));
 
                 sortedDays.forEach((dayKey, idx) => {
                     if (idx > 0) sheetMatrix.push([]);
