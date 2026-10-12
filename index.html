@@ -19,8 +19,8 @@
                 currentUserId: null,
                 filterCat: 'all',
                 filterSupplier: 'all',
-                pinnedCategory: '',
-                pinnedPosition: 'first',
+                pinnedCategory: localStorage.getItem('stock_pinned_cat') || '',
+                pinnedPosition: localStorage.getItem('stock_pinned_pos') || 'first',
                 orderViewTab: 'pending',
                 loginForm: { username: '', password: '' },
                 loginError: '',
@@ -67,6 +67,8 @@
                 filteredOrderDeskItems: [],
                 reconcileVendorItems: [],
                 submitNewCategory() {},
+                setPinnedCategory(cat) {},
+                setPinnedPosition(pos) {},
                 formatStock(val) { return val; },
                 selectItemForForms(item) {},
                 init() {}
@@ -431,16 +433,21 @@
                                 </select>
                             </div>
 
-                            <!-- Category Priority Pin UI -->
+                            <!-- Category Priority Pin UI with LocalStorage Persistence -->
                             <div class="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
                                 <span class="text-indigo-600 text-[10px] uppercase font-black">Pin:</span>
-                                <select x-model="pinnedCategory" class="bg-transparent font-bold text-slate-700 text-xs outline-none cursor-pointer">
+                                <select :value="pinnedCategory" 
+                                        @change="setPinnedCategory($event.target.value)" 
+                                        class="bg-transparent font-bold text-slate-700 text-xs outline-none cursor-pointer">
                                     <option value="">None (Default)</option>
                                     <template x-for="cat in categories" :key="cat.id">
-                                        <option :value="cat.name" x-text="cat.emoji + ' ' + cat.name"></option>
+                                        <option :value="cat.name" :selected="pinnedCategory === cat.name" x-text="cat.emoji + ' ' + cat.name"></option>
                                     </template>
                                 </select>
-                                <select x-show="pinnedCategory" x-model="pinnedPosition" class="bg-indigo-50 border border-indigo-200 rounded text-indigo-700 font-extrabold text-[10px] px-1 py-0.5 outline-none cursor-pointer">
+                                <select x-show="pinnedCategory" 
+                                        :value="pinnedPosition" 
+                                        @change="setPinnedPosition($event.target.value)" 
+                                        class="bg-indigo-50 border border-indigo-200 rounded text-indigo-700 font-extrabold text-[10px] px-1 py-0.5 outline-none cursor-pointer">
                                     <option value="first">⬆️ Show First</option>
                                     <option value="last">⬇️ Show Last</option>
                                 </select>
@@ -774,7 +781,7 @@
                             <pre class="whitespace-pre-wrap font-sans text-xs text-slate-800 leading-relaxed" x-text="cateringModal.text"></pre>
                         </div>
                         <div class="flex gap-2 pt-1">
-                            <button @click="cateringModal.show = false" class="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2 rounded-lg transition">Close</button>
+                            <button @click="cateringModal.show = false" class="w-full bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold py-2.5 rounded-lg transition">Close</button>
                         </div>
                     </div>
                 </div>
