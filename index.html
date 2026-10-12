@@ -19,6 +19,8 @@
                 currentUserId: null,
                 filterCat: 'all',
                 filterSupplier: 'all',
+                pinnedCategory: '',
+                pinnedPosition: 'first',
                 orderViewTab: 'pending',
                 loginForm: { username: '', password: '' },
                 loginError: '',
@@ -119,7 +121,6 @@
                     </div>
                 </header>
 
-                <!-- Incoming Procurement Desk: inward users review orders dispatched by order users -->
                 <section class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4" 
                          x-show="currentRole === 'admin' || currentRole === 'inward' || currentRole === 'order'" 
                          x-cloak>
@@ -394,7 +395,6 @@
                     </div>
                 </div>
 
-                <!-- Real-time Transaction Ledger Streams (Visible to ALL roles, Revert enabled for admin/inward/outward within 30 min) -->
                 <div x-show="logs.length > 0" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
                     <div class="text-[11px] font-bold uppercase text-slate-500 tracking-wider">⏱️ Real-time Transaction Ledger Streams (LIFO Buffer Timeline):</div>
                     <div class="flex flex-wrap gap-2">
@@ -420,6 +420,7 @@
                         </div>
                         
                         <div class="flex flex-wrap items-center gap-1.5 text-xs font-bold">
+                            <!-- Supplier Filter -->
                             <div class="flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
                                 <span class="text-slate-400 text-[10px] uppercase font-black">Vendor:</span>
                                 <select x-model="filterSupplier" class="bg-transparent font-bold text-slate-700 text-xs outline-none cursor-pointer">
@@ -427,6 +428,21 @@
                                     <template x-for="sup in suppliers" :key="sup.id">
                                         <option :value="sup.name" x-text="sup.name"></option>
                                     </template>
+                                </select>
+                            </div>
+
+                            <!-- Category Priority Pin UI -->
+                            <div class="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-2xs">
+                                <span class="text-indigo-600 text-[10px] uppercase font-black">Pin:</span>
+                                <select x-model="pinnedCategory" class="bg-transparent font-bold text-slate-700 text-xs outline-none cursor-pointer">
+                                    <option value="">None (Default)</option>
+                                    <template x-for="cat in categories" :key="cat.id">
+                                        <option :value="cat.name" x-text="cat.emoji + ' ' + cat.name"></option>
+                                    </template>
+                                </select>
+                                <select x-show="pinnedCategory" x-model="pinnedPosition" class="bg-indigo-50 border border-indigo-200 rounded text-indigo-700 font-extrabold text-[10px] px-1 py-0.5 outline-none cursor-pointer">
+                                    <option value="first">⬆️ Show First</option>
+                                    <option value="last">⬇️ Show Last</option>
                                 </select>
                             </div>
 
@@ -535,7 +551,6 @@
                     </div>
                 </section>
                 
-                <!-- Inward Reconciliation Modal -->
                 <div x-show="activeReconciliationOrder" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" x-cloak>
                     <div class="bg-white p-6 rounded-xl max-w-2xl w-full shadow-2xl space-y-4 border border-slate-200 max-h-[90vh] overflow-y-auto">
                         <div class="flex justify-between items-center border-b pb-2">
@@ -568,7 +583,6 @@
                             </template>
                         </div>
 
-                        <!-- Add Extra Items Supplied -->
                         <div class="p-3 bg-slate-50 border rounded-lg space-y-2">
                             <span class="text-[10px] font-bold text-slate-600 uppercase block">➕ Add Extra Item Supplied by Vendor</span>
                             <div class="flex gap-2 items-center">
